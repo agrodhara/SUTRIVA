@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useState } from "react";
 import { API_BASE_URL, trackEvent } from "../../lib/api";
-import { currency, ErrorState, ExampleValuesButton, FinancialInput, GoDeeperCTA, InsightBlock, LoadingState, ResultMetric } from "../../components/QuickCheckUI";
+import { currency, ErrorState, ExampleValuesButton, FinancialInput, GoDeeperCTA, InsightBlock, LoadingState, moneyValueStatusLabels, reasonCodeLabels, ResultMetric } from "../../components/QuickCheckUI";
 
 type Result = {
   estimated_annual_rewards: number;
@@ -46,8 +46,8 @@ export default function MoneyValuePage() {
     <InsightBlock title="1. What did we find?"><div className="metrics">
       <ResultMetric label="Estimated annual rewards" value={currency(result.estimated_annual_rewards)} /><ResultMetric label="Annual fee" value={currency(result.annual_card_fee)} />
       <ResultMetric label="Estimated annual interest cost" value={currency(result.estimated_annual_interest_cost)} /><ResultMetric label="Estimated net annual value" value={currency(result.estimated_net_annual_value)} />
-    </div><p className="status">{result.value_status}</p></InsightBlock>
-    <InsightBlock title="2. Why does it matter?"><p>{result.reason_codes.join(". ")}</p></InsightBlock>
+    </div><p className="status">{moneyValueStatusLabels[result.value_status] ?? "Your money value result is ready"}</p></InsightBlock>
+    <InsightBlock title="2. Why does it matter?"><p>{result.reason_codes.map((code) => reasonCodeLabels[code] ?? "One or more costs may be affecting the value you receive.").join(" ")}</p></InsightBlock>
     <InsightBlock title="3. What should I do next?"><p>{result.next_best_action}</p><GoDeeperCTA journey="money_value" /></InsightBlock></main>;
 
   return <main className="shell journey"><a className="backLink" href="/">← Home</a><p className="eyebrow">Get More From My Money</p><h1>See what your card use is worth.</h1><p className="lede">Answer a few questions for an initial estimate.</p>

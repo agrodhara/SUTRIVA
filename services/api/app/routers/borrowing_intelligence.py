@@ -31,6 +31,7 @@ def comfortable_borrowing_check(payload: ComfortableBorrowingCheckRequest) -> Co
         existing_monthly_emi=payload.existing_monthly_commitments,
         requested_loan_amount=payload.desired_borrowing_amount,
         requested_tenor_months=payload.desired_tenure_months,
+        income_verified=payload.income_verified,
     )
 
     features = build_affordability_features(internal_payload)

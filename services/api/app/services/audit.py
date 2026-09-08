@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +21,8 @@ def record_audit_event(
     Alpha note: replace with encrypted DB/S3 append-only logging after G0.5 security review.
     Do not log PAN/account numbers/raw statement lines here.
     """
-    path = Path(os.getenv("AUDIT_LOG_PATH", "./audit_events.jsonl"))
+    path = Path(os.getenv("AUDIT_LOG_PATH", str(Path(tempfile.gettempdir()) / "sutriva" / "audit_events.jsonl")))
+    path.parent.mkdir(parents=True, exist_ok=True)
     created_at = datetime.now(timezone.utc).isoformat()
     event = {
         "audit_event_id": str(uuid.uuid4()),

@@ -7,6 +7,7 @@ class ComfortableBorrowingCheckRequest(BaseModel):
     existing_monthly_commitments: float = Field(ge=0)
     desired_borrowing_amount: float = Field(gt=0)
     desired_tenure_months: int = Field(ge=1, le=360)
+    income_verified: bool = False
 
 
 class ComfortableBorrowingCheckResponse(BaseModel):

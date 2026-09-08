@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from app.main import app
@@ -147,6 +148,34 @@ def test_comfortable_borrowing_check_caution_includes_commitment_ratio_reason_co
     assert len(body["reason_codes"]) > 1
 
 
+def test_comfortable_borrowing_check_can_return_ok_when_income_verified():
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "monthly_income": 200000,
+        "existing_monthly_commitments": 10000,
+        "desired_borrowing_amount": 100000,
+        "desired_tenure_months": 60,
+        "income_verified": True,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["comfort_status"] == "OK"
+    assert body["reason_codes"] == []
+
+
+def test_comfortable_borrowing_check_unverified_income_is_caution():
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "monthly_income": 200000,
+        "existing_monthly_commitments": 10000,
+        "desired_borrowing_amount": 100000,
+        "desired_tenure_months": 60,
+        "income_verified": False,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["comfort_status"] == "CAUTION"
+    assert "INCOME_UNVERIFIED" in body["reason_codes"]
+
+
 def test_money_value_quick_check():
     response = client.post("/v1/money-value/quick-check", json={
         "monthly_card_spend": 50000,
@@ -157,6 +186,58 @@ def test_money_value_quick_check():
     })
     assert response.status_code == 200
     assert "estimated_net_value" in response.json()
+
+
+def test_legacy_money_value_uses_canonical_core_calculation():
+    payload = {
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 4000,
+        "reward_rate_percent": 1.5,
+        "revolving_balance": 100000,
+        "revolving_interest_rate_pa": 0.36,
+        "unused_subscription_cost_monthly": 0,
+    }
+    legacy = client.post("/v1/money-value/quick-check", json=payload)
+    preferred = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": payload["monthly_card_spend"],
+        "annual_card_fee": payload["annual_card_fee"],
+        "estimated_reward_rate_percent": payload["reward_rate_percent"],
+        "revolving_balance": payload["revolving_balance"],
+        "annual_interest_rate_percent": 36,
+    })
+    assert legacy.status_code == 200
+    assert preferred.status_code == 200
+    assert legacy.json()["estimated_annual_rewards"] == preferred.json()["estimated_annual_rewards"]
+    assert legacy.json()["estimated_annual_interest_cost"] == preferred.json()["estimated_annual_interest_cost"]
+    assert legacy.json()["estimated_net_value"] == preferred.json()["estimated_net_annual_value"]
+
+
+def test_default_generated_logs_use_runtime_path(monkeypatch):
+    monkeypatch.delenv("AUDIT_LOG_PATH", raising=False)
+    monkeypatch.delenv("PRODUCT_EVENT_LOG_PATH", raising=False)
+    repo_root = Path(__file__).resolve().parents[2]
+    for path in (
+        repo_root / "audit_events.jsonl",
+        repo_root / "product_events.jsonl",
+        repo_root / "services" / "api" / "audit_events.jsonl",
+    ):
+        assert not path.exists()
+
+    audit_response = client.post("/v1/borrow-better/quick-check", json={
+        "declared_monthly_income": 100000,
+        "existing_monthly_emi": 20000,
+        "requested_loan_amount": 500000,
+        "requested_tenor_months": 36,
+    })
+    event_response = client.post("/v1/events", json={
+        "event_type": "check_started",
+        "journey": "money_value",
+    })
+    assert audit_response.status_code == 200
+    assert event_response.status_code == 200
+    assert not (repo_root / "audit_events.jsonl").exists()
+    assert not (repo_root / "product_events.jsonl").exists()
+    assert not (repo_root / "services" / "api" / "audit_events.jsonl").exists()
 
 
 def test_money_value_check_positive():

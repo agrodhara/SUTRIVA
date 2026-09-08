@@ -1,7 +1,12 @@
 from fastapi import APIRouter
 
-from app.models.money_value import MoneyValueQuickCheckRequest, MoneyValueQuickCheckResponse
+from app.models.money_value import (
+    MoneyValueCheckRequest,
+    MoneyValueQuickCheckRequest,
+    MoneyValueQuickCheckResponse,
+)
 from app.services.audit import record_audit_event
+from app.services.money_value import run_money_value_check
 
 router = APIRouter(prefix="/v1/money-value", tags=["money-value"])
 
@@ -13,10 +18,17 @@ def quick_check(payload: MoneyValueQuickCheckRequest) -> MoneyValueQuickCheckRes
     The preferred Alpha-50 public endpoint is
     POST /v1/financial-intelligence/money-value-check.
     """
-    annual_rewards = payload.monthly_card_spend * 12 * payload.reward_rate_percent / 100
-    annual_interest = payload.revolving_balance * payload.revolving_interest_rate_pa
     annual_subscriptions = payload.unused_subscription_cost_monthly * 12
-    net_value = annual_rewards - annual_interest - payload.annual_card_fee - annual_subscriptions
+    canonical = run_money_value_check(MoneyValueCheckRequest(
+        monthly_card_spend=payload.monthly_card_spend,
+        annual_card_fee=payload.annual_card_fee,
+        estimated_reward_rate_percent=payload.reward_rate_percent,
+        revolving_balance=payload.revolving_balance,
+        annual_interest_rate_percent=payload.revolving_interest_rate_pa * 100,
+    ))
+    annual_rewards = canonical["estimated_annual_rewards"]
+    annual_interest = canonical["estimated_annual_interest_cost"]
+    net_value = canonical["estimated_net_annual_value"] - annual_subscriptions
 
     flags = []
     if annual_interest > annual_rewards:

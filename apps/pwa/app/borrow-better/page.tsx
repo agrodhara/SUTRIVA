@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useState } from "react";
 import { API_BASE_URL, trackEvent } from "../../lib/api";
-import { currency, ErrorState, ExampleValuesButton, FinancialInput, GoDeeperCTA, InsightBlock, LoadingState, percent, ResultMetric } from "../../components/QuickCheckUI";
+import { borrowingStatusLabels, currency, ErrorState, ExampleValuesButton, FinancialInput, GoDeeperCTA, InsightBlock, LoadingState, percent, reasonCodeLabels, ResultMetric } from "../../components/QuickCheckUI";
 
 type Result = { comfort_status: string; estimated_new_monthly_commitment: number; total_monthly_commitment: number; commitment_ratio: number; reason_codes: string[]; next_best_action: string };
 
@@ -34,8 +34,8 @@ export default function BorrowBetterPage() {
   }
 
   if (result) return <main className="shell journey"><a className="backLink" href="/borrow-better">← Update details</a><p className="eyebrow">Borrow Better</p><h1>Your borrowing comfort check</h1>
-    <InsightBlock title="1. What did we find?"><div className="metrics"><ResultMetric label="Estimated monthly commitment" value={currency(result.estimated_new_monthly_commitment)} /><ResultMetric label="Total monthly commitment" value={currency(result.total_monthly_commitment)} /><ResultMetric label="Commitment ratio" value={percent(result.commitment_ratio)} /></div><p className="status">{result.comfort_status}</p></InsightBlock>
-    <InsightBlock title="2. Why does it matter?"><p>{result.reason_codes.join(". ")}</p></InsightBlock>
+    <InsightBlock title="1. What did we find?"><div className="metrics"><ResultMetric label="Estimated monthly commitment" value={currency(result.estimated_new_monthly_commitment)} /><ResultMetric label="Total monthly commitment" value={currency(result.total_monthly_commitment)} /><ResultMetric label="Commitment ratio" value={percent(result.commitment_ratio)} /></div><p className="status">{borrowingStatusLabels[result.comfort_status] ?? "Your result is ready"}</p></InsightBlock>
+    <InsightBlock title="2. Why does it matter?"><p>{result.reason_codes.map((code) => reasonCodeLabels[code] ?? "Your income, commitments and requested amount affect this estimate.").join(" ")}</p></InsightBlock>
     <InsightBlock title="3. What should I do next?"><p>{result.next_best_action}</p><GoDeeperCTA journey="comfortable_borrowing" /></InsightBlock></main>;
 
   return <main className="shell journey"><a className="backLink" href="/">← Home</a><p className="eyebrow">Borrow Better</p><h1>Know what feels comfortable before you borrow.</h1><p className="lede">Answer a few questions for an initial estimate.</p>

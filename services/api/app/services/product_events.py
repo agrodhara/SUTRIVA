@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,7 +17,8 @@ def record_product_event(event_type: str, journey: str, decision_context: str = 
     raw financial-check inputs. Replace with a proper analytics-free event
     pipeline only if/when a governance review approves one.
     """
-    path = Path(os.getenv("PRODUCT_EVENT_LOG_PATH", "./product_events.jsonl"))
+    path = Path(os.getenv("PRODUCT_EVENT_LOG_PATH", str(Path(tempfile.gettempdir()) / "sutriva" / "product_events.jsonl")))
+    path.parent.mkdir(parents=True, exist_ok=True)
     event = {
         "event_id": str(uuid.uuid4()),
         "event_type": event_type,
