@@ -89,6 +89,46 @@ def test_borrow_better_quick_check_appends_multiple_audit_events(monkeypatch, tm
     assert len(lines) == 2
 
 
+def test_comfortable_borrowing_check_preferred_endpoint(monkeypatch, tmp_path):
+    audit_path = tmp_path / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_path))
+
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "monthly_income": 100000,
+        "existing_monthly_commitments": 25000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36
+    })
+    assert response.status_code == 200
+    body = response.json()
+
+    for field in [
+        "policy_version",
+        "estimated_new_monthly_commitment",
+        "total_monthly_commitment",
+        "commitment_ratio",
+        "comfort_status",
+        "reason_codes",
+        "next_best_action",
+        "guidance_disclaimer",
+        "audit_event_id",
+    ]:
+        assert field in body
+
+    assert isinstance(body["audit_event_id"], str)
+    assert len(body["audit_event_id"]) > 0
+
+    lines = audit_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    event = json.loads(lines[0])
+    assert event["event_type"] == "comfortable_borrowing_check"
+    assert event["audit_event_id"] == body["audit_event_id"]
+
+    flattened = json.dumps(event).lower()
+    for prohibited in PROHIBITED_FIELDS:
+        assert f'"{prohibited}"' not in flattened
+
+
 def test_money_value_quick_check():
     response = client.post("/v1/money-value/quick-check", json={
         "monthly_card_spend": 50000,
