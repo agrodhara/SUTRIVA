@@ -44,7 +44,7 @@ export default function BorrowBetterPage() {
     trackEvent("check_started", "comfortable_borrowing");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/borrow-better/quick-check`, {
+      const response = await fetch(`${API_BASE_URL}/v1/borrowing-intelligence/comfortable-borrowing-check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

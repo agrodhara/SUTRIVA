@@ -1,7 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import borrow_better, money_value, product_events
+from app.routers import (
+    borrow_better,
+    borrowing_intelligence,
+    financial_intelligence,
+    money_value,
+    product_events,
+)
 
 app = FastAPI(
     title="Sutriva Product API",
@@ -25,4 +31,6 @@ def health() -> dict:
 
 app.include_router(borrow_better.router)
 app.include_router(money_value.router)
+app.include_router(financial_intelligence.router)
+app.include_router(borrowing_intelligence.router)
 app.include_router(product_events.router)

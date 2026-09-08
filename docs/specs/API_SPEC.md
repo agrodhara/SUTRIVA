@@ -13,6 +13,12 @@ Response:
 }
 ```
 
+## POST /v1/borrowing-intelligence/comfortable-borrowing-check
+
+Preferred public route for the Borrow Better journey. The PWA calls this route
+(not the legacy `/v1/borrow-better/quick-check`, which remains for backend
+compatibility only). Request/response shape matches `/v1/borrow-better/quick-check`.
+
 ## POST /borrow-better/quick-check
 
 Purpose: return indicative affordability insight.
@@ -48,6 +54,13 @@ Response:
   "disclaimer": "Indicative financial-intelligence output, not a loan offer or approval."
 }
 ```
+
+## POST /v1/financial-intelligence/money-value-check
+
+Preferred public route for the Get More From My Money journey. The PWA calls
+this route (not the legacy `/v1/money-value/quick-check`, which remains for
+backend compatibility only). Request/response shape matches
+`/v1/money-value/quick-check`.
 
 ## POST /money-value/quick-check
 

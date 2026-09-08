@@ -8,6 +8,10 @@ function isJourney(value: string | null): value is Journey {
   return value === "money_value" || value === "comfortable_borrowing";
 }
 
+function journeyPath(journey: Journey): string {
+  return journey === "comfortable_borrowing" ? "/borrow-better" : "/money-value";
+}
+
 function GoDeeperContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -22,7 +26,7 @@ function GoDeeperContent() {
   function handleNotNow() {
     trackEvent("go_deeper_declined", journey);
     setChoice("not_now");
-    router.push("/");
+    router.push(journeyPath(journey));
   }
 
   return (

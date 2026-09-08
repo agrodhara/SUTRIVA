@@ -40,7 +40,7 @@ export default function MoneyValuePage() {
     trackEvent("check_started", "money_value");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/money-value/quick-check`, {
+      const response = await fetch(`${API_BASE_URL}/v1/financial-intelligence/money-value-check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
