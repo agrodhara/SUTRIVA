@@ -1,3 +1,4 @@
+import { BackendStatus } from "../components/BackendStatus";
 import { DoorCard } from "../components/DoorCard";
 
 export default function Home() {
@@ -9,6 +10,7 @@ export default function Home() {
         <p className="lede">
           Start with one quick check. Go deeper only after you see value.
         </p>
+        <BackendStatus />
       </section>
 
       <section className="doors" aria-label="Product journeys">

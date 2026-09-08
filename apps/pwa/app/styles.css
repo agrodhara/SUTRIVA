@@ -57,6 +57,17 @@ h1 {
 .doorCard p { font-size: 17px; line-height: 1.45; margin: 0; }
 .doorCard span { font-weight: 700; }
 
+.backendStatus {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.backendStatus--connected { color: #1a7f37; }
+.backendStatus--unavailable { color: #b42318; }
+.backendStatus--checking { color: #555; }
+
 .guardrail {
   margin-top: 24px;
   font-size: 14px;
