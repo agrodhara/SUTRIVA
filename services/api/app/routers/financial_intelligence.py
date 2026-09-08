@@ -35,9 +35,5 @@ def money_value_check(payload: MoneyValueCheckRequest) -> MoneyValueCheckRespons
     return MoneyValueCheckResponse(
         **result,
         audit_event_id=event["audit_event_id"],
-        audit_event={
-            "event_type": event["event_type"],
-            "policy_version": event["policy_version"],
-            "decision_context": event["decision_context"],
-        },
+        audit_event=event,
     )
