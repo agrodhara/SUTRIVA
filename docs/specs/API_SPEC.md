@@ -13,9 +13,49 @@ Response:
 }
 ```
 
-## POST /borrow-better/quick-check
+## POST /v1/borrowing-intelligence/comfortable-borrowing-check (preferred, Alpha-50)
 
-Purpose: return indicative affordability insight.
+Purpose: return indicative Comfortable Borrowing Check guidance. This is the preferred public Borrowing Intelligence endpoint for Alpha-50 and the one the PWA calls.
+
+Request:
+
+```json
+{
+  "monthly_income": 100000,
+  "existing_monthly_commitments": 25000,
+  "desired_borrowing_amount": 500000,
+  "desired_tenure_months": 36
+}
+```
+
+Response:
+
+```json
+{
+  "policy_version": "borrow_better_v0_1",
+  "estimated_new_monthly_commitment": 17088.81,
+  "total_monthly_commitment": 42088.81,
+  "commitment_ratio": 0.4209,
+  "comfort_status": "CAUTION",
+  "reason_codes": ["INCOME_UNVERIFIED"],
+  "next_best_action": "Income is self-declared or not yet verified, so the result should be treated as indicative.",
+  "guidance_disclaimer": "Indicative financial-intelligence guidance based on supplied inputs. This is not a loan offer, approval, pre-approval, or eligibility decision.",
+  "audit_event_id": "0f7c2e5a-6d0a-4e9a-9b1e-1f7f6c3d1a22",
+  "audit_event": {
+    "event_type": "comfortable_borrowing_check",
+    "policy_version": "borrow_better_v0_1",
+    "decision_context": "local_demo"
+  }
+}
+```
+
+Audit note: every call to this endpoint persists one local JSONL audit event (see `services/audit/README.md`) and returns the generated `audit_event_id`. This is Alpha traceability, not production audit infrastructure.
+
+This endpoint reuses the same affordability calculation and decision-engine rules as the legacy `/v1/borrow-better/quick-check` route below (no duplicated business logic); it only exposes product-aligned field names.
+
+## POST /v1/borrow-better/quick-check (legacy/internal compatibility)
+
+Purpose: original affordability quick-check route, kept for backward compatibility. New integrations should prefer `/v1/borrowing-intelligence/comfortable-borrowing-check` above.
 
 Request:
 
