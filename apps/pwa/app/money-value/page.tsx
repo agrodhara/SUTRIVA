@@ -43,11 +43,3 @@ export default function MoneyValuePage() {
       <div className="formActions"><ExampleValuesButton onClick={() => setForm({ monthly_card_spend: "75000", annual_card_fee: "4000", reward_rate_percent: "1.2", revolving_balance: "0", revolving_interest_rate_pa: "" })} /><button type="submit" className="primaryButton" disabled={loading}>Check my money value</button></div>
     </form>{loading && <LoadingState />}{error && <ErrorState message={error} retry={() => setError("")} />}</main>;
 }
-  return (
-    <main className="shell">
-      <p className="eyebrow">Get More From My Money</p>
-      <h1>Find where money value is leaking.</h1>
-      <p className="lede">This page will call the FastAPI quick-check endpoint for rewards, fees, subscriptions and interest leakage.</p>
-    </main>
-  );
-}

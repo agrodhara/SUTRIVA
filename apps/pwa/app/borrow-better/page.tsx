@@ -38,11 +38,3 @@ export default function BorrowBetterPage() {
       <div className="formActions"><ExampleValuesButton onClick={() => setForm({ income: "100000", commitments: "25000", amount: "1000000", tenure: "60" })} /><button type="submit" className="primaryButton" disabled={loading}>Check borrowing comfort</button></div>
     </form>{loading && <LoadingState />}{error && <ErrorState message={error} retry={() => setError("")} />}</main>;
 }
-  return (
-    <main className="shell">
-      <p className="eyebrow">Borrow Better</p>
-      <h1>Know what is comfortable before you borrow.</h1>
-      <p className="lede">This page will call the FastAPI quick-check endpoint. No lender fulfilment is exposed in Alpha.</p>
-    </main>
-  );
-}
