@@ -17,7 +17,7 @@ Controlled Alpha-50 users from warm channels. Optional control cohort: 5–10 ze
 - Get More From My Money indicative value-leakage insight.
 - Consent screen before deeper data.
 - Decision result with reason codes.
-- Audit log for decision outputs.
+- Audit log for decision outputs (local JSONL, returns `audit_event_id`; see `services/audit/README.md`).
 - Synthetic/demo data until real-data gate.
 
 ## Out of scope
@@ -74,5 +74,5 @@ Output:
 
 - Every policy has version.
 - Every result has reason codes.
-- Every decision is auditable.
+- Every decision is auditable. Each quick-check call persists a local JSONL audit event and returns its `audit_event_id` in the API response for traceability. This is Alpha-local audit trail, not production audit infrastructure.
 - Every real-data expansion requires gate approval.

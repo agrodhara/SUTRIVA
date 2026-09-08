@@ -45,9 +45,17 @@ Response:
     "Existing commitments reduce room for a new EMI",
     "A lower amount may preserve monthly buffer"
   ],
-  "disclaimer": "Indicative financial-intelligence output, not a loan offer or approval."
+  "disclaimer": "Indicative financial-intelligence output, not a loan offer or approval.",
+  "audit_event_id": "0f7c2e5a-6d0a-4e9a-9b1e-1f7f6c3d1a22",
+  "audit_event": {
+    "event_type": "borrow_better_quick_check",
+    "policy_version": "borrow_better_v0_1",
+    "decision_context": "local_demo"
+  }
 }
 ```
+
+Audit note: every call to this endpoint persists one local JSONL audit event (see `services/audit/README.md`) and returns the generated `audit_event_id`. This is Alpha traceability, not production audit infrastructure.
 
 ## POST /money-value/quick-check
 
