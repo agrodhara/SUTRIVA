@@ -157,3 +157,157 @@ def test_money_value_quick_check():
     })
     assert response.status_code == 200
     assert "estimated_net_value" in response.json()
+
+
+def test_money_value_check_positive():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 4000,
+        "estimated_reward_rate_percent": 1.5,
+        "revolving_balance": 0,
+        "annual_interest_rate_percent": 36,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["policy_version"] == "alpha50-money-value-v0.1"
+    assert body["annual_spend"] == 600000
+    assert body["estimated_annual_rewards"] == 9000
+    assert body["estimated_annual_interest_cost"] == 0
+    assert body["estimated_net_annual_value"] == 5000
+    assert body["value_status"] == "POSITIVE"
+    assert "NET_VALUE_POSITIVE" in body["reason_codes"]
+    assert body["audit_event_id"]
+    assert body["audit_event"]["event_type"] == "money_value_check"
+
+
+def test_money_value_check_neutral():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 9000,
+        "estimated_reward_rate_percent": 1.5,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_net_annual_value"] == 0
+    assert body["value_status"] == "NEUTRAL"
+    assert "NET_VALUE_NEUTRAL" in body["reason_codes"]
+
+
+def test_money_value_check_value_leakage():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 10000,
+        "annual_card_fee": 5000,
+        "estimated_reward_rate_percent": 1.0,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_net_annual_value"] < -1000
+    assert body["value_status"] == "VALUE_LEAKAGE"
+    assert "NET_VALUE_NEGATIVE" in body["reason_codes"]
+    assert "ANNUAL_FEE_DRAG" in body["reason_codes"]
+
+
+def test_money_value_check_revolving_interest_drag():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 4000,
+        "estimated_reward_rate_percent": 1.5,
+        "revolving_balance": 100000,
+        "annual_interest_rate_percent": 36,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_annual_interest_cost"] == 36000
+    assert "REVOLVING_INTEREST_DRAG" in body["reason_codes"]
+    assert body["value_status"] == "VALUE_LEAKAGE"
+
+
+def test_money_value_check_invalid_input():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": -100,
+        "annual_card_fee": 4000,
+        "estimated_reward_rate_percent": 1.5,
+    })
+    assert response.status_code == 422
+
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": -4000,
+        "estimated_reward_rate_percent": 1.5,
+    })
+    assert response.status_code == 422
+
+
+def test_money_value_check_audit_persistence(tmp_path, monkeypatch):
+    audit_file = tmp_path / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_file))
+    payload = {
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 4000,
+        "estimated_reward_rate_percent": 1.5,
+        "revolving_balance": 0,
+        "annual_interest_rate_percent": 36,
+    }
+
+    response = client.post("/v1/financial-intelligence/money-value-check", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["audit_event_id"]
+
+    lines = audit_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    event = json.loads(lines[0])
+    assert event["audit_event_id"] == body["audit_event_id"]
+    assert event["event_type"] == "money_value_check"
+    assert event["policy_version"] == "alpha50-money-value-v0.1"
+    assert event["decision_context"] == "local_demo"
+    assert event["created_at"]
+    assert event["event_time_utc"]
+    assert event["input_snapshot"] == payload
+    assert event["output_snapshot"]["value_status"] == "POSITIVE"
+    for prohibited in PROHIBITED_FIELDS:
+        assert f'"{prohibited}"' not in json.dumps(event).lower()
+
+
+def test_financial_intelligence_money_value_check_preferred_route():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 3000,
+        "estimated_reward_rate_percent": 1.5,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["policy_version"] == "alpha50-money-value-v0.1"
+    assert "estimated_net_annual_value" in body
+    assert "audit_event_id" in body
+
+
+def test_record_product_event(tmp_path, monkeypatch):
+    event_file = tmp_path / "product_events.jsonl"
+    monkeypatch.setenv("PRODUCT_EVENT_LOG_PATH", str(event_file))
+    response = client.post("/v1/events", json={
+        "event_type": "door_selected",
+        "journey": "money_value",
+        "decision_context": "local_demo",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["event_type"] == "door_selected"
+    assert body["journey"] == "money_value"
+    assert body["event_id"]
+    assert body["created_at"]
+
+    event = json.loads(event_file.read_text(encoding="utf-8").strip())
+    assert event == body
+    serialized = json.dumps(event).lower()
+    for prohibited in PROHIBITED_FIELDS + ["monthly_card_spend", "annual_card_fee", "income", "loan"]:
+        assert prohibited not in serialized
+
+
+def test_record_product_event_rejects_unknown_event_type():
+    response = client.post("/v1/events", json={
+        "event_type": "not_a_real_event",
+        "journey": "money_value",
+        "decision_context": "local_demo",
+    })
+    assert response.status_code == 422
