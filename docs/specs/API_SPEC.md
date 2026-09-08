@@ -92,3 +92,35 @@ Response:
 ## API rule
 
 APIs return insight and reason codes. They do not return loan offers, lender rankings or approval promises in Alpha.
+
+## POST /v1/events
+
+Purpose: record a minimal local product-learning event. Not analytics, not
+financial data.
+
+Request:
+
+```json
+{
+  "event_type": "door_selected",
+  "journey": "money_value",
+  "decision_context": "local_demo"
+}
+```
+
+`event_type` must be one of: `door_selected`, `check_started`, `check_completed`,
+`go_deeper_selected`, `go_deeper_declined`.
+
+`journey` must be one of: `money_value`, `comfortable_borrowing`.
+
+Response:
+
+```json
+{
+  "event_id": "uuid",
+  "event_type": "door_selected",
+  "created_at": "2026-09-08T00:00:00Z",
+  "journey": "money_value",
+  "decision_context": "local_demo"
+}
+```

@@ -56,3 +56,27 @@
 ## Sensitive-data rule
 
 Do not log full bank statements, PAN, account numbers, raw documents, API secrets or unnecessary personal data.
+
+## Product event (Vertical Slice 5)
+
+Minimal local event for product learning, recorded via `POST /v1/events`. Distinct
+from the audit event above: it never carries policy versions or financial
+input/output snapshots.
+
+```json
+{
+  "event_id": "uuid",
+  "event_type": "door_selected",
+  "created_at": "ISO-8601",
+  "journey": "money_value",
+  "decision_context": "local_demo"
+}
+```
+
+Allowed `event_type` values: `door_selected`, `check_started`, `check_completed`,
+`go_deeper_selected`, `go_deeper_declined`.
+
+Allowed `journey` values: `money_value`, `comfortable_borrowing`.
+
+Do not include name, phone, email, IP, account details, card numbers, raw
+financial-check inputs or device identifiers in this event.

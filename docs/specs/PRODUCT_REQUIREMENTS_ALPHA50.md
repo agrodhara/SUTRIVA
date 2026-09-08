@@ -70,6 +70,39 @@ Output:
 - Status: OK / Caution / Reduce amount / Not comfortable.
 - Reason codes.
 
+## Alpha journey (Vertical Slice 5)
+
+Home → choose door (A or B) → complete quick check → receive result → optionally
+"Go deeper" → consent-boundary screen → stop.
+
+- Value is always shown before any request for deeper engagement. No registration,
+  login or sensitive data is requested before the first useful result.
+- "Go deeper" only appears on the result screen after a quick check completes
+  successfully.
+- `/go-deeper` is a consent boundary, not real data collection. It explains that a
+  future deeper view could use additional permissioned information, and explicitly
+  states that no additional financial data is collected in this Alpha step.
+- The primary action, "I'm interested in deeper insights", records interest only.
+  It never requests bank details, card numbers, PAN/Aadhaar, statement uploads,
+  Account Aggregator consent, bureau pulls, or lender handoff.
+- The secondary action, "Not now", returns the user to the home page.
+- Financial Health remains a shared diagnostic layer, not a third acquisition door.
+
+## Product event taxonomy
+
+Minimal local, first-party events for product learning (no third-party analytics):
+
+- `door_selected`
+- `check_started`
+- `check_completed`
+- `go_deeper_selected`
+- `go_deeper_declined`
+
+Each event stores only `event_id`, `event_type`, `created_at`, `journey`
+(`money_value` or `comfortable_borrowing`) and `decision_context`. No name, phone,
+email, IP, account details, card numbers, raw check inputs or device identifiers
+are stored.
+
 ## Required controls
 
 - Every policy has version.

@@ -66,3 +66,102 @@ h1 {
 @media (max-width: 720px) {
   .doors { grid-template-columns: 1fr; }
 }
+
+.checkForm {
+  display: grid;
+  gap: 16px;
+  max-width: 520px;
+  margin: 32px 0;
+}
+
+.checkForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.checkForm input {
+  font-size: 16px;
+  padding: 10px 12px;
+  border: 1px solid #d9d7cc;
+  border-radius: 12px;
+  background: #ffffff;
+  color: inherit;
+}
+
+.checkForm button,
+.consentActions button {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px 20px;
+  border-radius: 999px;
+  border: none;
+  background: #171717;
+  color: #ffffff;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.checkForm button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.errorText {
+  color: #b3261e;
+  font-weight: 600;
+}
+
+.resultCard {
+  margin-top: 24px;
+  max-width: 640px;
+  border: 1px solid #d9d7cc;
+  border-radius: 28px;
+  padding: 28px;
+  background: #ffffff;
+}
+
+.resultCard h2 { margin-top: 0; }
+
+.resultHeadline {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 8px 0 16px;
+}
+
+.flags {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.explanation { font-size: 15px; }
+
+.disclaimer {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #555;
+}
+
+.goDeeperCta {
+  display: inline-block;
+  margin-top: 20px;
+  font-weight: 700;
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 2px solid currentColor;
+}
+
+.consentActions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+.consentActions .secondaryButton {
+  background: transparent;
+  color: inherit;
+  border: 1px solid #d9d7cc;
+}

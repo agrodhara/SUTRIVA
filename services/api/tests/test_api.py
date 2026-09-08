@@ -37,3 +37,28 @@ def test_money_value_quick_check():
     })
     assert response.status_code == 200
     assert "estimated_net_value" in response.json()
+
+
+def test_record_product_event():
+    response = client.post("/v1/events", json={
+        "event_type": "door_selected",
+        "journey": "money_value",
+        "decision_context": "local_demo"
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["event_type"] == "door_selected"
+    assert body["journey"] == "money_value"
+    assert "event_id" in body
+    assert "created_at" in body
+    assert "name" not in body
+    assert "account" not in body
+
+
+def test_record_product_event_rejects_unknown_event_type():
+    response = client.post("/v1/events", json={
+        "event_type": "not_a_real_event",
+        "journey": "money_value",
+        "decision_context": "local_demo"
+    })
+    assert response.status_code == 422

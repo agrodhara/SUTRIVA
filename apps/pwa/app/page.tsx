@@ -14,15 +14,17 @@ export default function Home() {
       <section className="doors" aria-label="Product journeys">
         <DoorCard
           title="Get More From My Money"
-          description="Find fees, avoidable interest, subscriptions and value leakage."
+          description="See whether your current card usage is creating value or quietly costing you money."
           href="/money-value"
-          cta="Check money value"
+          cta="Check my money value"
+          journey="money_value"
         />
         <DoorCard
           title="Borrow Better"
-          description="Know the EMI and borrowing range that feels comfortable before you borrow."
+          description="Check whether a desired borrowing amount looks comfortable for your monthly cash flow."
           href="/borrow-better"
-          cta="Check comfort range"
+          cta="Check borrowing comfort"
+          journey="comfortable_borrowing"
         />
       </section>
 
