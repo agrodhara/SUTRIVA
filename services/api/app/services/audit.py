@@ -14,24 +14,24 @@ def record_audit_event(
     input_snapshot: Dict[str, Any],
     output_snapshot: Dict[str, Any],
     decision_context: str = "local_demo",
-) -> str:
-    """Append a local JSONL audit event and return its generated audit_event_id.
+) -> Dict[str, Any]:
+    """Append a local JSONL audit event and return it.
 
     Alpha note: replace with encrypted DB/S3 append-only logging after G0.5 security review.
     Do not log PAN/account numbers/raw statement lines here.
     """
-    audit_event_id = str(uuid.uuid4())
     path = Path(os.getenv("AUDIT_LOG_PATH", "./audit_events.jsonl"))
+    created_at = datetime.now(timezone.utc).isoformat()
     event = {
-        "audit_event_id": audit_event_id,
+        "audit_event_id": str(uuid.uuid4()),
         "event_type": event_type,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": created_at,
+        "event_time_utc": created_at,
         "policy_version": policy_version,
         "decision_context": decision_context,
         "input_snapshot": input_snapshot,
         "output_snapshot": output_snapshot,
     }
-    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(event, ensure_ascii=False) + "\n")
-    return audit_event_id
+    return event

@@ -74,6 +74,83 @@ h1 {
   color: #555;
 }
 
+.form {
+  margin-top: 32px;
+  display: grid;
+  gap: 16px;
+  max-width: 480px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.field input {
+  border: 1px solid #d9d7cc;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 16px;
+  background: #ffffff;
+  color: inherit;
+}
+
+.primaryButton {
+  border: none;
+  border-radius: 999px;
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: 700;
+  background: #171717;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.errorText {
+  margin-top: 16px;
+  color: #a4231b;
+  font-weight: 600;
+}
+
+.resultCard {
+  margin-top: 32px;
+  border: 1px solid #d9d7cc;
+  border-radius: 28px;
+  padding: 28px;
+  background: #ffffff;
+}
+
+.resultGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.resultGrid dt {
+  font-size: 13px;
+  color: #555;
+}
+
+.resultGrid dd {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.resultCard h2 {
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+
 @media (max-width: 720px) {
   .doors { grid-template-columns: 1fr; }
+  .resultGrid { grid-template-columns: 1fr; }
 }

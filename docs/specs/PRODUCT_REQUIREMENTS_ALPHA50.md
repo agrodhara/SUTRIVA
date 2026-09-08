@@ -54,6 +54,38 @@ Output:
 - Suggested next check.
 - Reason codes.
 
+#### Money Value Check (Vertical Slice 4)
+
+- Preferred public endpoint: `POST /v1/financial-intelligence/money-value-check`.
+  The legacy internal route `POST /v1/money-value/quick-check` is preserved but
+  no longer preferred.
+- Question answered: "Based on how I use this card and what it costs me, am I
+  actually getting value from it?"
+- Inputs (user-declared estimates, all `>= 0`): `monthly_card_spend`,
+  `annual_card_fee`, `estimated_reward_rate_percent`, `revolving_balance`
+  (default 0), `annual_interest_rate_percent` (default 0).
+- Calculation (backend only):
+  `annual_spend = monthly_card_spend * 12`;
+  `estimated_annual_rewards = annual_spend * estimated_reward_rate_percent / 100`;
+  `estimated_annual_interest_cost = revolving_balance * annual_interest_rate_percent / 100`
+  (simple annualized estimate, not a billing-system calculation);
+  `estimated_net_annual_value = rewards - fee - interest`. Monetary outputs are
+  rounded to two decimals.
+- Value status uses placeholder Alpha-50 thresholds (not financial-advice
+  standards): `POSITIVE` if net value > 1000, `NEUTRAL` if within +/-1000,
+  `VALUE_LEAKAGE` if below -1000.
+- Deterministic reason codes: `NET_VALUE_POSITIVE`, `NET_VALUE_NEUTRAL`,
+  `NET_VALUE_NEGATIVE`, `ANNUAL_FEE_DRAG`, `REVOLVING_INTEREST_DRAG`,
+  `LOW_REWARD_CAPTURE`.
+- Every check is persisted via the shared audit service as a
+  `money_value_check` JSONL event with `audit_event_id` and
+  `decision_context = local_demo`.
+- Indicative-only limitation: outputs are estimates from user-declared inputs;
+  they are not a card recommendation, product offer or financial advice.
+- Hard boundary: no best-card recommendation, product ranking, card
+  marketplace, affiliate links, offers or apply flow. The user is checking
+  financial value and leakage, not shopping for a card.
+
 ### Door B — Borrow Better
 
 Input:

@@ -6,8 +6,13 @@ from app.services.audit import record_audit_event
 router = APIRouter(prefix="/v1/money-value", tags=["money-value"])
 
 
-@router.post("/quick-check", response_model=MoneyValueQuickCheckResponse)
+@router.post("/quick-check", response_model=MoneyValueQuickCheckResponse, deprecated=True)
 def quick_check(payload: MoneyValueQuickCheckRequest) -> MoneyValueQuickCheckResponse:
+    """Legacy internal quick check. Preserved for backwards compatibility.
+
+    The preferred Alpha-50 public endpoint is
+    POST /v1/financial-intelligence/money-value-check.
+    """
     annual_rewards = payload.monthly_card_spend * 12 * payload.reward_rate_percent / 100
     annual_interest = payload.revolving_balance * payload.revolving_interest_rate_pa
     annual_subscriptions = payload.unused_subscription_cost_monthly * 12
