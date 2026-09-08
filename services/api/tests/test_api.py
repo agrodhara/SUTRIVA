@@ -129,6 +129,24 @@ def test_comfortable_borrowing_check_preferred_endpoint(monkeypatch, tmp_path):
         assert f'"{prohibited}"' not in flattened
 
 
+def test_comfortable_borrowing_check_caution_includes_commitment_ratio_reason_code(monkeypatch, tmp_path):
+    audit_path = tmp_path / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_path))
+
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "monthly_income": 100000,
+        "existing_monthly_commitments": 25000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36
+    })
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["comfort_status"] == "CAUTION"
+    assert "COMMITMENT_RATIO_CAUTION" in body["reason_codes"]
+    assert len(body["reason_codes"]) > 1
+
+
 def test_money_value_quick_check():
     response = client.post("/v1/money-value/quick-check", json={
         "monthly_card_spend": 50000,

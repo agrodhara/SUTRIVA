@@ -37,8 +37,8 @@ Response:
   "total_monthly_commitment": 42088.81,
   "commitment_ratio": 0.4209,
   "comfort_status": "CAUTION",
-  "reason_codes": ["INCOME_UNVERIFIED"],
-  "next_best_action": "Income is self-declared or not yet verified, so the result should be treated as indicative.",
+  "reason_codes": ["INCOME_UNVERIFIED", "COMMITMENT_RATIO_CAUTION"],
+  "next_best_action": "Income is self-declared or not yet verified, so the result should be treated as indicative. | The commitment ratio after the new EMI is elevated and may reduce monthly flexibility.",
   "guidance_disclaimer": "Indicative financial-intelligence guidance based on supplied inputs. This is not a loan offer, approval, pre-approval, or eligibility decision.",
   "audit_event_id": "0f7c2e5a-6d0a-4e9a-9b1e-1f7f6c3d1a22",
   "audit_event": {
