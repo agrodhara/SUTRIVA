@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import borrow_better, money_value
+from app.routers import borrow_better, financial_intelligence, money_value
 
 app = FastAPI(
     title="Sutriva Product API",
@@ -16,3 +16,4 @@ def health() -> dict:
 
 app.include_router(borrow_better.router)
 app.include_router(money_value.router)
+app.include_router(financial_intelligence.router)
