@@ -102,6 +102,19 @@ Output:
 - Status: OK / Caution / Reduce amount / Not comfortable.
 - Reason codes.
 
+The preferred route is `POST /v1/borrowing-intelligence/comfortable-borrowing-check`.
+It uses the shared affordability layer and `borrow_better_v0_1.json`; the
+frontend does not calculate thresholds. The five policy rules are
+`FOIR_HIGH`, `BUFFER_LOW`, `INCOME_UNVERIFIED`, `COMMITMENT_RATIO_CAUTION`, and
+`NEGATIVE_SURPLUS`.
+
+The Alpha journey has exactly two doors. Go Deeper appears only after a
+successful quick check, records interest-only intent, collects no additional
+financial data, and sends “Not now” back to the originating journey.
+
+Product events are limited to `event_id`, `event_type`, `created_at`, `journey`,
+and `decision_context`; no PII or financial values are included.
+
 ## Required controls
 
 - Every policy has version.
