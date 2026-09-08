@@ -1,0 +1,25 @@
+experiment_id: paper_02_berka_baseline_v0_1
+paper_alignment: "Paper 2 - Beyond Aggregates: Learning Financial Behaviour from Transaction Sequences"
+dataset:
+  name: Berka
+  source_type: public
+  contains_real_customer_data: false
+  allowed_for_ai_prompts: true
+  notes: "Real anonymized banking transaction dataset with loan outcomes. Confirm license before redistribution."
+model:
+  name: aggregate_credit_risk_baseline
+  family: aggregate
+  target: loan_default_or_problematic_outcome
+  observation_window: transactions_before_loan_origination
+  performance_window: loan_outcome_after_origination
+  metrics:
+    - auc
+    - ks
+    - gini
+    - calibration
+    - bad_rate_by_decile
+leakage_controls:
+  - No transaction after loan origination in features
+  - No outcome-status derived fields in observation window
+  - Time-based validation before random validation
+governance_notes: "This is the boring benchmark. Sequence models must beat this fairly."

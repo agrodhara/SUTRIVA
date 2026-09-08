@@ -1,0 +1,9 @@
+[project]
+name = "sutriva-decision-engine"
+version = "0.1.0"
+description = "Versioned decision policy evaluator for Sutriva Alpha"
+requires-python = ">=3.10"
+dependencies = ["pydantic>=2.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
