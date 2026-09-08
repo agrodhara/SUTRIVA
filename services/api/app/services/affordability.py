@@ -31,6 +31,7 @@ def build_affordability_features(payload: BorrowBetterQuickCheckRequest) -> dict
 
     return {
         "estimated_new_emi": estimated_new_emi,
+        "total_monthly_commitment": total_commitments,
         "foir_after_new_emi": (payload.existing_monthly_emi + estimated_new_emi) / payload.declared_monthly_income,
         "post_emi_surplus": post_emi_surplus,
         "minimum_monthly_buffer": minimum_monthly_buffer,
