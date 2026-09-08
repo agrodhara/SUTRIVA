@@ -76,3 +76,20 @@ Output:
 - Every result has reason codes.
 - Every decision is auditable.
 - Every real-data expansion requires gate approval.
+
+## Comfortable Borrowing Check
+
+Comfortable Borrowing Check is guidance only. It is not a loan approval, eligibility
+decision, lender offer, marketplace, or application flow.
+
+The local flow accepts monthly income, existing monthly commitments, desired
+borrowing amount, and desired tenure in months. It returns an estimated new
+monthly commitment, total monthly commitment, a decimal commitment ratio,
+comfort status, deterministic reason codes, advice language, a policy version,
+and an `audit_event` local-demo stub.
+
+The placeholder Alpha-50 calculation uses an annual interest rate of `0.12` and
+the standard EMI formula. Status thresholds are `COMFORTABLE` at or below `0.35`,
+`CAUTION` above `0.35` through `0.50`, and `STRETCHED` above `0.50`. Reason
+codes are `COMMITMENT_RATIO_COMFORTABLE`, `COMMITMENT_RATIO_CAUTION`, and
+`COMMITMENT_RATIO_STRETCHED`.

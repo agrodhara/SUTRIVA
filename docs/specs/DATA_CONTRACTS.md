@@ -56,3 +56,30 @@
 ## Sensitive-data rule
 
 Do not log full bank statements, PAN, account numbers, raw documents, API secrets or unnecessary personal data.
+
+## Comfortable Borrowing Check
+
+Comfortable Borrowing Check is guidance only. It is not a loan approval, eligibility
+decision, lender offer, marketplace, or application flow.
+
+The request contains `monthly_income`, `existing_monthly_commitments`,
+`desired_borrowing_amount`, and `desired_tenure_months`. All values must be
+positive except existing commitments, which may be zero.
+
+The response contains `estimated_new_monthly_commitment`,
+`total_monthly_commitment`, decimal `commitment_ratio`, `comfort_status`,
+`reason_codes`, `next_best_action`, `policy_version`, `guidance_disclaimer`, and
+the following audit stub:
+
+```json
+{
+  "event_type": "comfortable_borrowing_check",
+  "policy_version": "alpha50-comfort-v0.1",
+  "decision_context": "local_demo"
+}
+```
+
+Alpha uses a placeholder annual interest rate of `0.12` and standard EMI
+calculation. Placeholder thresholds are `COMFORTABLE <= 0.35`, `CAUTION >
+0.35 and <= 0.50`, and `STRETCHED > 0.50`. Reason codes map deterministically to
+those three statuses.
