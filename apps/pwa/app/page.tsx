@@ -5,29 +5,39 @@ export default function Home() {
     <main className="shell">
       <section className="hero">
         <p className="eyebrow">Sutriva Alpha</p>
-        <h1>Understand your money. Decide better.</h1>
+        <h1>Make every money decision a better one.</h1>
         <p className="lede">
-          Start with one quick check. Go deeper only after you see value.
+          Personalized insights. Smarter choices. Better outcomes.
         </p>
       </section>
 
       <section className="doors" aria-label="Product journeys">
         <DoorCard
           title="Get More From My Money"
-          description="Find fees, avoidable interest, subscriptions and value leakage."
+          description="See whether your current card usage is creating value or quietly costing you money."
           href="/money-value"
-          cta="Check money value"
+          cta="Check my money value"
+          benefits={[
+            "Understand whether your card creates value",
+            "See the impact of fees and interest",
+            "Spot potential value leakage"
+          ]}
         />
         <DoorCard
           title="Borrow Better"
-          description="Know the EMI and borrowing range that feels comfortable before you borrow."
+          description="Check whether a desired borrowing amount looks comfortable for your monthly cash flow."
           href="/borrow-better"
-          cta="Check comfort range"
+          cta="Check borrowing comfort"
+          benefits={[
+            "Understand your monthly borrowing comfort",
+            "See how commitments affect cash flow",
+            "See what you may want to adjust"
+          ]}
         />
       </section>
 
       <p className="guardrail">
-        Alpha note: no lender offers or applications are shown before the legal and partner gate is cleared.
+        Alpha quick checks use only the details you enter. No lender offers or applications are shown.
       </p>
     </main>
   );
