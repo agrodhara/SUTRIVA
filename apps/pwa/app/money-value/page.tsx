@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useState } from "react";
+import { API_BASE_URL, trackEvent } from "../../lib/api";
+import { currency, ErrorState, ExampleValuesButton, FinancialInput, GoDeeperCTA, InsightBlock, LoadingState, ResultMetric } from "../../components/QuickCheckUI";
 
-interface MoneyValueCheckResult {
-  policy_version: string;
-  annual_spend: number;
+type Result = {
   estimated_annual_rewards: number;
   annual_card_fee: number;
   estimated_annual_interest_cost: number;
@@ -12,166 +12,46 @@ interface MoneyValueCheckResult {
   value_status: string;
   reason_codes: string[];
   next_best_action: string;
-  guidance_disclaimer: string;
-  audit_event_id?: string;
-}
-
-const INITIAL_FORM = {
-  monthly_card_spend: "",
-  annual_card_fee: "",
-  estimated_reward_rate_percent: "",
-  revolving_balance: "0",
-  annual_interest_rate_percent: "0"
 };
 
 export default function MoneyValuePage() {
-  const [form, setForm] = useState(INITIAL_FORM);
-  const [result, setResult] = useState<MoneyValueCheckResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({ monthly_card_spend: "", annual_card_fee: "", estimated_reward_rate_percent: "", revolving_balance: "", annual_interest_rate_percent: "" });
+  const [result, setResult] = useState<Result>();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const set = (key: keyof typeof form) => (event: ChangeEvent<HTMLInputElement>) => setForm({ ...form, [key]: event.target.value });
 
-  function updateField(field: keyof typeof INITIAL_FORM, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    setLoading(true);
-    setError(null);
-    setResult(null);
+    setLoading(true); setError(""); trackEvent("check_started", "money_value");
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
-      const response = await fetch(`${apiBaseUrl}/v1/financial-intelligence/money-value-check`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch(`${API_BASE_URL}/v1/financial-intelligence/money-value-check`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           monthly_card_spend: Number(form.monthly_card_spend),
           annual_card_fee: Number(form.annual_card_fee),
           estimated_reward_rate_percent: Number(form.estimated_reward_rate_percent),
           revolving_balance: Number(form.revolving_balance || 0),
-          annual_interest_rate_percent: Number(form.annual_interest_rate_percent || 0)
-        })
+          annual_interest_rate_percent: Number(form.annual_interest_rate_percent || 0),
+        }),
       });
-      if (!response.ok) {
-        throw new Error("The money value check could not be completed. Please review your inputs and try again.");
-      }
-      setResult((await response.json()) as MoneyValueCheckResult);
+      if (!response.ok) throw new Error("We couldn’t complete your money value check. Please check your inputs.");
+      setResult(await response.json()); trackEvent("check_completed", "money_value");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally { setLoading(false); }
   }
 
-  return (
-    <main className="shell">
-      <p className="eyebrow">Get More From My Money</p>
-      <h1>Money Value Check</h1>
-      <p className="lede">See whether your card is creating value or quietly costing you money.</p>
+  if (result) return <main className="shell journey"><a className="backLink" href="/money-value">← Update details</a><p className="eyebrow">Get More From My Money</p><h1>Your money value check</h1>
+    <InsightBlock title="1. What did we find?"><div className="metrics">
+      <ResultMetric label="Estimated annual rewards" value={currency(result.estimated_annual_rewards)} /><ResultMetric label="Annual fee" value={currency(result.annual_card_fee)} />
+      <ResultMetric label="Estimated annual interest cost" value={currency(result.estimated_annual_interest_cost)} /><ResultMetric label="Estimated net annual value" value={currency(result.estimated_net_annual_value)} />
+    </div><p className="status">{result.value_status}</p></InsightBlock>
+    <InsightBlock title="2. Why does it matter?"><p>{result.reason_codes.join(". ")}</p></InsightBlock>
+    <InsightBlock title="3. What should I do next?"><p>{result.next_best_action}</p><GoDeeperCTA journey="money_value" /></InsightBlock></main>;
 
-      <form className="form" onSubmit={handleSubmit}>
-        <label className="field">
-          <span>Monthly card spend</span>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            required
-            value={form.monthly_card_spend}
-            onChange={(event) => updateField("monthly_card_spend", event.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Annual card fee</span>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            required
-            value={form.annual_card_fee}
-            onChange={(event) => updateField("annual_card_fee", event.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Estimated reward rate %</span>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            required
-            value={form.estimated_reward_rate_percent}
-            onChange={(event) => updateField("estimated_reward_rate_percent", event.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Revolving balance</span>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            value={form.revolving_balance}
-            onChange={(event) => updateField("revolving_balance", event.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Annual interest rate %</span>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            value={form.annual_interest_rate_percent}
-            onChange={(event) => updateField("annual_interest_rate_percent", event.target.value)}
-          />
-        </label>
-        <button className="primaryButton" type="submit" disabled={loading}>
-          {loading ? "Checking…" : "Check money value"}
-        </button>
-      </form>
-
-      {error ? <p className="errorText">{error}</p> : null}
-
-      {result ? (
-        <section className="resultCard" aria-label="Money value result">
-          <p className="eyebrow">Result · {result.policy_version}</p>
-          <dl className="resultGrid">
-            <div>
-              <dt>Annual spend</dt>
-              <dd>{result.annual_spend}</dd>
-            </div>
-            <div>
-              <dt>Estimated annual rewards</dt>
-              <dd>{result.estimated_annual_rewards}</dd>
-            </div>
-            <div>
-              <dt>Annual card fee</dt>
-              <dd>{result.annual_card_fee}</dd>
-            </div>
-            <div>
-              <dt>Estimated annual interest cost</dt>
-              <dd>{result.estimated_annual_interest_cost}</dd>
-            </div>
-            <div>
-              <dt>Estimated net annual value</dt>
-              <dd>{result.estimated_net_annual_value}</dd>
-            </div>
-            <div>
-              <dt>Value status</dt>
-              <dd>{result.value_status}</dd>
-            </div>
-          </dl>
-          <div>
-            <h2>Reason codes</h2>
-            <ul>
-              {result.reason_codes.map((code) => (
-                <li key={code}>{code}</li>
-              ))}
-            </ul>
-          </div>
-          <p>{result.next_best_action}</p>
-          <p className="guardrail">{result.guidance_disclaimer}</p>
-          {result.audit_event_id ? <p className="guardrail">Audit event: {result.audit_event_id}</p> : null}
-        </section>
-      ) : null}
-    </main>
-  );
+  return <main className="shell journey"><a className="backLink" href="/">← Home</a><p className="eyebrow">Get More From My Money</p><h1>See what your card use is worth.</h1><p className="lede">Answer a few questions for an initial estimate.</p>
+    <form onSubmit={submit}><FinancialInput label="Monthly card spend" type="number" min="0" required value={form.monthly_card_spend} onChange={set("monthly_card_spend")} /><FinancialInput label="Annual card fee" type="number" min="0" required value={form.annual_card_fee} onChange={set("annual_card_fee")} /><FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} /><FinancialInput label="Revolving balance" optional type="number" min="0" value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" optional type="number" min="0" value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} />
+      <div className="formActions"><ExampleValuesButton onClick={() => setForm({ monthly_card_spend: "75000", annual_card_fee: "4000", estimated_reward_rate_percent: "1.2", revolving_balance: "0", annual_interest_rate_percent: "0" })} /><button type="submit" className="primaryButton" disabled={loading}>Check my money value</button></div>
+    </form>{loading && <LoadingState />}{error && <ErrorState message={error} retry={() => setError("")} />}</main>;
 }
