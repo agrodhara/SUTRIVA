@@ -38,20 +38,21 @@
 }
 ```
 
-## Audit event
+## Audit event (Alpha local JSONL implementation)
 
 ```json
 {
-  "event_id": "uuid",
-  "event_type": "decision_evaluated",
-  "journey": "borrow_better",
+  "audit_event_id": "uuid",
+  "event_type": "borrow_better_quick_check",
+  "created_at": "2026-09-08T00:00:00Z",
   "policy_version": "borrow_better_v0_1",
-  "input_summary": {},
-  "output_summary": {},
-  "reason_codes": [],
-  "created_at": "2026-09-08T00:00:00Z"
+  "decision_context": "local_demo",
+  "input_snapshot": {},
+  "output_snapshot": {}
 }
 ```
+
+Alpha implementation note: audit events are appended to a local JSONL file (`services/api/audit_events.jsonl`, path overridable via `AUDIT_LOG_PATH`). This is local traceability for guidance outputs, not production audit infrastructure. It never contains name, phone, email, PAN, Aadhaar, bank account number, card number, raw statement lines, bureau fields, device fingerprint, location or IP address.
 
 ## Sensitive-data rule
 
