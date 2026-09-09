@@ -37,10 +37,11 @@ export default function BorrowBetterPage() {
 
   async function runWhatIf(event: FormEvent) {
     event.preventDefault(); setLoading(true); setError("");
+    trackEvent("what_if_started", "comfortable_borrowing");
     try {
       const response = await fetch(`${API_BASE_URL}/v1/borrowing-intelligence/comfortable-borrowing-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, desired_borrowing_amount: Number(whatIf.desired_borrowing_amount), desired_tenure_months: Number(whatIf.desired_tenure_months) }) });
       if (!response.ok) throw new Error("We couldn’t update this what-if estimate.");
-      setResult(await response.json());
+      setResult(await response.json()); trackEvent("what_if_completed", "comfortable_borrowing");
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); } finally { setLoading(false); }
   }
   if (result) return <main className="shell journey"><a className="backLink" href="/borrow-better">← Update details</a><p className="eyebrow">Borrow Better</p><h1>Your borrowing comfort check</h1><p className="estimateLabel">{exampleMode ? "Example preview" : "Your estimate"}</p>

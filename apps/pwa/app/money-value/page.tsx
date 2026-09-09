@@ -45,10 +45,11 @@ export default function MoneyValuePage() {
 
   async function runWhatIf(event: FormEvent) {
     event.preventDefault(); setLoading(true); setError("");
+    trackEvent("what_if_started", "money_value");
     try {
       const response = await fetch(`${API_BASE_URL}/v1/financial-intelligence/money-value-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ monthly_card_spend: Number(form.monthly_card_spend), annual_card_fee: Number(form.annual_card_fee), estimated_reward_rate_percent: Number(form.estimated_reward_rate_percent), revolving_balance: Number(form.revolving_balance || 0), annual_interest_rate_percent: Number(form.annual_interest_rate_percent || 0) }) });
       if (!response.ok) throw new Error("We couldn’t update this what-if estimate.");
-      setResult(await response.json());
+      setResult(await response.json()); trackEvent("what_if_completed", "money_value");
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); } finally { setLoading(false); }
   }
   if (result) return <main className="shell journey"><a className="backLink" href="/money-value">← Update details</a><p className="eyebrow">Get More From My Money</p><h1>Your money value check</h1><p className="estimateLabel">{exampleMode ? "Example preview" : "Your estimate"}</p>

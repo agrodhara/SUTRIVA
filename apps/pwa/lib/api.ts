@@ -8,7 +8,9 @@ export type ProductEventType =
   | "check_started"
   | "check_completed"
   | "go_deeper_selected"
-  | "go_deeper_declined";
+  | "go_deeper_declined"
+  | "what_if_started"
+  | "what_if_completed";
 
 /**
  * Minimal local product-event tracker.

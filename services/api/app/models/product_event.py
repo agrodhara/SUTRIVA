@@ -8,6 +8,8 @@ ProductEventType = Literal[
     "check_completed",
     "go_deeper_selected",
     "go_deeper_declined",
+    "what_if_started",
+    "what_if_completed",
 ]
 
 JourneyType = Literal["money_value", "comfortable_borrowing"]
