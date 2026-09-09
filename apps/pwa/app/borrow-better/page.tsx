@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useState } from "react";
-import { API_BASE_URL, trackEvent } from "../../lib/api";
+import { requireApiBaseUrl, trackEvent } from "../../lib/api";
 import { borrowingStatusLabels, currency, ErrorState, ExampleValuesButton, FinancialInput, FutureInterestCapture, InsightBlock, LoadingState, percent, reasonCodeLabels, ResultMetric } from "../../components/QuickCheckUI";
 
 type Result = { comfort_status: string; estimated_new_monthly_commitment: number; total_monthly_commitment: number; commitment_ratio: number; reason_codes: string[]; next_best_action: string };
@@ -19,7 +19,7 @@ export default function BorrowBetterPage() {
     event.preventDefault();
     setLoading(true); setError(""); trackEvent("check_started", "comfortable_borrowing");
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/borrowing-intelligence/comfortable-borrowing-check`, {
+      const response = await fetch(`${requireApiBaseUrl()}/v1/borrowing-intelligence/comfortable-borrowing-check`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           monthly_income: Number(form.monthly_income),
@@ -39,7 +39,7 @@ export default function BorrowBetterPage() {
     event.preventDefault(); setLoading(true); setError("");
     trackEvent("what_if_started", "comfortable_borrowing");
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/borrowing-intelligence/comfortable-borrowing-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, desired_borrowing_amount: Number(whatIf.desired_borrowing_amount), desired_tenure_months: Number(whatIf.desired_tenure_months) }) });
+      const response = await fetch(`${requireApiBaseUrl()}/v1/borrowing-intelligence/comfortable-borrowing-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, desired_borrowing_amount: Number(whatIf.desired_borrowing_amount), desired_tenure_months: Number(whatIf.desired_tenure_months) }) });
       if (!response.ok) throw new Error("We couldn’t update this what-if estimate.");
       setResult(await response.json()); trackEvent("what_if_completed", "comfortable_borrowing");
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); } finally { setLoading(false); }

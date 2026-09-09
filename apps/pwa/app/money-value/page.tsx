@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useState } from "react";
-import { API_BASE_URL, trackEvent } from "../../lib/api";
+import { requireApiBaseUrl, trackEvent } from "../../lib/api";
 import { currency, ErrorState, ExampleValuesButton, FinancialInput, FutureInterestCapture, InsightBlock, LoadingState, moneyValueStatusLabels, reasonCodeLabels, ResultMetric } from "../../components/QuickCheckUI";
 
 type Result = {
@@ -26,7 +26,7 @@ export default function MoneyValuePage() {
     event.preventDefault();
     setLoading(true); setError(""); trackEvent("check_started", "money_value");
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/financial-intelligence/money-value-check`, {
+      const response = await fetch(`${requireApiBaseUrl()}/v1/financial-intelligence/money-value-check`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           monthly_card_spend: Number(form.monthly_card_spend),
@@ -47,7 +47,7 @@ export default function MoneyValuePage() {
     event.preventDefault(); setLoading(true); setError("");
     trackEvent("what_if_started", "money_value");
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/financial-intelligence/money-value-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ monthly_card_spend: Number(form.monthly_card_spend), annual_card_fee: Number(form.annual_card_fee), estimated_reward_rate_percent: Number(form.estimated_reward_rate_percent), revolving_balance: Number(form.revolving_balance || 0), annual_interest_rate_percent: Number(form.annual_interest_rate_percent || 0) }) });
+      const response = await fetch(`${requireApiBaseUrl()}/v1/financial-intelligence/money-value-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ monthly_card_spend: Number(form.monthly_card_spend), annual_card_fee: Number(form.annual_card_fee), estimated_reward_rate_percent: Number(form.estimated_reward_rate_percent), revolving_balance: Number(form.revolving_balance || 0), annual_interest_rate_percent: Number(form.annual_interest_rate_percent || 0) }) });
       if (!response.ok) throw new Error("We couldn’t update this what-if estimate.");
       setResult(await response.json()); trackEvent("what_if_completed", "money_value");
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); } finally { setLoading(false); }

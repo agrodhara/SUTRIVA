@@ -1,5 +1,12 @@
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+
+export function requireApiBaseUrl(): string {
+  if (!API_BASE_URL) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
+  }
+  return API_BASE_URL;
+}
 
 export type Journey = "money_value" | "comfortable_borrowing";
 
@@ -19,6 +26,7 @@ export type ProductEventType =
  * name, contact details, account details or raw financial-check inputs here.
  */
 export function trackEvent(eventType: ProductEventType, journey: Journey): void {
+  if (!API_BASE_URL) return;
   fetch(`${API_BASE_URL}/v1/events`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
