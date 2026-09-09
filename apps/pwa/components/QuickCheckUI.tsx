@@ -1,6 +1,7 @@
 "use client";
 
-import { InputHTMLAttributes, ReactNode } from "react";
+import { InputHTMLAttributes, ReactNode, useState } from "react";
+import { trackEvent } from "../lib/api";
 
 export function FinancialInput({ label, optional, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; optional?: boolean }) {
   return <label className="field"><span>{label}{optional && <em>Optional</em>}</span><input {...props} /></label>;
@@ -26,8 +27,10 @@ export function InsightBlock({ title, children }: { title: string; children: Rea
   return <section className="insightBlock"><h2>{title}</h2>{children}</section>;
 }
 
-export function GoDeeperCTA({ journey }: { journey: "money_value" | "comfortable_borrowing" }) {
-  return <a className="goDeeper" href={`/go-deeper?journey=${journey}`}>Go deeper <span aria-hidden="true">→</span></a>;
+export function FutureInterestCapture({ journey }: { journey: "money_value" | "comfortable_borrowing" }) {
+  const [choice, setChoice] = useState<"interested" | "not_now" | null>(null);
+  if (choice) return <section className="interestCard"><h2>Want deeper insights later?</h2><p>{choice === "interested" ? "Thanks — we’ve recorded your interest. No additional information was collected." : "No problem. You can return whenever you want."}</p></section>;
+  return <section className="interestCard"><h2>Want deeper insights later?</h2><p>You&apos;ve already seen an estimate using the information you entered. In a future version, deeper insights may use additional permissioned data.</p><div className="buttonRow"><button type="button" onClick={() => { trackEvent("go_deeper_selected", journey); setChoice("interested"); }}>I&apos;m interested</button><button type="button" className="secondaryButton" onClick={() => { trackEvent("go_deeper_declined", journey); setChoice("not_now"); }}>Not now</button></div></section>;
 }
 
 export const borrowingStatusLabels: Record<string, string> = {
