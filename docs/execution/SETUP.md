@@ -43,9 +43,17 @@ pytest
 
 ```bash
 cd apps/pwa
+cp .env.example .env.local
 npm install
 npm run dev
 ```
+
+The PWA reads the backend URL from `NEXT_PUBLIC_API_BASE_URL` (default `http://127.0.0.1:8000`, see `apps/pwa/.env.example`).
+With the API running, open the PWA home page: it calls `GET {NEXT_PUBLIC_API_BASE_URL}/health` and shows
+"Backend connected" or "Backend unavailable" depending on whether the request succeeds.
+
+The PWA calls the preferred borrowing and money-value routes only. Run
+`npx tsc --noEmit` and `npm run build` for frontend validation.
 
 ## GitHub-first rule
 

@@ -1,94 +1,52 @@
-# API Specification — Alpha-50 Draft
+# API Specification — Alpha-50
 
-Base URL local: `http://127.0.0.1:8000`
+Base URL: `http://127.0.0.1:8000`
 
-## GET /health
+## Foundation
 
-Response:
+`GET /health` returns the service status. The PWA uses
+`NEXT_PUBLIC_API_BASE_URL` for all calls.
 
-```json
-{
-  "status": "ok",
-  "service": "sutriva-api"
-}
-```
+## Preferred quick-check routes
 
-## POST /borrow-better/quick-check
+### `POST /v1/borrowing-intelligence/comfortable-borrowing-check`
 
-Purpose: return indicative affordability insight.
+Request fields: `monthly_income`, `existing_monthly_commitments`,
+`desired_borrowing_amount`, and `desired_tenure_months`.
 
-Request:
+The response includes `policy_version=borrow_better_v0_1`,
+`estimated_new_monthly_commitment`, `total_monthly_commitment`,
+`commitment_ratio`, `comfort_status`, `reason_codes`, `next_best_action`,
+`guidance_disclaimer`, and `audit_event_id`.
 
-```json
-{
-  "declared_monthly_income": 150000,
-  "existing_monthly_emi": 35000,
-  "desired_loan_amount": 800000,
-  "tenure_months": 36,
-  "indicative_interest_rate_pa": 0.15
-}
-```
+### `POST /v1/financial-intelligence/money-value-check`
 
-Response:
+Request fields: `monthly_card_spend`, `annual_card_fee`,
+`estimated_reward_rate_percent`, `revolving_balance`, and
+`annual_interest_rate_percent`.
 
-```json
-{
-  "journey": "borrow_better",
-  "policy_version": "borrow_better_v0_1",
-  "status": "CAUTION",
-  "comfortable_monthly_emi": 32500,
-  "comfortable_borrowing_range": {
-    "lower": 550000,
-    "upper": 700000
-  },
-  "reason_codes": [
-    "Existing commitments reduce room for a new EMI",
-    "A lower amount may preserve monthly buffer"
-  ],
-  "disclaimer": "Indicative financial-intelligence output, not a loan offer or approval."
-}
-```
+The response includes `policy_version=alpha50-money-value-v0.1`,
+`annual_spend`, estimated rewards, annual fee, estimated interest cost,
+estimated net annual value, `value_status`, `reason_codes`,
+`next_best_action`, `guidance_disclaimer`, and `audit_event_id`.
 
-## POST /money-value/quick-check
+## Compatibility routes
 
-Purpose: return indicative value-leakage estimate.
+`POST /v1/borrow-better/quick-check` and
+`POST /v1/money-value/quick-check` remain available for compatibility and
+delegate to the shared backend services. The PWA does not call them.
 
-Request:
+## Product events
 
-```json
-{
-  "monthly_card_spend": 100000,
-  "annual_card_fee": 5000,
-  "monthly_interest_or_late_fee": 1500,
-  "estimated_reward_rate": 0.01,
-  "subscription_leakage_monthly": 800
-}
-```
+`POST /v1/events` accepts only `event_type`, `journey`, and
+`decision_context`. Supported events are `door_selected`, `check_started`,
+`check_completed`, `go_deeper_selected`, and `go_deeper_declined`.
+The server adds `event_id` and `created_at`; no PII or financial values are
+accepted.
 
-Response:
+## Alpha boundaries
 
-```json
-{
-  "journey": "money_value",
-  "policy_version": "money_value_v0_1",
-  "estimated_annual_value_gap": 23600,
-  "reason_codes": [
-    "Annual fee and recurring charges reduce net value",
-    "Reward rate may not offset current leakage"
-  ],
-  "disclaimer": "Indicative estimate based on user-declared inputs."
-}
-```
-
-## Error shape
-
-```json
-{
-  "error": "INVALID_INPUT",
-  "message": "declared_monthly_income must be greater than zero"
-}
-```
-
-## API rule
-
-APIs return insight and reason codes. They do not return loan offers, lender rankings or approval promises in Alpha.
+All calculations and thresholds remain backend-owned. These APIs provide
+indicative guidance only and do not provide lender offers, ranking, approval,
+fulfilment, Account Aggregator, bureau, login, OTP, PAN, Aadhaar, or
+statement-upload flows.

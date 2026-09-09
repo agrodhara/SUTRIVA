@@ -1,58 +1,58 @@
-# Data Contracts — Alpha-50 Draft
+# Data Contracts — Alpha-50
 
-## User-declared profile
+## Shared audit event
 
-```json
-{
-  "user_id": "optional-alpha-id",
-  "declared_monthly_income": 150000,
-  "employment_type": "salaried",
-  "country": "IN",
-  "consent_version": "alpha_consent_v0_1"
-}
-```
-
-## Borrow Better input
+Every quick-check call appends one local JSONL event through the single shared
+`record_audit_event` implementation. The path is `AUDIT_LOG_PATH` or
+`./audit_events.jsonl`.
 
 ```json
 {
-  "declared_monthly_income": 150000,
-  "existing_monthly_emi": 35000,
-  "desired_loan_amount": 800000,
-  "tenure_months": 36,
-  "indicative_interest_rate_pa": 0.15
+  "audit_event_id": "uuid",
+  "event_type": "money_value_check",
+  "created_at": "2026-09-08T00:00:00Z",
+  "event_time_utc": "2026-09-08T00:00:00Z",
+  "policy_version": "alpha50-money-value-v0.1",
+  "decision_context": "local_demo",
+  "input_snapshot": {},
+  "output_snapshot": {}
 }
 ```
 
-## Decision result
+The same structure is used for `comfortable_borrowing_check` and legacy
+compatibility checks. Responses expose `audit_event_id` and the structured
+event.
 
-```json
-{
-  "decision_id": "uuid",
-  "journey": "borrow_better",
-  "policy_version": "borrow_better_v0_1",
-  "status": "CAUTION",
-  "outputs": {},
-  "reason_codes": [],
-  "created_at": "2026-09-08T00:00:00Z"
-}
-```
+## Borrowing policy
 
-## Audit event
+The shared decision engine loads `borrow_better_v0_1.json` and evaluates five
+rules: `FOIR_HIGH`, `BUFFER_LOW`, `INCOME_UNVERIFIED`,
+`COMMITMENT_RATIO_CAUTION`, and `NEGATIVE_SURPLUS`.
+
+## Money Value policy
+
+The dedicated backend service uses `alpha50-money-value-v0.1`. It calculates
+annual spend, rewards, annualized interest cost, and net annual value from
+user-declared estimates. It returns `POSITIVE`, `NEUTRAL`, or
+`VALUE_LEAKAGE` plus deterministic reason codes.
+
+## Product event
 
 ```json
 {
   "event_id": "uuid",
-  "event_type": "decision_evaluated",
-  "journey": "borrow_better",
-  "policy_version": "borrow_better_v0_1",
-  "input_summary": {},
-  "output_summary": {},
-  "reason_codes": [],
-  "created_at": "2026-09-08T00:00:00Z"
+  "event_type": "check_completed",
+  "created_at": "2026-09-08T00:00:00Z",
+  "journey": "money_value",
+  "decision_context": "local_demo"
 }
 ```
 
+Product events intentionally contain no PII, financial values, analytics
+identifiers, or raw check inputs.
+
 ## Sensitive-data rule
 
-Do not log full bank statements, PAN, account numbers, raw documents, API secrets or unnecessary personal data.
+Do not collect or log names, phone numbers, email, PAN, Aadhaar, account or
+card numbers, bureau data, raw statements, IP/device fingerprints, or
+secrets.
