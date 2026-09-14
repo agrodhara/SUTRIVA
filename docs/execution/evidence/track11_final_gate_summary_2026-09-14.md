@@ -37,6 +37,9 @@ Task: close two remaining release blockers after checkpoint commit.
 - Reveal -> Intent -> Closure and teaser_viewed cardinality:
   - docs/execution/evidence/track11_journey_continuation_teaser_2026-09-14.json
   - pass=true, moneyTeaserDelta=2, borrowTeaserDelta=2
+- Five-minute happy-path walkthrough (both journeys):
+  - docs/execution/evidence/track11_happy_path_2026-09-14.json
+  - pass=true
 
 ## Residual notes
 - Next.js dev runtime intermittently served missing chunk error (Cannot find module './819.js').
