@@ -1,14 +1,13 @@
 "use client";
 
-import { InputHTMLAttributes, ReactNode, useState } from "react";
-import { trackEvent } from "../lib/api";
+import { InputHTMLAttributes, ReactNode } from "react";
 
 export function FinancialInput({ label, optional, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; optional?: boolean }) {
   return <label className="field"><span>{label}{optional && <em>Optional</em>}</span><input {...props} /></label>;
 }
 
-export function ExampleValuesButton({ onClick }: { onClick: () => void }) {
-  return <button type="button" className="secondaryButton" onClick={onClick}>Use example values</button>;
+export function ExampleValuesButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
+  return <button type="button" className="secondaryButton" onClick={onClick} disabled={disabled}>Use example values</button>;
 }
 
 export function LoadingState() {
@@ -27,12 +26,6 @@ export function InsightBlock({ title, children }: { title: string; children: Rea
   return <section className="insightBlock"><h2>{title}</h2>{children}</section>;
 }
 
-export function FutureInterestCapture({ journey }: { journey: "money_value" | "comfortable_borrowing" }) {
-  const [choice, setChoice] = useState<"interested" | "not_now" | null>(null);
-  if (choice) return <section className="interestCard"><h2>Want deeper insights later?</h2><p>{choice === "interested" ? "Thanks — we’ve recorded your interest. No additional information was collected." : "No problem. You can return whenever you want."}</p></section>;
-  return <section className="interestCard"><h2>Want deeper insights later?</h2><p>You&apos;ve already seen an estimate using the information you entered. In a future version, deeper insights may use additional permissioned data.</p><div className="buttonRow"><button type="button" onClick={() => { trackEvent("go_deeper_selected", journey); setChoice("interested"); }}>I&apos;m interested</button><button type="button" className="secondaryButton" onClick={() => { trackEvent("go_deeper_declined", journey); setChoice("not_now"); }}>Not now</button></div></section>;
-}
-
 export const borrowingStatusLabels: Record<string, string> = {
   OK: "Looks comfortable",
   CAUTION: "Proceed carefully",
@@ -44,6 +37,7 @@ export const moneyValueStatusLabels: Record<string, string> = {
   POSITIVE: "Your card appears to create value",
   NEUTRAL: "Your card value appears roughly balanced",
   VALUE_LEAKAGE: "Your card may be costing more than it returns",
+  UNKNOWN_VALUE: "We need reward details to estimate card value",
 };
 
 export const reasonCodeLabels: Record<string, string> = {
@@ -58,6 +52,14 @@ export const reasonCodeLabels: Record<string, string> = {
   ANNUAL_FEE_DRAG: "The annual fee may be reducing the value you receive.",
   REVOLVING_INTEREST_DRAG: "Revolving interest may be reducing the value you receive.",
   LOW_REWARD_CAPTURE: "The estimated reward rate is relatively low.",
+  REWARD_VALUE_UNKNOWN: "You marked reward value as unknown.",
+  REWARD_CONVERSION_UNKNOWN: "A rupee value per point/mile is needed for conversion.",
+  REWARD_RATE_MISSING: "A reward rate is needed for this reward input type.",
+  CASHBACK_INPUT_INCOMPLETE: "Cashback amount and period are needed to calculate annual rewards.",
+  REWARD_VALUE_INPUT_INCOMPLETE: "Reward value and period are needed to calculate annual rewards.",
+  REWARD_UNITS_INPUT_INCOMPLETE: "Reward units and period are needed to calculate annual rewards.",
+  INTEREST_VALUE_UNKNOWN: "Interest cost is unknown until carried balance details are provided.",
+  REWARD_INPUT_UNKNOWN: "Reward input is incomplete for this check.",
 };
 
 export const currency = (value: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);

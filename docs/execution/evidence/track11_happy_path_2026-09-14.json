@@ -1,0 +1,7 @@
+{
+  "pass": true,
+  "checks": {
+    "money_happy_path": true,
+    "borrow_happy_path": true
+  }
+}

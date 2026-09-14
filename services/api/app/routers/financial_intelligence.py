@@ -18,10 +18,18 @@ def money_value_check(payload: MoneyValueCheckRequest) -> MoneyValueCheckRespons
     output_snapshot = {
         key: result[key]
         for key in (
+            "reward_type",
+            "reward_input_basis",
+            "reward_period",
+            "reward_value_amount",
             "annual_spend",
             "estimated_annual_rewards",
+            "interest_input_basis",
+            "interest_value_known",
             "estimated_annual_interest_cost",
             "estimated_net_annual_value",
+            "reward_value_known",
+            "unknown_value_reason",
             "value_status",
             "reason_codes",
         )

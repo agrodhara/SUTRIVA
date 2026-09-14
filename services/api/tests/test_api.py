@@ -130,6 +130,21 @@ def test_comfortable_borrowing_check_preferred_endpoint(monkeypatch, tmp_path):
         assert f'"{prohibited}"' not in flattened
 
 
+def test_comfortable_borrowing_commitment_ratio_includes_existing_and_proposed_emi():
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "monthly_income": 100000,
+        "existing_monthly_commitments": 25000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36,
+    })
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["estimated_new_monthly_commitment"] > 0
+    expected_ratio = body["total_monthly_commitment"] / 100000
+    assert abs(body["commitment_ratio"] - round(expected_ratio, 4)) <= 0.0001
+
+
 def test_comfortable_borrowing_check_caution_includes_commitment_ratio_reason_code(monkeypatch, tmp_path):
     audit_path = tmp_path / "audit_events.jsonl"
     monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_path))
@@ -255,6 +270,8 @@ def test_money_value_check_positive():
     assert body["estimated_annual_rewards"] == 9000
     assert body["estimated_annual_interest_cost"] == 0
     assert body["estimated_net_annual_value"] == 5000
+    assert body["reward_value_known"] is True
+    assert body["reward_input_basis"] == "rate_percent"
     assert body["value_status"] == "POSITIVE"
     assert "NET_VALUE_POSITIVE" in body["reason_codes"]
     assert body["audit_event_id"]
@@ -270,6 +287,7 @@ def test_money_value_check_neutral():
     assert response.status_code == 200
     body = response.json()
     assert body["estimated_net_annual_value"] == 0
+    assert body["reward_value_known"] is True
     assert body["value_status"] == "NEUTRAL"
     assert "NET_VALUE_NEUTRAL" in body["reason_codes"]
 
@@ -286,6 +304,306 @@ def test_money_value_check_value_leakage():
     assert body["value_status"] == "VALUE_LEAKAGE"
     assert "NET_VALUE_NEGATIVE" in body["reason_codes"]
     assert "ANNUAL_FEE_DRAG" in body["reason_codes"]
+
+
+def test_money_value_check_valid_negative_net_value_with_non_negative_inputs():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 15000,
+        "annual_card_fee": 6000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 100,
+        "reward_period": "monthly",
+        "revolving_balance": 50000,
+        "annual_interest_rate_percent": 24,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_net_annual_value"] is not None
+    assert body["estimated_net_annual_value"] < 0
+    assert body["value_status"] == "VALUE_LEAKAGE"
+
+
+def test_money_value_check_cashback_amount_monthly():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 3000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 500,
+        "reward_period": "monthly",
+        "revolving_balance": 0,
+        "annual_interest_rate_percent": 0,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_annual_rewards"] == 6000
+    assert body["estimated_net_annual_value"] == 3000
+    assert body["reward_input_basis"] == "cashback_amount"
+    assert body["reward_period"] == "monthly"
+    assert body["reward_value_known"] is True
+
+
+def test_money_value_check_cashback_amount_yearly():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 3000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 7200,
+        "reward_period": "yearly",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_annual_rewards"] == 7200
+    assert body["estimated_net_annual_value"] == 4200
+    assert body["reward_period"] == "yearly"
+
+
+def test_money_value_check_points_known_reward_value_monthly():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 500,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_annual_rewards"] == 6000
+    assert body["estimated_net_annual_value"] == 2000
+    assert body["reward_value_known"] is True
+    assert body["reward_input_basis"] == "known_reward_value"
+
+
+def test_money_value_check_miles_known_reward_value_yearly():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "miles",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 12000,
+        "reward_period": "yearly",
+        "interest_input_basis": "no_balance",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_annual_rewards"] == 12000
+    assert body["estimated_net_annual_value"] == 8000
+    assert body["reward_value_known"] is True
+    assert body["reward_period"] == "yearly"
+
+
+def test_money_value_check_points_unknown_value_not_zeroed():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_value_unknown": True,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reward_value_known"] is False
+    assert body["estimated_annual_rewards"] is None
+    assert body["estimated_net_annual_value"] is None
+    assert body["value_status"] == "UNKNOWN_VALUE"
+
+
+def test_money_value_check_unknown_reward_value_not_zeroed():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "miles",
+        "reward_value_unknown": True,
+        "revolving_balance": 50000,
+        "annual_interest_rate_percent": 24,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reward_value_known"] is False
+    assert body["estimated_annual_rewards"] is None
+    assert body["estimated_net_annual_value"] is None
+    assert body["value_status"] == "UNKNOWN_VALUE"
+    assert "REWARD_VALUE_UNKNOWN" in body["reason_codes"]
+    assert "REVOLVING_INTEREST_DRAG" in body["reason_codes"]
+
+
+def test_money_value_check_not_sure_reward_type_is_unknown_value_path():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "not_sure",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reward_value_known"] is False
+    assert body["estimated_annual_rewards"] is None
+    assert body["value_status"] == "UNKNOWN_VALUE"
+
+
+def test_money_value_check_blank_amount_vs_explicit_zero_for_known_reward_value():
+    missing_amount = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "known_reward_value",
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    assert missing_amount.status_code == 422
+
+    explicit_zero = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 0,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    assert explicit_zero.status_code == 200
+    body = explicit_zero.json()
+    assert body["estimated_annual_rewards"] == 0
+    assert body["reward_value_known"] is True
+
+
+def test_money_value_check_unknown_interest_vs_no_balance():
+    unknown_interest = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 900,
+        "reward_period": "monthly",
+        "interest_input_basis": "unknown",
+        "interest_value_unknown": True,
+    })
+    assert unknown_interest.status_code == 200
+    unknown_body = unknown_interest.json()
+    assert unknown_body["estimated_annual_rewards"] == 10800
+    assert unknown_body["estimated_annual_interest_cost"] is None
+    assert unknown_body["estimated_net_annual_value"] is None
+    assert unknown_body["value_status"] == "UNKNOWN_VALUE"
+    assert "INTEREST_VALUE_UNKNOWN" in unknown_body["reason_codes"]
+
+    no_balance = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 900,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    assert no_balance.status_code == 200
+    no_balance_body = no_balance.json()
+    assert no_balance_body["estimated_annual_interest_cost"] == 0
+    assert no_balance_body["interest_value_known"] is True
+    assert no_balance_body["estimated_net_annual_value"] == 6800
+
+
+def test_money_value_check_monthly_yearly_annualization_for_known_reward_value():
+    monthly = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 500,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    yearly = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 6000,
+        "reward_period": "yearly",
+        "interest_input_basis": "no_balance",
+    })
+    assert monthly.status_code == 200
+    assert yearly.status_code == 200
+    assert monthly.json()["estimated_annual_rewards"] == yearly.json()["estimated_annual_rewards"] == 6000
+
+
+def test_money_value_check_fixed_reward_amount_unaffected_by_spend_change():
+    low_spend = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 10000,
+        "annual_card_fee": 4000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 900,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    high_spend = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 200000,
+        "annual_card_fee": 4000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 900,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    assert low_spend.status_code == 200
+    assert high_spend.status_code == 200
+    assert low_spend.json()["estimated_annual_rewards"] == high_spend.json()["estimated_annual_rewards"] == 10800
+
+
+def test_money_value_check_legacy_earned_units_compatibility():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "earned_units",
+        "reward_units_earned": 1000,
+        "reward_period": "monthly",
+        "rupee_value_per_reward_unit": 0.5,
+        "interest_input_basis": "no_balance",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_annual_rewards"] == 6000
+    assert body["reward_input_basis"] == "earned_units"
+
+
+def test_money_value_check_rejects_incompatible_fields_after_reward_type_switch():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 3000,
+        "reward_type": "miles",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 3000,
+        "reward_period": "monthly",
+        "cashback_amount": 500,
+        "interest_input_basis": "no_balance",
+    })
+    assert response.status_code == 422
+
+
+def test_money_value_check_rejects_invalid_mixed_reward_fields():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 3000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 500,
+        "reward_period": "monthly",
+        "estimated_reward_rate_percent": 1.5,
+    })
+    assert response.status_code == 422
+
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 3000,
+        "reward_type": "points",
+        "reward_input_basis": "earned_units",
+        "reward_units_earned": 1000,
+        "reward_period": "monthly",
+    })
+    assert response.status_code == 422
 
 
 def test_money_value_check_revolving_interest_drag():
@@ -318,6 +636,35 @@ def test_money_value_check_invalid_input():
     })
     assert response.status_code == 422
 
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 4000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": -1,
+        "reward_period": "monthly",
+    })
+    assert response.status_code == 422
+
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "earned_units",
+        "reward_units_earned": -10,
+        "reward_period": "monthly",
+        "rupee_value_per_reward_unit": 0.5,
+    })
+    assert response.status_code == 422
+
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 4000,
+        "estimated_reward_rate_percent": 1.5,
+        "revolving_balance": -100,
+    })
+    assert response.status_code == 422
+
 
 def test_money_value_check_audit_persistence(tmp_path, monkeypatch):
     audit_file = tmp_path / "audit_events.jsonl"
@@ -344,7 +691,9 @@ def test_money_value_check_audit_persistence(tmp_path, monkeypatch):
     assert event["decision_context"] == "local_demo"
     assert event["created_at"]
     assert event["event_time_utc"]
-    assert event["input_snapshot"] == payload
+    for key, value in payload.items():
+        assert event["input_snapshot"][key] == value
+    assert event["input_snapshot"]["reward_type"] == "cashback"
     assert event["output_snapshot"]["value_status"] == "POSITIVE"
     for prohibited in PROHIBITED_FIELDS:
         assert f'"{prohibited}"' not in json.dumps(event).lower()
@@ -392,3 +741,71 @@ def test_record_product_event_rejects_unknown_event_type():
         "decision_context": "local_demo",
     })
     assert response.status_code == 422
+
+
+def test_record_product_event_accepts_new_track_11_fields(tmp_path, monkeypatch):
+    event_file = tmp_path / "product_events.jsonl"
+    monkeypatch.setenv("PRODUCT_EVENT_LOG_PATH", str(event_file))
+
+    response = client.post("/v1/events", json={
+        "event_type": "next_interest_selected",
+        "journey": "comfortable_borrowing",
+        "decision_context": "local_demo",
+        "intent": "actual_obligations",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "actual_obligations"
+    assert body["reason"] is None
+
+    record = json.loads(event_file.read_text(encoding="utf-8").strip())
+    assert record["intent"] == "actual_obligations"
+    assert record["reason"] is None
+
+
+def test_record_product_event_validates_track_11_payload_combinations():
+    accepted = client.post("/v1/events", json={
+        "event_type": "decline_reason_selected",
+        "journey": "money_value",
+        "decision_context": "local_demo",
+        "intent": "actual_card_value",
+        "reason": "statement_sharing_declined",
+    })
+    assert accepted.status_code == 200
+
+    invalid_intent = client.post("/v1/events", json={
+        "event_type": "next_interest_selected",
+        "journey": "money_value",
+        "decision_context": "local_demo",
+        "reason": "not_useful",
+    })
+    assert invalid_intent.status_code == 422
+
+    invalid_reason = client.post("/v1/events", json={
+        "event_type": "decline_reason_selected",
+        "journey": "comfortable_borrowing",
+        "decision_context": "local_demo",
+        "intent": "actual_obligations",
+    })
+    assert invalid_reason.status_code == 422
+
+    wrong_journey_intent = client.post("/v1/events", json={
+        "event_type": "next_interest_selected",
+        "journey": "comfortable_borrowing",
+        "decision_context": "local_demo",
+        "intent": "actual_card_value",
+    })
+    assert wrong_journey_intent.status_code == 422
+
+
+def test_record_product_event_preserves_legacy_go_deeper_compatibility():
+    response = client.post("/v1/events", json={
+        "event_type": "go_deeper_selected",
+        "journey": "money_value",
+        "decision_context": "local_demo",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision_context"] == "local_demo"
+    assert body["intent"] is None
+    assert body["reason"] is None
