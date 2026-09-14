@@ -9,3 +9,4 @@
 | 2026-09-07 | Fulfilment gated | Legal/LSP/DLA risk | Accepted |
 | 2026-09-08 | Alpha-50 reconciliation uses one borrowing policy, one Money Value service, and one shared audit contract | Prevent duplicate decision logic and preserve traceability across both journeys | Accepted |
 | 2026-09-08 | Product events are minimal server-recorded events | Support journey learning without PII, financial values, or third-party analytics | Accepted |
+| 2026-09-14 | Track 1.1 adds a reveal, intent, closure and terminal continuation flow on top of the existing quick-check results | Preserve the result experience while collecting one explicit future-use signal per journey | Accepted |

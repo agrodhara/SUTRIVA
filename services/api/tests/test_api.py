@@ -392,3 +392,71 @@ def test_record_product_event_rejects_unknown_event_type():
         "decision_context": "local_demo",
     })
     assert response.status_code == 422
+
+
+def test_record_product_event_accepts_new_track_11_fields(tmp_path, monkeypatch):
+    event_file = tmp_path / "product_events.jsonl"
+    monkeypatch.setenv("PRODUCT_EVENT_LOG_PATH", str(event_file))
+
+    response = client.post("/v1/events", json={
+        "event_type": "next_interest_selected",
+        "journey": "comfortable_borrowing",
+        "decision_context": "local_demo",
+        "intent": "actual_obligations",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "actual_obligations"
+    assert body["reason"] is None
+
+    record = json.loads(event_file.read_text(encoding="utf-8").strip())
+    assert record["intent"] == "actual_obligations"
+    assert record["reason"] is None
+
+
+def test_record_product_event_validates_track_11_payload_combinations():
+    accepted = client.post("/v1/events", json={
+        "event_type": "decline_reason_selected",
+        "journey": "money_value",
+        "decision_context": "local_demo",
+        "intent": "actual_card_value",
+        "reason": "statement_sharing_declined",
+    })
+    assert accepted.status_code == 200
+
+    invalid_intent = client.post("/v1/events", json={
+        "event_type": "next_interest_selected",
+        "journey": "money_value",
+        "decision_context": "local_demo",
+        "reason": "not_useful",
+    })
+    assert invalid_intent.status_code == 422
+
+    invalid_reason = client.post("/v1/events", json={
+        "event_type": "decline_reason_selected",
+        "journey": "comfortable_borrowing",
+        "decision_context": "local_demo",
+        "intent": "actual_obligations",
+    })
+    assert invalid_reason.status_code == 422
+
+    wrong_journey_intent = client.post("/v1/events", json={
+        "event_type": "next_interest_selected",
+        "journey": "comfortable_borrowing",
+        "decision_context": "local_demo",
+        "intent": "actual_card_value",
+    })
+    assert wrong_journey_intent.status_code == 422
+
+
+def test_record_product_event_preserves_legacy_go_deeper_compatibility():
+    response = client.post("/v1/events", json={
+        "event_type": "go_deeper_selected",
+        "journey": "money_value",
+        "decision_context": "local_demo",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision_context"] == "local_demo"
+    assert body["intent"] is None
+    assert body["reason"] is None

@@ -6,10 +6,16 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, Optional
 
 
-def record_product_event(event_type: str, journey: str, decision_context: str = "local_demo") -> Dict[str, str]:
+def record_product_event(
+    event_type: str,
+    journey: str,
+    decision_context: str = "local_demo",
+    intent: Optional[str] = None,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
     """Append a minimal local product-learning event.
 
     Alpha note: this is a lightweight, local-only event log for product learning.
@@ -25,6 +31,8 @@ def record_product_event(event_type: str, journey: str, decision_context: str = 
         "created_at": datetime.now(timezone.utc).isoformat(),
         "journey": journey,
         "decision_context": decision_context,
+        "intent": intent,
+        "reason": reason,
     }
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(event, ensure_ascii=False) + "\n")

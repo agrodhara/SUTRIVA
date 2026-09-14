@@ -12,5 +12,7 @@ def record_event(payload: ProductEventRequest) -> ProductEventResponse:
         event_type=payload.event_type,
         journey=payload.journey,
         decision_context=payload.decision_context,
+        intent=payload.intent,
+        reason=payload.reason,
     )
     return ProductEventResponse(**event)
