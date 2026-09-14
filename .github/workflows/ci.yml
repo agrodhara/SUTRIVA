@@ -21,6 +21,6 @@ jobs:
       - name: Run decision engine tests
         run: cd services/decision_engine && pytest
       - name: Run learning engine tests
-        run: cd services/learning_engine && pytest
+        run: cd services/learning_engine && python -m pytest -q
       - name: Run API tests
         run: cd services/api && pytest
