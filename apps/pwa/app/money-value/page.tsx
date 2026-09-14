@@ -39,6 +39,13 @@ type FormState = {
 
 type FormTextKey = Exclude<keyof FormState, "reward_value_unknown">;
 
+function guidanceParagraphs(text: string): string[] {
+  return text
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 export default function MoneyValuePage() {
   const [form, setForm] = useState<FormState>({
     monthly_card_spend: "",
@@ -56,7 +63,7 @@ export default function MoneyValuePage() {
   });
   const [result, setResult] = useState<Result>();
   const [resultVariant, setResultVariant] = useState<Track11ResultVariant>("original");
-  const [trackStep, setTrackStep] = useState<Track11ContinuationStep>("intent");
+  const [trackStep, setTrackStep] = useState<Track11ContinuationStep>("reveal");
   const [viewMode, setViewMode] = useState<ViewMode>("result");
   const [isStale, setIsStale] = useState(false);
   const [exampleMode, setExampleMode] = useState(false);
@@ -136,7 +143,7 @@ export default function MoneyValuePage() {
       if (!response.ok) throw new Error("We couldn’t complete your money value check. Please check your inputs.");
       setResult(await response.json());
       setResultVariant("original");
-      setTrackStep("intent");
+      setTrackStep("reveal");
       setViewMode("result");
       setIsStale(false);
       trackEvent("check_completed", "money_value");
@@ -153,7 +160,7 @@ export default function MoneyValuePage() {
       if (!response.ok) throw new Error("We couldn’t update this what-if estimate.");
       setResult(await response.json());
       setResultVariant("what_if");
-      setTrackStep("intent");
+      setTrackStep("reveal");
       setViewMode("result");
       setIsStale(false);
       trackEvent("what_if_completed", "money_value");
@@ -161,7 +168,12 @@ export default function MoneyValuePage() {
   }
   const displayResult = useMemo(() => result, [result]);
 
-  const formatCurrencyMaybe = (value: number | null) => (value === null ? "Unknown" : currency(value));
+  const formatCurrencyMaybe = (value: number | null, reason?: string | null) => {
+    if (value !== null) return currency(value);
+    if (reason === "REWARD_VALUE_UNKNOWN") return "Unknown until reward value is provided";
+    if (reason === "REWARD_CONVERSION_UNKNOWN") return "Unknown until rupee value per point/mile is provided";
+    return "Unknown until reward details are completed";
+  };
 
   if (displayResult && viewMode === "continuation") {
     return <main className="shell journey"><a className="backLink" href="#" onClick={(event) => { event.preventDefault(); setViewMode("result"); }}>← Back to estimate details</a>
@@ -172,7 +184,7 @@ export default function MoneyValuePage() {
         returnLabel="← Back to estimate details"
         onNavigate={setTrackStep}
         onReturnToResult={() => setViewMode("result")}
-        netAnnualValue={formatCurrencyMaybe(displayResult.estimated_net_annual_value)}
+        netAnnualValue={formatCurrencyMaybe(displayResult.estimated_net_annual_value, displayResult.unknown_value_reason)}
       />
     </main>;
   }
@@ -180,10 +192,10 @@ export default function MoneyValuePage() {
   if (displayResult) return <main className="shell journey"><a className="backLink" href="/money-value">← Update details</a><p className="eyebrow">Get More From My Money</p><h1>Your money value check</h1><p className="estimateLabel">{exampleMode ? "Example preview" : "Your estimate"}</p>
     <InsightBlock title="1. What did we find?"><div className="metrics">
       <ResultMetric label="Estimated annual rewards" value={formatCurrencyMaybe(displayResult.estimated_annual_rewards)} /><ResultMetric label="Annual fee" value={currency(displayResult.annual_card_fee)} />
-      <ResultMetric label="Estimated annual interest cost" value={currency(displayResult.estimated_annual_interest_cost)} /><ResultMetric label="Estimated net annual value" value={formatCurrencyMaybe(displayResult.estimated_net_annual_value)} />
+      <ResultMetric label="Estimated annual interest cost" value={currency(displayResult.estimated_annual_interest_cost)} /><ResultMetric label="Estimated net annual value" value={formatCurrencyMaybe(displayResult.estimated_net_annual_value, displayResult.unknown_value_reason)} />
     </div><p className="status">{moneyValueStatusLabels[displayResult.value_status] ?? "Your money value result is ready"}</p></InsightBlock>
     <InsightBlock title="2. Why does it matter?"><div className="reasonParagraphs">{displayResult.reason_codes.map((code, index) => <p key={`${code}-${index}`}>{reasonCodeLabels[code] ?? "One or more costs may be affecting the value you receive."}</p>)}</div></InsightBlock>
-    <InsightBlock title="3. What should I do next?"><p>{displayResult.next_best_action}</p></InsightBlock>
+    <InsightBlock title="3. What should I do next?"><div className="reasonParagraphs">{guidanceParagraphs(displayResult.next_best_action).map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div></InsightBlock>
     <section className="whatIfCard"><h2>Want to see what could improve this?</h2><p>Adjust only the information you already entered.</p><form onSubmit={runWhatIf}><FinancialInput label="Monthly card spend" type="number" min="0" required value={form.monthly_card_spend} onChange={set("monthly_card_spend")} /><FinancialInput label="Annual card fee" type="number" min="0" required value={form.annual_card_fee} onChange={set("annual_card_fee")} />
       {form.reward_type === "cashback" && form.reward_input_basis === "rate_percent" && <FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} />}
       {form.reward_type === "cashback" && form.reward_input_basis === "cashback_amount" && <FinancialInput label="Cashback amount" type="number" min="0" required value={form.cashback_amount} onChange={set("cashback_amount")} />}
@@ -193,7 +205,7 @@ export default function MoneyValuePage() {
       {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <label className="checkRow"><input type="checkbox" checked={form.reward_value_unknown} onChange={(event) => { setIsStale(true); setForm({ ...form, reward_value_unknown: event.target.checked }); }} />I do not know the rupee value per point/mile yet</label>}
       <FinancialInput label="Revolving balance" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} /><button className="primaryButton" disabled={loading}>Update estimate</button></form></section>
     {isStale && <p className="staleHint" role="status">Inputs changed. Update estimate before opening the next-step screens.</p>}
-    <div className="buttonRow"><button type="button" className="primaryButton" disabled={!canOpenContinuation} onClick={() => { setTrackStep("intent"); setViewMode("continuation"); }}>See what I could check next</button></div>
+    <div className="buttonRow"><button type="button" className="primaryButton" disabled={!canOpenContinuation} onClick={() => { setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
     {error && <ErrorState message={error} />}
   </main>;
 
