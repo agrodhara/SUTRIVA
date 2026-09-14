@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
-from typing import List
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class MoneyValueQuickCheckRequest(BaseModel):
@@ -18,3 +19,150 @@ class MoneyValueQuickCheckResponse(BaseModel):
     estimated_net_value: float
     flags: List[str]
     explanation: str
+
+
+class MoneyValueCheckRequest(BaseModel):
+    """Preferred Alpha-50 public contract for Money Value Check.
+
+    User-declared estimates only. No card number, issuer, PAN, customer ID,
+    phone, email, account number, statement upload or transaction-level data.
+    """
+
+    monthly_card_spend: float = Field(ge=0)
+    annual_card_fee: float = Field(ge=0)
+    estimated_reward_rate_percent: Optional[float] = Field(default=None, ge=0)
+    reward_type: Literal["cashback", "points", "miles", "not_sure"] = "cashback"
+    reward_input_basis: Optional[Literal["rate_percent", "cashback_amount", "earned_units", "known_reward_value"]] = None
+    reward_period: Optional[Literal["monthly", "yearly"]] = None
+    cashback_amount: Optional[float] = Field(default=None, ge=0)
+    reward_value_amount: Optional[float] = Field(default=None, ge=0)
+    reward_units_earned: Optional[float] = Field(default=None, ge=0)
+    rupee_value_per_reward_unit: Optional[float] = Field(default=None, gt=0)
+    reward_value_unknown: bool = False
+    reward_amount_is_estimate: bool = False
+    interest_input_basis: Optional[Literal["no_balance", "known", "unknown"]] = None
+    interest_value_unknown: bool = False
+    revolving_balance: Optional[float] = Field(default=None, ge=0)
+    annual_interest_rate_percent: Optional[float] = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_reward_fields(self) -> "MoneyValueCheckRequest":
+        basis = self.reward_input_basis
+
+        if basis is None:
+            if self.estimated_reward_rate_percent is not None:
+                basis = "rate_percent"
+            elif self.reward_type == "cashback" and self.cashback_amount is not None:
+                basis = "cashback_amount"
+            elif self.reward_type in {"points", "miles"} and self.reward_value_amount is not None:
+                basis = "known_reward_value"
+            elif self.reward_type in {"points", "miles"} and self.reward_units_earned is not None:
+                basis = "earned_units"
+
+        if self.reward_type == "not_sure" and basis is None:
+            self.reward_value_unknown = True
+            return self
+
+        if basis == "rate_percent":
+            if self.estimated_reward_rate_percent is None:
+                raise ValueError("estimated_reward_rate_percent is required for rate_percent basis")
+            if self.cashback_amount is not None or self.reward_units_earned is not None or self.reward_value_amount is not None:
+                raise ValueError("rate_percent basis cannot include cashback_amount, reward_units_earned or reward_value_amount")
+            return self
+
+        if basis == "cashback_amount":
+            if self.reward_type != "cashback":
+                raise ValueError("cashback_amount basis is only valid for cashback reward_type")
+            if self.cashback_amount is None:
+                raise ValueError("cashback_amount is required for cashback_amount basis")
+            if self.reward_period is None:
+                raise ValueError("reward_period is required for cashback_amount basis")
+            if self.estimated_reward_rate_percent is not None or self.reward_units_earned is not None or self.reward_value_amount is not None:
+                raise ValueError("cashback_amount basis cannot include estimated_reward_rate_percent, reward_units_earned or reward_value_amount")
+            return self
+
+        if basis == "known_reward_value":
+            if self.reward_type not in {"points", "miles"}:
+                raise ValueError("known_reward_value basis is only valid for points or miles reward_type")
+            if self.reward_value_amount is None:
+                raise ValueError("reward_value_amount is required for known_reward_value basis")
+            if self.reward_period is None:
+                raise ValueError("reward_period is required for known_reward_value basis")
+            if self.estimated_reward_rate_percent is not None or self.cashback_amount is not None or self.reward_units_earned is not None:
+                raise ValueError("known_reward_value basis cannot include estimated_reward_rate_percent, cashback_amount or reward_units_earned")
+            return self
+
+        if basis == "earned_units":
+            if self.reward_type not in {"points", "miles"}:
+                raise ValueError("earned_units basis is only valid for points or miles reward_type")
+            if self.reward_units_earned is None:
+                raise ValueError("reward_units_earned is required for earned_units basis")
+            if self.reward_period is None:
+                raise ValueError("reward_period is required for earned_units basis")
+            if self.estimated_reward_rate_percent is not None or self.cashback_amount is not None or self.reward_value_amount is not None:
+                raise ValueError("earned_units basis cannot include estimated_reward_rate_percent, cashback_amount or reward_value_amount")
+            if not self.reward_value_unknown and self.rupee_value_per_reward_unit is None:
+                raise ValueError("rupee_value_per_reward_unit is required unless reward_value_unknown is true")
+            return self
+
+        if self.reward_value_unknown:
+            return self
+
+        raise ValueError("A valid reward input is required")
+
+    @model_validator(mode="after")
+    def validate_interest_fields(self) -> "MoneyValueCheckRequest":
+        basis = self.interest_input_basis
+
+        if basis is None:
+            if self.interest_value_unknown:
+                basis = "unknown"
+            elif self.revolving_balance is None and self.annual_interest_rate_percent is None:
+                basis = "no_balance"
+            else:
+                basis = "known"
+
+        if basis == "no_balance":
+            self.interest_value_unknown = False
+            self.revolving_balance = 0.0
+            self.annual_interest_rate_percent = 0.0
+            return self
+
+        if basis == "known":
+            self.interest_value_unknown = False
+            if self.revolving_balance is None:
+                raise ValueError("revolving_balance is required for known interest basis")
+            if self.revolving_balance > 0 and self.annual_interest_rate_percent is None:
+                raise ValueError("annual_interest_rate_percent is required when revolving_balance is greater than zero")
+            if self.annual_interest_rate_percent is None:
+                self.annual_interest_rate_percent = 0.0
+            return self
+
+        if basis == "unknown":
+            self.interest_value_unknown = True
+            return self
+
+        raise ValueError("A valid interest input is required")
+
+
+class MoneyValueCheckResponse(BaseModel):
+    policy_version: str
+    reward_type: Literal["cashback", "points", "miles", "not_sure"]
+    reward_input_basis: Optional[Literal["rate_percent", "cashback_amount", "earned_units", "known_reward_value"]] = None
+    reward_period: Optional[Literal["monthly", "yearly"]] = None
+    reward_value_amount: Optional[float] = None
+    annual_spend: float
+    estimated_annual_rewards: Optional[float] = None
+    annual_card_fee: float
+    interest_input_basis: Literal["no_balance", "known", "unknown"]
+    interest_value_known: bool
+    estimated_annual_interest_cost: Optional[float] = None
+    estimated_net_annual_value: Optional[float] = None
+    reward_value_known: bool
+    unknown_value_reason: Optional[str] = None
+    value_status: str
+    reason_codes: List[str]
+    next_best_action: str
+    guidance_disclaimer: str
+    audit_event_id: str
+    audit_event: Dict[str, Any]

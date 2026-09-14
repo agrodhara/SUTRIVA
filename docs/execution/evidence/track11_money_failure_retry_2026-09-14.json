@@ -1,0 +1,16 @@
+{
+  "pass": true,
+  "checks": {
+    "initial_success_and_result_visible": true,
+    "exact_error_visible_on_failed_update": true,
+    "previous_result_preserved_on_failure": true,
+    "continuation_disabled_on_failure": true,
+    "retry_makes_another_request": true,
+    "retry_clears_error": true,
+    "retry_updates_result": true,
+    "beforeFailureMetric": "Annual fee₹4,500",
+    "failureMetric": "Annual fee₹4,500",
+    "afterRetryMetric": "Annual fee₹4,700",
+    "updateRequests": 4
+  }
+}

@@ -1,94 +1,76 @@
-# API Specification — Alpha-50 Draft
+# API Specification — Alpha-50
 
-Base URL local: `http://127.0.0.1:8000`
+Base URL: `http://127.0.0.1:8000`
 
-## GET /health
+## Foundation
 
-Response:
+`GET /health` returns the service status. The PWA uses
+`NEXT_PUBLIC_API_BASE_URL` for all calls.
 
-```json
-{
-  "status": "ok",
-  "service": "sutriva-api"
-}
-```
+## Preferred quick-check routes
 
-## POST /borrow-better/quick-check
+### `POST /v1/borrowing-intelligence/comfortable-borrowing-check`
 
-Purpose: return indicative affordability insight.
+Request fields: `monthly_income`, `existing_monthly_commitments`,
+`desired_borrowing_amount`, and `desired_tenure_months`.
 
-Request:
+The response includes `policy_version=borrow_better_v0_1`,
+`estimated_new_monthly_commitment`, `total_monthly_commitment`,
+`commitment_ratio`, `comfort_status`, `reason_codes`, `next_best_action`,
+`guidance_disclaimer`, and `audit_event_id`.
 
-```json
-{
-  "declared_monthly_income": 150000,
-  "existing_monthly_emi": 35000,
-  "desired_loan_amount": 800000,
-  "tenure_months": 36,
-  "indicative_interest_rate_pa": 0.15
-}
-```
+### `POST /v1/financial-intelligence/money-value-check`
 
-Response:
+Request fields: `monthly_card_spend`, `annual_card_fee`,
+`revolving_balance`, and `annual_interest_rate_percent`.
 
-```json
-{
-  "journey": "borrow_better",
-  "policy_version": "borrow_better_v0_1",
-  "status": "CAUTION",
-  "comfortable_monthly_emi": 32500,
-  "comfortable_borrowing_range": {
-    "lower": 550000,
-    "upper": 700000
-  },
-  "reason_codes": [
-    "Existing commitments reduce room for a new EMI",
-    "A lower amount may preserve monthly buffer"
-  ],
-  "disclaimer": "Indicative financial-intelligence output, not a loan offer or approval."
-}
-```
+Reward input supports both legacy and extended forms:
+- Legacy compatibility: `estimated_reward_rate_percent`.
+- Cashback amount mode: `reward_type=cashback`,
+  `reward_input_basis=cashback_amount`, `cashback_amount`, `reward_period`.
+- Known reward value mode: `reward_type=points|miles`,
+    `reward_input_basis=known_reward_value`, `reward_value_amount`,
+    `reward_period`.
+- Points/miles mode: `reward_type=points|miles`,
+  `reward_input_basis=earned_units`, `reward_units_earned`, `reward_period`,
+  and either `rupee_value_per_reward_unit` or `reward_value_unknown=true`.
+- Unknown mode: `reward_type=not_sure` sets an explicit unknown-value outcome.
 
-## POST /money-value/quick-check
+Interest input supports additive completeness fields:
+- `interest_input_basis=no_balance` for confirmed no carried balance.
+- `interest_input_basis=known` with `revolving_balance` and
+    `annual_interest_rate_percent`.
+- `interest_input_basis=unknown` with `interest_value_unknown=true`.
 
-Purpose: return indicative value-leakage estimate.
+The response includes `policy_version=alpha50-money-value-v0.1`,
+`reward_type`, `reward_input_basis`, `reward_period`, `annual_spend`,
+`estimated_annual_rewards`, `annual_card_fee`,
+`interest_input_basis`, `interest_value_known`,
+`estimated_annual_interest_cost`, `estimated_net_annual_value`,
+`reward_value_known`, optional `unknown_value_reason`, `value_status`,
+`reason_codes`, `next_best_action`, `guidance_disclaimer`, and `audit_event_id`.
 
-Request:
+## Compatibility routes
 
-```json
-{
-  "monthly_card_spend": 100000,
-  "annual_card_fee": 5000,
-  "monthly_interest_or_late_fee": 1500,
-  "estimated_reward_rate": 0.01,
-  "subscription_leakage_monthly": 800
-}
-```
+`POST /v1/borrow-better/quick-check` and
+`POST /v1/money-value/quick-check` remain available for compatibility and
+delegate to the shared backend services. The PWA does not call them.
 
-Response:
+## Product events
 
-```json
-{
-  "journey": "money_value",
-  "policy_version": "money_value_v0_1",
-  "estimated_annual_value_gap": 23600,
-  "reason_codes": [
-    "Annual fee and recurring charges reduce net value",
-    "Reward rate may not offset current leakage"
-  ],
-  "disclaimer": "Indicative estimate based on user-declared inputs."
-}
-```
+`POST /v1/events` accepts only `event_type`, `journey`, and
+`decision_context`, plus optional Track 1.1 fields `intent` and `reason`
+for selected event types. Supported events are `door_selected`,
+`check_started`, `check_completed`, `what_if_started`, `what_if_completed`,
+`teaser_viewed`, `teaser_cta_selected`, `next_interest_viewed`,
+`next_interest_selected`, `next_interest_skipped`, `go_deeper_selected`,
+`go_deeper_declined`, and `decline_reason_selected`.
+The server adds `event_id` and `created_at`; no PII or financial values are
+accepted.
 
-## Error shape
+## Alpha boundaries
 
-```json
-{
-  "error": "INVALID_INPUT",
-  "message": "declared_monthly_income must be greater than zero"
-}
-```
-
-## API rule
-
-APIs return insight and reason codes. They do not return loan offers, lender rankings or approval promises in Alpha.
+All calculations and thresholds remain backend-owned. These APIs provide
+indicative guidance only and do not provide lender offers, ranking, approval,
+fulfilment, Account Aggregator, bureau, login, OTP, PAN, Aadhaar, or
+statement-upload flows.

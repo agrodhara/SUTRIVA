@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 
 class BorrowBetterQuickCheckRequest(BaseModel):
@@ -23,3 +23,5 @@ class BorrowBetterQuickCheckResponse(BaseModel):
     comfortable_borrowing_range_high: float
     reason_codes: List[str]
     explanation: str
+    audit_event_id: Optional[str] = None
+    audit_event: Optional[dict] = None
