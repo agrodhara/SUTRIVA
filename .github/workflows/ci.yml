@@ -23,4 +23,4 @@ jobs:
       - name: Run learning engine tests
         run: cd services/learning_engine && python -m pytest -q
       - name: Run API tests
-        run: cd services/api && pytest
+        run: cd services/api && python -m pytest -q
