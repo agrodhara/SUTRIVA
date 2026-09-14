@@ -116,6 +116,7 @@ export default function MoneyValuePage() {
   const [result, setResult] = useState<Result>();
   const [resultVariant, setResultVariant] = useState<Track11ResultVariant>("original");
   const [trackStep, setTrackStep] = useState<Track11ContinuationStep>("reveal");
+  const [trackEntryId, setTrackEntryId] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("result");
   const [isStale, setIsStale] = useState(false);
   const [exampleMode, setExampleMode] = useState(false);
@@ -344,12 +345,14 @@ export default function MoneyValuePage() {
       setResult(await response.json());
       setResultVariant("what_if");
       setTrackStep("reveal");
+      setTrackEntryId((previous) => previous + 1);
       setViewMode("result");
       setIsStale(false);
       setWhatIfError("");
       trackEvent("what_if_completed", "money_value");
     } catch (err) {
-      setWhatIfError(err instanceof Error ? err.message : WHAT_IF_UPDATE_ERROR_MESSAGE);
+      console.error("money-value what-if update failed", err);
+      setWhatIfError(WHAT_IF_UPDATE_ERROR_MESSAGE);
     } finally {
       setLoading(false);
     }
@@ -383,6 +386,7 @@ export default function MoneyValuePage() {
       <MoneyValueContinuationFlow
         journey="money_value"
         step={trackStep}
+        logicalEntryId={trackEntryId}
         resultVariant={resultVariant}
         returnLabel="← Back to estimate details"
         onNavigate={setTrackStep}
@@ -478,7 +482,7 @@ export default function MoneyValuePage() {
       {whatIfError && <div className="errorState" role="alert"><p>{whatIfError}</p><button type="button" className="secondaryButton" onClick={() => { void runWhatIfRequest(); }} disabled={interactionDisabled}>Try again</button></div>}
     </form></section>
     {isStale && <p className="staleHint" role="status">Inputs changed. Update estimate before opening the next-step screens.</p>}
-    <div className="buttonRow"><button type="button" className="primaryButton" disabled={interactionDisabled || !canOpenContinuation} onClick={() => { setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
+    <div className="buttonRow"><button type="button" className="primaryButton" disabled={interactionDisabled || !canOpenContinuation} onClick={() => { setTrackEntryId((previous) => previous + 1); setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
     {error && <ErrorState message={error} />}
   </main>;
 

@@ -65,12 +65,37 @@ type FlowConfig<TIntent extends ProductEventIntent, TReason extends ProductEvent
 type FlowProps<TIntent extends ProductEventIntent, TReason extends ProductEventReason> = {
   journey: Journey;
   step: Track11ContinuationStep;
+  logicalEntryId: number;
   resultVariant: Track11ResultVariant;
   returnLabel?: string;
   onNavigate: (step: Track11ContinuationStep) => void;
   onReturnToResult: () => void;
   config: FlowConfig<TIntent, TReason>;
 };
+
+const VIEW_EVENT_STORAGE_PREFIX = "track11:view-entry:";
+
+function viewEntryKey(journey: Journey, step: "reveal" | "intent", logicalEntryId: number): string {
+  return `${journey}:${step}:${logicalEntryId}`;
+}
+
+function hasViewEntryBeenTracked(key: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(`${VIEW_EVENT_STORAGE_PREFIX}${key}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markViewEntryTracked(key: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(`${VIEW_EVENT_STORAGE_PREFIX}${key}`, "1");
+  } catch {
+    // Best effort only. If storage is unavailable, component-local dedupe still applies.
+  }
+}
 
 function useHeadingFocus(step: Track11ContinuationStep) {
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -125,6 +150,7 @@ function TerminalScreen({
 function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends ProductEventReason>({
   journey,
   step,
+  logicalEntryId,
   resultVariant,
   returnLabel,
   onNavigate,
@@ -133,16 +159,38 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
 }: FlowProps<TIntent, TReason>) {
   const headingRef = useHeadingFocus(step);
   const [selectedIntent, setSelectedIntent] = useState<TIntent>(config.intent.options[0].value);
-  const lastTrackedStep = useRef<Track11ContinuationStep | null>(null);
+  const trackedViewEntries = useRef<Set<string>>(new Set());
+  const inFlightActions = useRef<Set<string>>(new Set());
+
+  const runActionOnce = (actionKey: string, action: () => void) => {
+    const scopedKey = `${journey}:${logicalEntryId}:${actionKey}`;
+    if (inFlightActions.current.has(scopedKey)) return;
+
+    inFlightActions.current.add(scopedKey);
+    try {
+      action();
+    } finally {
+      queueMicrotask(() => {
+        inFlightActions.current.delete(scopedKey);
+      });
+    }
+  };
 
   useEffect(() => {
-    if (lastTrackedStep.current === step) return;
+    if (step !== "reveal" && step !== "intent") return;
 
-    lastTrackedStep.current = step;
+    const entryKey = viewEntryKey(journey, step, logicalEntryId);
+    if (trackedViewEntries.current.has(entryKey) || hasViewEntryBeenTracked(entryKey)) {
+      trackedViewEntries.current.add(entryKey);
+      return;
+    }
+
+    trackedViewEntries.current.add(entryKey);
+    markViewEntryTracked(entryKey);
 
     if (step === "reveal") trackEvent("teaser_viewed", journey);
     if (step === "intent") trackEvent("next_interest_viewed", journey);
-  }, [journey, step]);
+  }, [journey, logicalEntryId, step]);
 
   if (step === "yes_terminal") {
     return (
@@ -199,9 +247,11 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
               type="button"
               className="track11ChoiceCard"
               onClick={() => {
-                setSelectedIntent(option.value);
-                trackEvent("next_interest_selected", journey, { intent: option.value });
-                onNavigate("closure");
+                runActionOnce(`next_interest_selected:${option.value}`, () => {
+                  setSelectedIntent(option.value);
+                  trackEvent("next_interest_selected", journey, { intent: option.value });
+                  onNavigate("closure");
+                });
               }}
             >
               <span className="track11ChoiceCard__content">
@@ -336,8 +386,10 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
         type="button"
         className="primaryButton track11PrimaryButton"
         onClick={() => {
-          trackEvent("teaser_cta_selected", journey);
-          onNavigate("intent");
+          runActionOnce("teaser_cta_selected", () => {
+            trackEvent("teaser_cta_selected", journey);
+            onNavigate("intent");
+          });
         }}
       >
         {config.resultLink.primaryCta}
@@ -349,6 +401,7 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
 export function BorrowBetterContinuationFlow({
   journey,
   step,
+  logicalEntryId,
   resultVariant,
   returnLabel,
   onNavigate,
@@ -358,6 +411,7 @@ export function BorrowBetterContinuationFlow({
 }: {
   journey: Journey;
   step: Track11ContinuationStep;
+  logicalEntryId: number;
   resultVariant: Track11ResultVariant;
   returnLabel?: string;
   onNavigate: (step: Track11ContinuationStep) => void;
@@ -369,6 +423,7 @@ export function BorrowBetterContinuationFlow({
     <ContinuationFlow
       journey={journey}
       step={step}
+      logicalEntryId={logicalEntryId}
       resultVariant={resultVariant}
       returnLabel={returnLabel}
       onNavigate={onNavigate}
@@ -453,6 +508,7 @@ export function BorrowBetterContinuationFlow({
 export function MoneyValueContinuationFlow({
   journey,
   step,
+  logicalEntryId,
   resultVariant,
   returnLabel,
   onNavigate,
@@ -461,6 +517,7 @@ export function MoneyValueContinuationFlow({
 }: {
   journey: Journey;
   step: Track11ContinuationStep;
+  logicalEntryId: number;
   resultVariant: Track11ResultVariant;
   returnLabel?: string;
   onNavigate: (step: Track11ContinuationStep) => void;
@@ -471,6 +528,7 @@ export function MoneyValueContinuationFlow({
     <ContinuationFlow
       journey={journey}
       step={step}
+      logicalEntryId={logicalEntryId}
       resultVariant={resultVariant}
       returnLabel={returnLabel}
       onNavigate={onNavigate}

@@ -32,6 +32,7 @@ export default function BorrowBetterPage() {
   const [whatIf, setWhatIf] = useState({ desired_borrowing_amount: "", desired_tenure_months: "" });
   const [resultVariant, setResultVariant] = useState<Track11ResultVariant>("original");
   const [trackStep, setTrackStep] = useState<Track11ContinuationStep>("reveal");
+  const [trackEntryId, setTrackEntryId] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("result");
   const [isStale, setIsStale] = useState(false);
   const [exampleMode, setExampleMode] = useState(false);
@@ -94,12 +95,14 @@ export default function BorrowBetterPage() {
       setResult(await response.json());
       setResultVariant("what_if");
       setTrackStep("reveal");
+      setTrackEntryId((previous) => previous + 1);
       setViewMode("result");
       setIsStale(false);
       setWhatIfError("");
       trackEvent("what_if_completed", "comfortable_borrowing");
     } catch (err) {
-      setWhatIfError(err instanceof Error ? err.message : WHAT_IF_UPDATE_ERROR_MESSAGE);
+      console.error("borrow-better what-if update failed", err);
+      setWhatIfError(WHAT_IF_UPDATE_ERROR_MESSAGE);
     } finally {
       setLoading(false);
     }
@@ -116,6 +119,7 @@ export default function BorrowBetterPage() {
       <BorrowBetterContinuationFlow
         journey="comfortable_borrowing"
         step={trackStep}
+        logicalEntryId={trackEntryId}
         resultVariant={resultVariant}
         returnLabel="← Back to estimate details"
         onNavigate={setTrackStep}
@@ -150,7 +154,7 @@ export default function BorrowBetterPage() {
       {whatIfError && <div className="errorState" role="alert"><p>{whatIfError}</p><button type="button" className="secondaryButton" onClick={() => { void runWhatIfRequest(); }} disabled={interactionDisabled}>Try again</button></div>}
     </form></section>
     {isStale && <p className="staleHint" role="status">Inputs changed. Update estimate before opening the next-step screens.</p>}
-    <div className="buttonRow"><button type="button" className="primaryButton" disabled={interactionDisabled || !canOpenContinuation} onClick={() => { setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
+    <div className="buttonRow"><button type="button" className="primaryButton" disabled={interactionDisabled || !canOpenContinuation} onClick={() => { setTrackEntryId((previous) => previous + 1); setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
     {error && <ErrorState message={error} />}
   </main>;
 

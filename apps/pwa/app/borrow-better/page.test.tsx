@@ -152,6 +152,7 @@ describe("BorrowBetterPage", () => {
 
     const expectedError = "We couldn’t update your estimate. Your previous result is still shown. Please try again.";
     await screen.findByText(expectedError);
+    expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
     expect(screen.getByText("₹17,122")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "See what I could check next" })).toBeDisabled();
     expect(global.fetch).toHaveBeenCalledTimes(2);

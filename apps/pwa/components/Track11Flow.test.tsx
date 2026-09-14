@@ -10,67 +10,88 @@ vi.mock("../lib/api", () => ({
 }));
 
 describe("MoneyValueContinuationFlow analytics", () => {
-  it("emits view events once per genuine step entry under StrictMode", () => {
+  it("emits exactly one view event per logical entry and step", () => {
     trackEventMock.mockReset();
 
-    const { rerender } = render(
+    const props = {
+      journey: "money_value" as const,
+      step: "reveal" as const,
+      logicalEntryId: 1,
+      resultVariant: "original" as const,
+      onNavigate: vi.fn(),
+      onReturnToResult: vi.fn(),
+      netAnnualValue: "₹6,800",
+    };
+
+    const firstRender = render(
       <StrictMode>
-        <MoneyValueContinuationFlow
-          journey="money_value"
-          step="reveal"
-          resultVariant="original"
-          onNavigate={() => {}}
-          onReturnToResult={() => {}}
-          netAnnualValue="₹6,800"
-        />
+        <MoneyValueContinuationFlow {...props} />
       </StrictMode>,
     );
 
     expect(trackEventMock.mock.calls.filter(([eventType]) => eventType === "teaser_viewed")).toHaveLength(1);
 
-    rerender(
+    firstRender.rerender(
       <StrictMode>
-        <MoneyValueContinuationFlow
-          journey="money_value"
-          step="reveal"
-          resultVariant="original"
-          onNavigate={() => {}}
-          onReturnToResult={() => {}}
-          netAnnualValue="₹6,800"
-        />
+        <MoneyValueContinuationFlow {...props} />
       </StrictMode>,
     );
 
     expect(trackEventMock.mock.calls.filter(([eventType]) => eventType === "teaser_viewed")).toHaveLength(1);
 
-    rerender(
+    firstRender.unmount();
+
+    const secondRender = render(
+      <StrictMode>
+        <MoneyValueContinuationFlow {...props} />
+      </StrictMode>,
+    );
+
+    expect(trackEventMock.mock.calls.filter(([eventType]) => eventType === "teaser_viewed")).toHaveLength(1);
+
+    secondRender.rerender(
       <StrictMode>
         <MoneyValueContinuationFlow
-          journey="money_value"
+          {...props}
           step="intent"
-          resultVariant="original"
-          onNavigate={() => {}}
-          onReturnToResult={() => {}}
-          netAnnualValue="₹6,800"
         />
       </StrictMode>,
     );
 
     expect(trackEventMock.mock.calls.filter(([eventType]) => eventType === "next_interest_viewed")).toHaveLength(1);
 
-    rerender(
+    secondRender.rerender(
       <StrictMode>
         <MoneyValueContinuationFlow
-          journey="money_value"
+          {...props}
           step="reveal"
-          resultVariant="original"
-          onNavigate={() => {}}
-          onReturnToResult={() => {}}
-          netAnnualValue="₹6,800"
+          logicalEntryId={2}
         />
       </StrictMode>,
     );
 
     expect(trackEventMock.mock.calls.filter(([eventType]) => eventType === "teaser_viewed")).toHaveLength(2);
+  });
+
+  it("emits action events once per explicit click", async () => {
+    trackEventMock.mockReset();
+    const onNavigate = vi.fn();
+    const user = (await import("@testing-library/user-event")).default.setup();
+    const { getByRole } = render(
+      <MoneyValueContinuationFlow
+        journey="money_value"
+        step="reveal"
+        logicalEntryId={9}
+        resultVariant="original"
+        onNavigate={onNavigate}
+        onReturnToResult={() => {}}
+        netAnnualValue="₹6,800"
+      />,
+    );
+
+    await user.click(getByRole("button", { name: "See what I could check next" }));
+
+    expect(trackEventMock.mock.calls.filter(([eventType]) => eventType === "teaser_cta_selected")).toHaveLength(1);
+    expect(onNavigate).toHaveBeenCalledTimes(1);
   });
 });
