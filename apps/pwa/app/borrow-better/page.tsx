@@ -17,6 +17,8 @@ const TENURE_MIN = 1;
 const TENURE_MAX = 360;
 const TENURE_STEP = 1;
 
+const WHAT_IF_UPDATE_ERROR_MESSAGE = "We couldn’t update your estimate. Your previous result is still shown. Please try again.";
+
 function guidanceParagraphs(text: string): string[] {
   return text
     .split("|")
@@ -35,24 +37,27 @@ export default function BorrowBetterPage() {
   const [exampleMode, setExampleMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [whatIfError, setWhatIfError] = useState("");
   const hydrated = useHydrated();
   const interactionDisabled = !hydrated || loading;
 
   const set = (key: keyof BorrowBetterFormState) => (event: ChangeEvent<HTMLInputElement>) => {
     setExampleMode(false);
+    setWhatIfError("");
     setForm((previous) => updateBorrowBetterField(previous, key, event.target.value));
   };
 
   const updateWhatIf = (key: keyof typeof whatIf) => (event: ChangeEvent<HTMLInputElement>) => {
     setIsStale(true);
+    setWhatIfError("");
     setWhatIf((previous) => ({ ...previous, [key]: event.target.value }));
   };
 
-  const canOpenContinuation = !!result && !isStale && !error;
+  const canOpenContinuation = !!result && !isStale && !error && !whatIfError;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setLoading(true); setError(""); trackEvent("check_started", "comfortable_borrowing");
+    setLoading(true); setError(""); setWhatIfError(""); trackEvent("check_started", "comfortable_borrowing");
     try {
       const response = await fetch(`${requireApiBaseUrl()}/v1/borrowing-intelligence/comfortable-borrowing-check`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -72,8 +77,8 @@ export default function BorrowBetterPage() {
     } finally { setLoading(false); }
   }
 
-  async function runWhatIf(event: FormEvent) {
-    event.preventDefault(); setLoading(true); setError("");
+  async function runWhatIfRequest() {
+    setLoading(true);
     trackEvent("what_if_started", "comfortable_borrowing");
     try {
       const response = await fetch(`${requireApiBaseUrl()}/v1/borrowing-intelligence/comfortable-borrowing-check`, {
@@ -85,14 +90,24 @@ export default function BorrowBetterPage() {
           desired_tenure_months: whatIf.desired_tenure_months,
         })),
       });
-      if (!response.ok) throw new Error("We couldn’t update this what-if estimate.");
+      if (!response.ok) throw new Error(WHAT_IF_UPDATE_ERROR_MESSAGE);
       setResult(await response.json());
       setResultVariant("what_if");
       setTrackStep("reveal");
       setViewMode("result");
       setIsStale(false);
+      setWhatIfError("");
       trackEvent("what_if_completed", "comfortable_borrowing");
-    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); } finally { setLoading(false); }
+    } catch (err) {
+      setWhatIfError(err instanceof Error ? err.message : WHAT_IF_UPDATE_ERROR_MESSAGE);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runWhatIf(event: FormEvent) {
+    event.preventDefault();
+    await runWhatIfRequest();
   }
   const displayResult = useMemo(() => result, [result]);
 
@@ -132,6 +147,7 @@ export default function BorrowBetterPage() {
         </div>
       </label>
       <button className="primaryButton" disabled={interactionDisabled}>Update estimate</button>
+      {whatIfError && <div className="errorState" role="alert"><p>{whatIfError}</p><button type="button" className="secondaryButton" onClick={() => { void runWhatIfRequest(); }} disabled={interactionDisabled}>Try again</button></div>}
     </form></section>
     {isStale && <p className="staleHint" role="status">Inputs changed. Update estimate before opening the next-step screens.</p>}
     <div className="buttonRow"><button type="button" className="primaryButton" disabled={interactionDisabled || !canOpenContinuation} onClick={() => { setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>

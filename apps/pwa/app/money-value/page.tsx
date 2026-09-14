@@ -59,6 +59,8 @@ const FEE_SLIDER_MAX = 50000;
 const FEE_SLIDER_STEP = 100;
 const FEE_SLIDER_EXPAND_BY = 5000;
 
+const WHAT_IF_UPDATE_ERROR_MESSAGE = "We couldn’t update your estimate. Your previous result is still shown. Please try again.";
+
 const INDIAN_NUMBER = new Intl.NumberFormat("en-IN");
 
 function guidanceParagraphs(text: string): string[] {
@@ -119,6 +121,7 @@ export default function MoneyValuePage() {
   const [exampleMode, setExampleMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [whatIfError, setWhatIfError] = useState("");
   const hydrated = useHydrated();
   const interactionDisabled = !hydrated || loading;
 
@@ -128,18 +131,21 @@ export default function MoneyValuePage() {
   const set = (key: FormTextKey) => (event: ChangeEvent<HTMLInputElement>) => {
     setExampleMode(false);
     setIsStale(true);
+    setWhatIfError("");
     setForm((previous) => ({ ...previous, [key]: event.target.value }));
   };
 
   const setSelect = (key: FormTextKey) => (event: ChangeEvent<HTMLSelectElement>) => {
     setExampleMode(false);
     setIsStale(true);
+    setWhatIfError("");
     setForm((previous) => ({ ...previous, [key]: event.target.value }));
   };
 
   const setCashbackPercentageMode = (useRatePercent: boolean) => {
     setExampleMode(false);
     setIsStale(true);
+    setWhatIfError("");
     setForm((previous) => ({
       ...previous,
       reward_input_basis: useRatePercent ? "rate_percent" : "cashback_amount",
@@ -150,6 +156,7 @@ export default function MoneyValuePage() {
   const setCashbackKnowledge = (knowledge: CashbackKnowledge) => {
     setExampleMode(false);
     setIsStale(true);
+    setWhatIfError("");
     setForm((previous) => ({
       ...previous,
       cashback_knowledge: knowledge,
@@ -162,6 +169,7 @@ export default function MoneyValuePage() {
   const setPointsMilesKnowledge = (knowledge: PointsMilesKnowledge) => {
     setExampleMode(false);
     setIsStale(true);
+    setWhatIfError("");
     setForm((previous) => ({
       ...previous,
       points_miles_knowledge: knowledge,
@@ -174,6 +182,7 @@ export default function MoneyValuePage() {
   const setInterestBasis = (basis: InterestInputBasis) => {
     setExampleMode(false);
     setIsStale(true);
+    setWhatIfError("");
     setForm((previous) => ({
       ...previous,
       interest_input_basis: basis,
@@ -185,6 +194,7 @@ export default function MoneyValuePage() {
   const setRewardType = (rewardType: RewardType) => {
     setExampleMode(false);
     setIsStale(true);
+    setWhatIfError("");
     setForm((previous) => ({
       ...previous,
       reward_type: rewardType,
@@ -218,6 +228,7 @@ export default function MoneyValuePage() {
   const setSliderAmount = (key: "monthly_card_spend" | "annual_card_fee", max: number) => (event: ChangeEvent<HTMLInputElement>) => {
     setExampleMode(false);
     setIsStale(true);
+    setWhatIfError("");
     const nextValue = String(Number(event.target.value));
     setForm((previous) => ({ ...previous, [key]: nextValue }));
 
@@ -232,6 +243,7 @@ export default function MoneyValuePage() {
   const setTypedAmount = (key: "monthly_card_spend" | "annual_card_fee") => (event: ChangeEvent<HTMLInputElement>) => {
     setExampleMode(false);
     setIsStale(true);
+    setWhatIfError("");
     const normalized = parseNonNegativeWholeAmount(event.target.value);
     setForm((previous) => ({ ...previous, [key]: normalized }));
 
@@ -301,11 +313,11 @@ export default function MoneyValuePage() {
     return payload;
   };
 
-  const canOpenContinuation = !!result && !isStale && !error;
+  const canOpenContinuation = !!result && !isStale && !error && !whatIfError;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setLoading(true); setError(""); trackEvent("check_started", "money_value");
+    setLoading(true); setError(""); setWhatIfError(""); trackEvent("check_started", "money_value");
     try {
       const response = await fetch(`${requireApiBaseUrl()}/v1/financial-intelligence/money-value-check`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -323,19 +335,29 @@ export default function MoneyValuePage() {
     } finally { setLoading(false); }
   }
 
-  async function runWhatIf(event: FormEvent) {
-    event.preventDefault(); setLoading(true); setError("");
+  async function runWhatIfRequest() {
+    setLoading(true);
     trackEvent("what_if_started", "money_value");
     try {
       const response = await fetch(`${requireApiBaseUrl()}/v1/financial-intelligence/money-value-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(buildPayload()) });
-      if (!response.ok) throw new Error("We couldn’t update this what-if estimate.");
+      if (!response.ok) throw new Error(WHAT_IF_UPDATE_ERROR_MESSAGE);
       setResult(await response.json());
       setResultVariant("what_if");
       setTrackStep("reveal");
       setViewMode("result");
       setIsStale(false);
+      setWhatIfError("");
       trackEvent("what_if_completed", "money_value");
-    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); } finally { setLoading(false); }
+    } catch (err) {
+      setWhatIfError(err instanceof Error ? err.message : WHAT_IF_UPDATE_ERROR_MESSAGE);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runWhatIf(event: FormEvent) {
+    event.preventDefault();
+    await runWhatIfRequest();
   }
   const displayResult = useMemo(() => result, [result]);
 
@@ -449,10 +471,12 @@ export default function MoneyValuePage() {
         {form.points_miles_knowledge === "yes" && <><FinancialInput label="Approximate reward value (₹)" type="number" min="0" required value={form.reward_value_amount} onChange={set("reward_value_amount")} disabled={interactionDisabled} /><label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")} disabled={interactionDisabled}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label><p className="staleHint">Use the value of rewards earned during this period, not your total accumulated balance or a redemption from earlier years.</p></>}
       </>}
       {isUnknownRewardInput && <p className="staleHint">Reward value is unknown. Add a reward value if you learn it, then update estimate.</p>}
-      <label className="field"><span>Balance carried forward</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)} disabled={interactionDisabled}><option value="no_balance">No balance carried forward</option><option value="known">I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
-      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} disabled={interactionDisabled} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} disabled={interactionDisabled} /></>}
+      <label className="field"><span>Do you carry a balance forward?</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)} disabled={interactionDisabled}><option value="no_balance">No, I pay in full</option><option value="known">Yes, I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
+      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} disabled={interactionDisabled} /><FinancialInput label="Annual interest rate (%)" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} disabled={interactionDisabled} /></>}
       {form.interest_input_basis === "unknown" && <p className="staleHint">Interest cost will stay unknown until you provide carried balance details.</p>}
-      <button className="primaryButton" disabled={interactionDisabled}>{loading ? "Updating estimate..." : "Update estimate"}</button></form></section>
+      <button className="primaryButton" disabled={interactionDisabled}>{loading ? "Updating estimate..." : "Update estimate"}</button>
+      {whatIfError && <div className="errorState" role="alert"><p>{whatIfError}</p><button type="button" className="secondaryButton" onClick={() => { void runWhatIfRequest(); }} disabled={interactionDisabled}>Try again</button></div>}
+    </form></section>
     {isStale && <p className="staleHint" role="status">Inputs changed. Update estimate before opening the next-step screens.</p>}
     <div className="buttonRow"><button type="button" className="primaryButton" disabled={interactionDisabled || !canOpenContinuation} onClick={() => { setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
     {error && <ErrorState message={error} />}
@@ -477,8 +501,8 @@ export default function MoneyValuePage() {
         <label className="field"><span>Do you know the approximate cash value of the rewards you earned in this period?</span><select className="selectInput" value={form.points_miles_knowledge} onChange={(event) => setPointsMilesKnowledge(event.target.value as PointsMilesKnowledge)} required disabled={interactionDisabled}><option value="">Select one</option><option value="yes">Yes, I know the amount</option><option value="unknown">I&apos;m not sure</option></select></label>
         {form.points_miles_knowledge === "yes" && <><FinancialInput label="Approximate reward value (₹)" type="number" min="0" required value={form.reward_value_amount} onChange={set("reward_value_amount")} disabled={interactionDisabled} /><label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")} disabled={interactionDisabled}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label><p className="staleHint">Use the value of rewards earned during this period, not your total accumulated balance or a redemption from earlier years.</p></>}
       </>}
-      <label className="field"><span>Balance carried forward</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)} disabled={interactionDisabled}><option value="no_balance">No balance carried forward</option><option value="known">I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
-      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} disabled={interactionDisabled} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} disabled={interactionDisabled} /></>}
+      <label className="field"><span>Do you carry a balance forward?</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)} disabled={interactionDisabled}><option value="no_balance">No, I pay in full</option><option value="known">Yes, I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
+      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} disabled={interactionDisabled} /><FinancialInput label="Annual interest rate (%)" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} disabled={interactionDisabled} /></>}
       {form.interest_input_basis === "unknown" && <p className="staleHint">Interest cost will stay unknown until you provide carried balance details.</p>}
       <div className="formActions"><ExampleValuesButton disabled={interactionDisabled} onClick={() => { setExampleMode(true); setForm({ monthly_card_spend: "75000", annual_card_fee: "4000", estimated_reward_rate_percent: "", reward_type: "cashback", reward_input_basis: "cashback_amount", reward_period: "monthly", reward_value_amount: "", points_miles_knowledge: "", cashback_knowledge: "known", cashback_amount: "900", reward_value_unknown: false, interest_input_basis: "no_balance", revolving_balance: "", annual_interest_rate_percent: "" }); setSpendSliderMax(nextExpandedMax(SPEND_SLIDER_MAX, 75000, SPEND_SLIDER_EXPAND_BY)); setFeeSliderMax(nextExpandedMax(FEE_SLIDER_MAX, 4000, FEE_SLIDER_EXPAND_BY)); setIsStale(true); }} /><button type="submit" className="primaryButton" disabled={interactionDisabled}>{loading ? "Checking..." : "Check my money value"}</button></div>
     </form>{loading && <LoadingState />}{error && <ErrorState message={error} retry={() => setError("")} />}</main>;
