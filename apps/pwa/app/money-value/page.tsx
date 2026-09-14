@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 import { requireApiBaseUrl, trackEvent } from "../../lib/api";
 import { currency, ErrorState, ExampleValuesButton, FinancialInput, InsightBlock, LoadingState, moneyValueStatusLabels, reasonCodeLabels, ResultMetric } from "../../components/QuickCheckUI";
 import { MoneyValueContinuationFlow, Track11ContinuationStep, Track11ResultVariant } from "../../components/Track11Flow";
+import { useHydrated } from "../../lib/useHydrated";
 
 type RewardType = "cashback" | "points" | "miles" | "not_sure";
 type RewardInputBasis = "rate_percent" | "cashback_amount" | "earned_units" | "known_reward_value";
@@ -118,6 +119,8 @@ export default function MoneyValuePage() {
   const [exampleMode, setExampleMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const hydrated = useHydrated();
+  const interactionDisabled = !hydrated || loading;
 
   const [spendSliderMax, setSpendSliderMax] = useState(SPEND_SLIDER_MAX);
   const [feeSliderMax, setFeeSliderMax] = useState(FEE_SLIDER_MAX);
@@ -125,13 +128,13 @@ export default function MoneyValuePage() {
   const set = (key: FormTextKey) => (event: ChangeEvent<HTMLInputElement>) => {
     setExampleMode(false);
     setIsStale(true);
-    setForm({ ...form, [key]: event.target.value });
+    setForm((previous) => ({ ...previous, [key]: event.target.value }));
   };
 
   const setSelect = (key: FormTextKey) => (event: ChangeEvent<HTMLSelectElement>) => {
     setExampleMode(false);
     setIsStale(true);
-    setForm({ ...form, [key]: event.target.value });
+    setForm((previous) => ({ ...previous, [key]: event.target.value }));
   };
 
   const setCashbackPercentageMode = (useRatePercent: boolean) => {
@@ -405,6 +408,7 @@ export default function MoneyValuePage() {
             onChange={setTypedAmount("monthly_card_spend")}
             aria-label="Monthly card spend"
             required
+            disabled={interactionDisabled}
           />
         </div>
         <div className="sliderEndpoints"><span>{formatAmountInput(String(SPEND_SLIDER_MIN)) || "₹ 0"}</span><span>{formatAmountInput(String(spendSliderMax))}</span></div>
@@ -428,53 +432,54 @@ export default function MoneyValuePage() {
             onChange={setTypedAmount("annual_card_fee")}
             aria-label="Annual card fee"
             required
+            disabled={interactionDisabled}
           />
         </div>
         <div className="sliderEndpoints"><span>{formatAmountInput(String(FEE_SLIDER_MIN)) || "₹ 0"}</span><span>{formatAmountInput(String(feeSliderMax))}</span></div>
       </label>
       {form.reward_type === "cashback" && <>
-        <FinancialInput label="How much cashback did you receive?" type="number" min="0" required={form.cashback_knowledge === "known" && form.reward_input_basis === "cashback_amount"} value={form.cashback_amount} onChange={set("cashback_amount")} />
-        <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label>
-        <label className="checkRow"><input type="checkbox" checked={form.reward_input_basis === "rate_percent"} onChange={(event) => setCashbackPercentageMode(event.target.checked)} />I know my cashback percentage</label>
-        {isRateBased && <><FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} /><p className="staleHint">This estimate assumes the entered cashback percentage applies to the entered spend.</p></>}
-        <label className="checkRow"><input type="checkbox" checked={form.cashback_knowledge === "unknown"} onChange={(event) => setCashbackKnowledge(event.target.checked ? "unknown" : "known")} />I&apos;m not sure</label>
+        <FinancialInput label="How much cashback did you receive?" type="number" min="0" required={form.cashback_knowledge === "known" && form.reward_input_basis === "cashback_amount"} value={form.cashback_amount} onChange={set("cashback_amount")} disabled={interactionDisabled} />
+        <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")} disabled={interactionDisabled}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label>
+        <label className="checkRow"><input type="checkbox" checked={form.reward_input_basis === "rate_percent"} onChange={(event) => setCashbackPercentageMode(event.target.checked)} disabled={interactionDisabled} />I know my cashback percentage</label>
+        {isRateBased && <><FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} disabled={interactionDisabled} /><p className="staleHint">This estimate assumes the entered cashback percentage applies to the entered spend.</p></>}
+        <label className="checkRow"><input type="checkbox" checked={form.cashback_knowledge === "unknown"} onChange={(event) => setCashbackKnowledge(event.target.checked ? "unknown" : "known")} disabled={interactionDisabled} />I&apos;m not sure</label>
       </>}
       {(form.reward_type === "points" || form.reward_type === "miles") && <>
-        <label className="field"><span>Do you know the approximate cash value of the rewards you earned in this period?</span><select className="selectInput" value={form.points_miles_knowledge} onChange={(event) => setPointsMilesKnowledge(event.target.value as PointsMilesKnowledge)} required><option value="">Select one</option><option value="yes">Yes, I know the amount</option><option value="unknown">I&apos;m not sure</option></select></label>
-        {form.points_miles_knowledge === "yes" && <><FinancialInput label="Approximate reward value (₹)" type="number" min="0" required value={form.reward_value_amount} onChange={set("reward_value_amount")} /><label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label><p className="staleHint">Use the value of rewards earned during this period, not your total accumulated balance or a redemption from earlier years.</p></>}
+        <label className="field"><span>Do you know the approximate cash value of the rewards you earned in this period?</span><select className="selectInput" value={form.points_miles_knowledge} onChange={(event) => setPointsMilesKnowledge(event.target.value as PointsMilesKnowledge)} required disabled={interactionDisabled}><option value="">Select one</option><option value="yes">Yes, I know the amount</option><option value="unknown">I&apos;m not sure</option></select></label>
+        {form.points_miles_knowledge === "yes" && <><FinancialInput label="Approximate reward value (₹)" type="number" min="0" required value={form.reward_value_amount} onChange={set("reward_value_amount")} disabled={interactionDisabled} /><label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")} disabled={interactionDisabled}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label><p className="staleHint">Use the value of rewards earned during this period, not your total accumulated balance or a redemption from earlier years.</p></>}
       </>}
       {isUnknownRewardInput && <p className="staleHint">Reward value is unknown. Add a reward value if you learn it, then update estimate.</p>}
-      <label className="field"><span>Balance carried forward</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)}><option value="no_balance">No balance carried forward</option><option value="known">I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
-      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} /></>}
+      <label className="field"><span>Balance carried forward</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)} disabled={interactionDisabled}><option value="no_balance">No balance carried forward</option><option value="known">I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
+      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} disabled={interactionDisabled} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} disabled={interactionDisabled} /></>}
       {form.interest_input_basis === "unknown" && <p className="staleHint">Interest cost will stay unknown until you provide carried balance details.</p>}
-      <button className="primaryButton" disabled={loading}>{loading ? "Updating estimate..." : "Update estimate"}</button></form></section>
+      <button className="primaryButton" disabled={interactionDisabled}>{loading ? "Updating estimate..." : "Update estimate"}</button></form></section>
     {isStale && <p className="staleHint" role="status">Inputs changed. Update estimate before opening the next-step screens.</p>}
-    <div className="buttonRow"><button type="button" className="primaryButton" disabled={!canOpenContinuation} onClick={() => { setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
+    <div className="buttonRow"><button type="button" className="primaryButton" disabled={interactionDisabled || !canOpenContinuation} onClick={() => { setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
     {error && <ErrorState message={error} />}
   </main>;
 
   return <main className="shell journey"><a className="backLink" href="/">← Home</a><p className="eyebrow">Get More From My Money</p><h1>See what your card use is worth.</h1><p className="lede">Answer a few questions for an initial estimate.</p>
-    <form onSubmit={submit}><FinancialInput label="Monthly card spend" type="number" min="0" required value={form.monthly_card_spend} onChange={set("monthly_card_spend")} /><FinancialInput label="Annual card fee" type="number" min="0" required value={form.annual_card_fee} onChange={set("annual_card_fee")} />
+    <form onSubmit={submit}><FinancialInput label="Monthly card spend" type="number" min="0" required value={form.monthly_card_spend} onChange={set("monthly_card_spend")} disabled={interactionDisabled} /><FinancialInput label="Annual card fee" type="number" min="0" required value={form.annual_card_fee} onChange={set("annual_card_fee")} disabled={interactionDisabled} />
       <section className="rewardChooser"><h2>How does your card reward you?</h2><div className="rewardChooserGrid">
-        <button type="button" className={`rewardOption${form.reward_type === "cashback" ? " isSelected" : ""}`} onClick={() => setRewardType("cashback")}>Cashback</button>
-        <button type="button" className={`rewardOption${form.reward_type === "points" ? " isSelected" : ""}`} onClick={() => setRewardType("points")}>Points</button>
-        <button type="button" className={`rewardOption${form.reward_type === "miles" ? " isSelected" : ""}`} onClick={() => setRewardType("miles")}>Miles</button>
-        <button type="button" className={`rewardOption${form.reward_type === "not_sure" ? " isSelected" : ""}`} onClick={() => setRewardType("not_sure")}>I&apos;m not sure</button>
+        <button type="button" className={`rewardOption${form.reward_type === "cashback" ? " isSelected" : ""}`} onClick={() => setRewardType("cashback")} disabled={interactionDisabled}>Cashback</button>
+        <button type="button" className={`rewardOption${form.reward_type === "points" ? " isSelected" : ""}`} onClick={() => setRewardType("points")} disabled={interactionDisabled}>Points</button>
+        <button type="button" className={`rewardOption${form.reward_type === "miles" ? " isSelected" : ""}`} onClick={() => setRewardType("miles")} disabled={interactionDisabled}>Miles</button>
+        <button type="button" className={`rewardOption${form.reward_type === "not_sure" ? " isSelected" : ""}`} onClick={() => setRewardType("not_sure")} disabled={interactionDisabled}>I&apos;m not sure</button>
       </div></section>
       {form.reward_type === "cashback" && <>
-        <FinancialInput label="How much cashback did you receive?" type="number" min="0" required={form.cashback_knowledge === "known" && form.reward_input_basis === "cashback_amount"} value={form.cashback_amount} onChange={set("cashback_amount")} />
-        <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label>
-        <label className="checkRow"><input type="checkbox" checked={form.reward_input_basis === "rate_percent"} onChange={(event) => setCashbackPercentageMode(event.target.checked)} />I know my cashback percentage</label>
-        {form.reward_input_basis === "rate_percent" && <FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} />}
-        <label className="checkRow"><input type="checkbox" checked={form.cashback_knowledge === "unknown"} onChange={(event) => setCashbackKnowledge(event.target.checked ? "unknown" : "known")} />I&apos;m not sure</label>
+        <FinancialInput label="How much cashback did you receive?" type="number" min="0" required={form.cashback_knowledge === "known" && form.reward_input_basis === "cashback_amount"} value={form.cashback_amount} onChange={set("cashback_amount")} disabled={interactionDisabled} />
+        <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")} disabled={interactionDisabled}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label>
+        <label className="checkRow"><input type="checkbox" checked={form.reward_input_basis === "rate_percent"} onChange={(event) => setCashbackPercentageMode(event.target.checked)} disabled={interactionDisabled} />I know my cashback percentage</label>
+        {form.reward_input_basis === "rate_percent" && <FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} disabled={interactionDisabled} />}
+        <label className="checkRow"><input type="checkbox" checked={form.cashback_knowledge === "unknown"} onChange={(event) => setCashbackKnowledge(event.target.checked ? "unknown" : "known")} disabled={interactionDisabled} />I&apos;m not sure</label>
       </>}
       {(form.reward_type === "points" || form.reward_type === "miles") && <>
-        <label className="field"><span>Do you know the approximate cash value of the rewards you earned in this period?</span><select className="selectInput" value={form.points_miles_knowledge} onChange={(event) => setPointsMilesKnowledge(event.target.value as PointsMilesKnowledge)} required><option value="">Select one</option><option value="yes">Yes, I know the amount</option><option value="unknown">I&apos;m not sure</option></select></label>
-        {form.points_miles_knowledge === "yes" && <><FinancialInput label="Approximate reward value (₹)" type="number" min="0" required value={form.reward_value_amount} onChange={set("reward_value_amount")} /><label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label><p className="staleHint">Use the value of rewards earned during this period, not your total accumulated balance or a redemption from earlier years.</p></>}
+        <label className="field"><span>Do you know the approximate cash value of the rewards you earned in this period?</span><select className="selectInput" value={form.points_miles_knowledge} onChange={(event) => setPointsMilesKnowledge(event.target.value as PointsMilesKnowledge)} required disabled={interactionDisabled}><option value="">Select one</option><option value="yes">Yes, I know the amount</option><option value="unknown">I&apos;m not sure</option></select></label>
+        {form.points_miles_knowledge === "yes" && <><FinancialInput label="Approximate reward value (₹)" type="number" min="0" required value={form.reward_value_amount} onChange={set("reward_value_amount")} disabled={interactionDisabled} /><label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")} disabled={interactionDisabled}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label><p className="staleHint">Use the value of rewards earned during this period, not your total accumulated balance or a redemption from earlier years.</p></>}
       </>}
-      <label className="field"><span>Balance carried forward</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)}><option value="no_balance">No balance carried forward</option><option value="known">I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
-      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} /></>}
+      <label className="field"><span>Balance carried forward</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)} disabled={interactionDisabled}><option value="no_balance">No balance carried forward</option><option value="known">I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
+      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} disabled={interactionDisabled} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} disabled={interactionDisabled} /></>}
       {form.interest_input_basis === "unknown" && <p className="staleHint">Interest cost will stay unknown until you provide carried balance details.</p>}
-      <div className="formActions"><ExampleValuesButton onClick={() => { setExampleMode(true); setForm({ monthly_card_spend: "75000", annual_card_fee: "4000", estimated_reward_rate_percent: "", reward_type: "cashback", reward_input_basis: "cashback_amount", reward_period: "monthly", reward_value_amount: "", points_miles_knowledge: "", cashback_knowledge: "known", cashback_amount: "900", reward_value_unknown: false, interest_input_basis: "no_balance", revolving_balance: "", annual_interest_rate_percent: "" }); setSpendSliderMax(nextExpandedMax(SPEND_SLIDER_MAX, 75000, SPEND_SLIDER_EXPAND_BY)); setFeeSliderMax(nextExpandedMax(FEE_SLIDER_MAX, 4000, FEE_SLIDER_EXPAND_BY)); setIsStale(true); }} /><button type="submit" className="primaryButton" disabled={loading}>{loading ? "Checking..." : "Check my money value"}</button></div>
+      <div className="formActions"><ExampleValuesButton disabled={interactionDisabled} onClick={() => { setExampleMode(true); setForm({ monthly_card_spend: "75000", annual_card_fee: "4000", estimated_reward_rate_percent: "", reward_type: "cashback", reward_input_basis: "cashback_amount", reward_period: "monthly", reward_value_amount: "", points_miles_knowledge: "", cashback_knowledge: "known", cashback_amount: "900", reward_value_unknown: false, interest_input_basis: "no_balance", revolving_balance: "", annual_interest_rate_percent: "" }); setSpendSliderMax(nextExpandedMax(SPEND_SLIDER_MAX, 75000, SPEND_SLIDER_EXPAND_BY)); setFeeSliderMax(nextExpandedMax(FEE_SLIDER_MAX, 4000, FEE_SLIDER_EXPAND_BY)); setIsStale(true); }} /><button type="submit" className="primaryButton" disabled={interactionDisabled}>{loading ? "Checking..." : "Check my money value"}</button></div>
     </form>{loading && <LoadingState />}{error && <ErrorState message={error} retry={() => setError("")} />}</main>;
 }

@@ -6,8 +6,8 @@ export function FinancialInput({ label, optional, ...props }: InputHTMLAttribute
   return <label className="field"><span>{label}{optional && <em>Optional</em>}</span><input {...props} /></label>;
 }
 
-export function ExampleValuesButton({ onClick }: { onClick: () => void }) {
-  return <button type="button" className="secondaryButton" onClick={onClick}>Use example values</button>;
+export function ExampleValuesButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
+  return <button type="button" className="secondaryButton" onClick={onClick} disabled={disabled}>Use example values</button>;
 }
 
 export function LoadingState() {

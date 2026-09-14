@@ -133,8 +133,13 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
 }: FlowProps<TIntent, TReason>) {
   const headingRef = useHeadingFocus(step);
   const [selectedIntent, setSelectedIntent] = useState<TIntent>(config.intent.options[0].value);
+  const lastTrackedStep = useRef<Track11ContinuationStep | null>(null);
 
   useEffect(() => {
+    if (lastTrackedStep.current === step) return;
+
+    lastTrackedStep.current = step;
+
     if (step === "reveal") trackEvent("teaser_viewed", journey);
     if (step === "intent") trackEvent("next_interest_viewed", journey);
   }, [journey, step]);
