@@ -486,12 +486,12 @@ export function MoneyValueContinuationFlow({
           options: [
             {
               value: "actual_card_value",
-              title: "What my card is actually worth",
-              body: "Use my statement to compare rewards, fees and interest.",
+              title: "Understand my rewards and costs",
+              body: "Check the reward value and charges behind my estimate.",
             },
             {
               value: "spend_understanding",
-              title: "Where my spending is going",
+              title: "Understand my spending",
               body: "Show me the categories and patterns behind my card use.",
             },
           ],
@@ -517,7 +517,7 @@ export function MoneyValueContinuationFlow({
             ],
           },
           disclosure:
-            "This isn't available yet. A future check would need a statement you choose to share. Nothing is uploaded here.",
+            "A statement could help check spending and charges. Reward value may need additional details.",
           question: "Would you use this?",
           yesLabel: "I'd use this when available",
           noLabel: "Not for me right now",

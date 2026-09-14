@@ -6,14 +6,21 @@ import { currency, ErrorState, ExampleValuesButton, FinancialInput, InsightBlock
 import { MoneyValueContinuationFlow, Track11ContinuationStep, Track11ResultVariant } from "../../components/Track11Flow";
 
 type RewardType = "cashback" | "points" | "miles" | "not_sure";
-type RewardInputBasis = "rate_percent" | "cashback_amount" | "earned_units";
+type RewardInputBasis = "rate_percent" | "cashback_amount" | "earned_units" | "known_reward_value";
+type InterestInputBasis = "no_balance" | "known" | "unknown";
+type PointsMilesKnowledge = "" | "yes" | "unknown";
+type CashbackKnowledge = "known" | "unknown";
 
 type Result = {
   estimated_annual_rewards: number | null;
   annual_card_fee: number;
-  estimated_annual_interest_cost: number;
+  estimated_annual_interest_cost: number | null;
   estimated_net_annual_value: number | null;
   reward_value_known: boolean;
+  interest_value_known: boolean;
+  reward_input_basis?: RewardInputBasis | null;
+  reward_period?: "monthly" | "yearly" | null;
+  interest_input_basis: InterestInputBasis;
   unknown_value_reason?: string | null;
   value_status: string;
   reason_codes: string[];
@@ -28,11 +35,13 @@ type FormState = {
   estimated_reward_rate_percent: string;
   reward_type: RewardType;
   reward_input_basis: RewardInputBasis;
-  reward_period: string;
+  reward_period: "monthly" | "yearly";
+  reward_value_amount: string;
+  points_miles_knowledge: PointsMilesKnowledge;
+  cashback_knowledge: CashbackKnowledge;
   cashback_amount: string;
-  reward_units_earned: string;
-  rupee_value_per_reward_unit: string;
   reward_value_unknown: boolean;
+  interest_input_basis: InterestInputBasis;
   revolving_balance: string;
   annual_interest_rate_percent: string;
 };
@@ -92,10 +101,12 @@ export default function MoneyValuePage() {
     reward_type: "cashback" as RewardType,
     reward_input_basis: "cashback_amount" as RewardInputBasis,
     reward_period: "monthly",
+    reward_value_amount: "",
+    points_miles_knowledge: "",
+    cashback_knowledge: "known",
     cashback_amount: "",
-    reward_units_earned: "",
-    rupee_value_per_reward_unit: "",
     reward_value_unknown: false,
+    interest_input_basis: "no_balance",
     revolving_balance: "",
     annual_interest_rate_percent: "",
   });
@@ -123,18 +134,48 @@ export default function MoneyValuePage() {
     setForm({ ...form, [key]: event.target.value });
   };
 
-  const setRewardBasis = (event: ChangeEvent<HTMLSelectElement>) => {
-    const basis = event.target.value as RewardInputBasis;
+  const setCashbackPercentageMode = (useRatePercent: boolean) => {
     setExampleMode(false);
     setIsStale(true);
     setForm((previous) => ({
       ...previous,
-      reward_input_basis: basis,
-      estimated_reward_rate_percent: basis === "rate_percent" ? previous.estimated_reward_rate_percent : "",
-      cashback_amount: basis === "cashback_amount" ? previous.cashback_amount : "",
-      reward_units_earned: basis === "earned_units" ? previous.reward_units_earned : "",
-      rupee_value_per_reward_unit: basis === "earned_units" ? previous.rupee_value_per_reward_unit : "",
-      reward_value_unknown: basis === "earned_units" ? previous.reward_value_unknown : false,
+      reward_input_basis: useRatePercent ? "rate_percent" : "cashback_amount",
+      reward_value_unknown: previous.cashback_knowledge === "unknown",
+    }));
+  };
+
+  const setCashbackKnowledge = (knowledge: CashbackKnowledge) => {
+    setExampleMode(false);
+    setIsStale(true);
+    setForm((previous) => ({
+      ...previous,
+      cashback_knowledge: knowledge,
+      reward_value_unknown: knowledge === "unknown",
+      estimated_reward_rate_percent: knowledge === "unknown" ? "" : previous.estimated_reward_rate_percent,
+      cashback_amount: knowledge === "unknown" ? "" : previous.cashback_amount,
+    }));
+  };
+
+  const setPointsMilesKnowledge = (knowledge: PointsMilesKnowledge) => {
+    setExampleMode(false);
+    setIsStale(true);
+    setForm((previous) => ({
+      ...previous,
+      points_miles_knowledge: knowledge,
+      reward_input_basis: knowledge === "yes" ? "known_reward_value" : previous.reward_input_basis,
+      reward_value_unknown: knowledge === "unknown",
+      reward_value_amount: knowledge === "yes" ? previous.reward_value_amount : "",
+    }));
+  };
+
+  const setInterestBasis = (basis: InterestInputBasis) => {
+    setExampleMode(false);
+    setIsStale(true);
+    setForm((previous) => ({
+      ...previous,
+      interest_input_basis: basis,
+      revolving_balance: basis === "known" ? previous.revolving_balance : "",
+      annual_interest_rate_percent: basis === "known" ? previous.annual_interest_rate_percent : "",
     }));
   };
 
@@ -144,22 +185,30 @@ export default function MoneyValuePage() {
     setForm((previous) => ({
       ...previous,
       reward_type: rewardType,
-      reward_input_basis: rewardType === "cashback" ? "cashback_amount" : rewardType === "not_sure" ? previous.reward_input_basis : "earned_units",
+      reward_input_basis: rewardType === "cashback" ? "cashback_amount" : rewardType === "not_sure" ? previous.reward_input_basis : "known_reward_value",
       estimated_reward_rate_percent: rewardType === "cashback" ? previous.estimated_reward_rate_percent : "",
       cashback_amount: rewardType === "cashback" ? previous.cashback_amount : "",
-      reward_units_earned:
+      reward_value_amount:
         (previous.reward_type === "points" && rewardType === "miles") || (previous.reward_type === "miles" && rewardType === "points")
           ? ""
           : rewardType === "points" || rewardType === "miles"
-            ? previous.reward_units_earned
+            ? previous.reward_value_amount
             : "",
-      rupee_value_per_reward_unit:
+      points_miles_knowledge:
         (previous.reward_type === "points" && rewardType === "miles") || (previous.reward_type === "miles" && rewardType === "points")
           ? ""
           : rewardType === "points" || rewardType === "miles"
-            ? previous.rupee_value_per_reward_unit
+            ? previous.points_miles_knowledge
             : "",
-      reward_value_unknown: rewardType === "not_sure" ? true : rewardType === "points" || rewardType === "miles" ? previous.reward_value_unknown : false,
+      cashback_knowledge: rewardType === "cashback" ? previous.cashback_knowledge : "known",
+      reward_value_unknown:
+        rewardType === "not_sure"
+          ? true
+          : rewardType === "cashback"
+            ? previous.cashback_knowledge === "unknown"
+            : rewardType === "points" || rewardType === "miles"
+              ? previous.points_miles_knowledge === "unknown"
+              : false,
     }));
   };
 
@@ -199,11 +248,32 @@ export default function MoneyValuePage() {
       monthly_card_spend: Number(form.monthly_card_spend),
       annual_card_fee: Number(form.annual_card_fee),
       reward_type: form.reward_type,
-      revolving_balance: Number(form.revolving_balance || 0),
-      annual_interest_rate_percent: Number(form.annual_interest_rate_percent || 0),
     };
 
+    if (form.interest_input_basis === "no_balance") {
+      payload.interest_input_basis = "no_balance";
+      payload.revolving_balance = 0;
+      payload.annual_interest_rate_percent = 0;
+    } else if (form.interest_input_basis === "unknown") {
+      payload.interest_input_basis = "unknown";
+      payload.interest_value_unknown = true;
+    } else {
+      payload.interest_input_basis = "known";
+      payload.revolving_balance = Number(form.revolving_balance);
+      payload.annual_interest_rate_percent = Number(form.annual_interest_rate_percent);
+    }
+
     if (form.reward_type === "not_sure") {
+      payload.reward_value_unknown = true;
+      return payload;
+    }
+
+    if (form.reward_type === "cashback" && form.cashback_knowledge === "unknown") {
+      payload.reward_value_unknown = true;
+      return payload;
+    }
+
+    if ((form.reward_type === "points" || form.reward_type === "miles") && form.points_miles_knowledge === "unknown") {
       payload.reward_value_unknown = true;
       return payload;
     }
@@ -219,13 +289,10 @@ export default function MoneyValuePage() {
       payload.reward_period = form.reward_period;
     }
 
-    if (form.reward_input_basis === "earned_units") {
-      payload.reward_units_earned = Number(form.reward_units_earned);
+    if (form.reward_input_basis === "known_reward_value") {
+      payload.reward_value_amount = Number(form.reward_value_amount);
       payload.reward_period = form.reward_period;
-      payload.reward_value_unknown = form.reward_value_unknown;
-      if (!form.reward_value_unknown) {
-        payload.rupee_value_per_reward_unit = Number(form.rupee_value_per_reward_unit);
-      }
+      payload.reward_amount_is_estimate = true;
     }
 
     return payload;
@@ -272,9 +339,19 @@ export default function MoneyValuePage() {
   const formatCurrencyMaybe = (value: number | null, reason?: string | null) => {
     if (value !== null) return currency(value);
     if (reason === "REWARD_VALUE_UNKNOWN") return "Unknown until reward value is provided";
+    if (reason === "INTEREST_VALUE_UNKNOWN") return "Unknown until carried balance details are provided";
+    if (reason === "REWARD_VALUE_INPUT_INCOMPLETE") return "Unknown until reward value and period are provided";
     if (reason === "REWARD_CONVERSION_UNKNOWN") return "Unknown until rupee value per point/mile is provided";
     return "Unknown until reward details are completed";
   };
+
+  const rewardUnknown = !!displayResult && !displayResult.reward_value_known;
+  const interestUnknown = !!displayResult && !displayResult.interest_value_known;
+  const isRateBased = form.reward_type === "cashback" && form.reward_input_basis === "rate_percent" && form.cashback_knowledge === "known";
+  const isUnknownRewardInput =
+    form.reward_type === "not_sure" ||
+    (form.reward_type === "cashback" && form.cashback_knowledge === "unknown") ||
+    ((form.reward_type === "points" || form.reward_type === "miles") && form.points_miles_knowledge === "unknown");
 
   if (displayResult && viewMode === "continuation") {
     return <main className="shell journey"><a className="backLink" href="#" onClick={(event) => { event.preventDefault(); setViewMode("result"); }}>← Back to estimate details</a>
@@ -291,14 +368,25 @@ export default function MoneyValuePage() {
   }
 
   if (displayResult) return <main className="shell journey"><a className="backLink" href="/money-value">← Update details</a><p className="eyebrow">Get More From My Money</p><h1>Your money value check</h1><p className="estimateLabel">{exampleMode ? "Example preview" : "Your estimate"}</p>
-    <InsightBlock title="1. What did we find?"><div className="metrics">
-      <ResultMetric label="Estimated annual rewards" value={formatCurrencyMaybe(displayResult.estimated_annual_rewards)} /><ResultMetric label="Annual fee" value={currency(displayResult.annual_card_fee)} />
-      <ResultMetric label="Estimated annual interest cost" value={currency(displayResult.estimated_annual_interest_cost)} /><ResultMetric label="Estimated net annual value" value={formatCurrencyMaybe(displayResult.estimated_net_annual_value, displayResult.unknown_value_reason)} />
-    </div><p className="status">{moneyValueStatusLabels[displayResult.value_status] ?? "Your money value result is ready"}</p></InsightBlock>
+    <InsightBlock title={rewardUnknown ? "Your reward value is still missing" : "1. What did we find?"}>
+      {rewardUnknown && <p className="status">We can show the card costs you entered, but we can&apos;t yet tell whether your rewards cover them.</p>}
+      <div className="metrics">
+        {!rewardUnknown && <ResultMetric label="Estimated annual rewards" value={formatCurrencyMaybe(displayResult.estimated_annual_rewards)} />}
+        <ResultMetric label="Annual fee" value={currency(displayResult.annual_card_fee)} />
+        <ResultMetric label="Estimated annual interest cost" value={formatCurrencyMaybe(displayResult.estimated_annual_interest_cost, displayResult.unknown_value_reason)} />
+        {!rewardUnknown && !interestUnknown && <ResultMetric label="Estimated net annual value" value={formatCurrencyMaybe(displayResult.estimated_net_annual_value, displayResult.unknown_value_reason)} />}
+      </div>
+      {!rewardUnknown && <p className="status">{moneyValueStatusLabels[displayResult.value_status] ?? "Your money value result is ready"}</p>}
+      {!rewardUnknown && displayResult.reward_input_basis === "cashback_amount" && displayResult.reward_period === "monthly" && <p className="status">Annual estimate assumes the monthly reward amount stays the same for 12 months.</p>}
+      {!rewardUnknown && displayResult.reward_input_basis === "known_reward_value" && displayResult.reward_period === "monthly" && <p className="status">Annual estimate assumes the monthly reward amount stays the same for 12 months.</p>}
+      {!rewardUnknown && (displayResult.reward_input_basis === "cashback_amount" || displayResult.reward_input_basis === "known_reward_value") && displayResult.reward_period === "yearly" && <p className="status">Based on the yearly reward value you entered.</p>}
+      {!rewardUnknown && displayResult.reward_input_basis === "rate_percent" && <p className="status">This estimate assumes the entered cashback percentage applies to the entered spend.</p>}
+      {interestUnknown && <p className="status">Interest cost is missing, so net annual value cannot be finalized yet. Current formula: carried balance × annual interest rate % ÷ 100.</p>}
+    </InsightBlock>
     <InsightBlock title="2. Why does it matter?"><div className="reasonParagraphs">{displayResult.reason_codes.map((code, index) => <p key={`${code}-${index}`}>{reasonCodeLabels[code] ?? "One or more costs may be affecting the value you receive."}</p>)}</div></InsightBlock>
     <InsightBlock title="3. What should I do next?"><div className="reasonParagraphs">{guidanceParagraphs(displayResult.next_best_action).map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div></InsightBlock>
     <section className="whatIfCard"><h2>Want to see what could improve this?</h2><p>Adjust only the information you already entered.</p><form onSubmit={runWhatIf}>
-      <label className="sliderField">
+      {isRateBased && <label className="sliderField">
         <span>Monthly card spend</span>
         <div className="sliderFieldRow">
           <input
@@ -320,7 +408,7 @@ export default function MoneyValuePage() {
           />
         </div>
         <div className="sliderEndpoints"><span>{formatAmountInput(String(SPEND_SLIDER_MIN)) || "₹ 0"}</span><span>{formatAmountInput(String(spendSliderMax))}</span></div>
-      </label>
+      </label>}
       <label className="sliderField">
         <span>Annual card fee</span>
         <div className="sliderFieldRow">
@@ -344,14 +432,22 @@ export default function MoneyValuePage() {
         </div>
         <div className="sliderEndpoints"><span>{formatAmountInput(String(FEE_SLIDER_MIN)) || "₹ 0"}</span><span>{formatAmountInput(String(feeSliderMax))}</span></div>
       </label>
-      {form.reward_type === "cashback" && form.reward_input_basis === "rate_percent" && <FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} />}
-      {form.reward_type === "cashback" && form.reward_input_basis === "cashback_amount" && <FinancialInput label="Cashback amount" type="number" min="0" required value={form.cashback_amount} onChange={set("cashback_amount")} />}
-      {form.reward_type === "cashback" && form.reward_input_basis === "cashback_amount" && <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>}
-      {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <FinancialInput label={form.reward_type === "points" ? "Points earned" : "Miles earned"} type="number" min="0" required value={form.reward_units_earned} onChange={set("reward_units_earned")} />}
-      {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && form.reward_input_basis === "earned_units" && <label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>}
-      {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && !form.reward_value_unknown && <FinancialInput label="Rupee value per point/mile" type="number" min="0.01" step="0.01" required value={form.rupee_value_per_reward_unit} onChange={set("rupee_value_per_reward_unit")} />}
-      {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <label className="checkRow"><input type="checkbox" checked={form.reward_value_unknown} onChange={(event) => { setIsStale(true); setForm({ ...form, reward_value_unknown: event.target.checked }); }} />I do not know the rupee value per point/mile yet</label>}
-      <FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} /><button className="primaryButton" disabled={loading}>Update estimate</button></form></section>
+      {form.reward_type === "cashback" && <>
+        <FinancialInput label="How much cashback did you receive?" type="number" min="0" required={form.cashback_knowledge === "known" && form.reward_input_basis === "cashback_amount"} value={form.cashback_amount} onChange={set("cashback_amount")} />
+        <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label>
+        <label className="checkRow"><input type="checkbox" checked={form.reward_input_basis === "rate_percent"} onChange={(event) => setCashbackPercentageMode(event.target.checked)} />I know my cashback percentage</label>
+        {isRateBased && <><FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} /><p className="staleHint">This estimate assumes the entered cashback percentage applies to the entered spend.</p></>}
+        <label className="checkRow"><input type="checkbox" checked={form.cashback_knowledge === "unknown"} onChange={(event) => setCashbackKnowledge(event.target.checked ? "unknown" : "known")} />I&apos;m not sure</label>
+      </>}
+      {(form.reward_type === "points" || form.reward_type === "miles") && <>
+        <label className="field"><span>Do you know the approximate cash value of the rewards you earned in this period?</span><select className="selectInput" value={form.points_miles_knowledge} onChange={(event) => setPointsMilesKnowledge(event.target.value as PointsMilesKnowledge)} required><option value="">Select one</option><option value="yes">Yes, I know the amount</option><option value="unknown">I&apos;m not sure</option></select></label>
+        {form.points_miles_knowledge === "yes" && <><FinancialInput label="Approximate reward value (₹)" type="number" min="0" required value={form.reward_value_amount} onChange={set("reward_value_amount")} /><label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label><p className="staleHint">Use the value of rewards earned during this period, not your total accumulated balance or a redemption from earlier years.</p></>}
+      </>}
+      {isUnknownRewardInput && <p className="staleHint">Reward value is unknown. Add a reward value if you learn it, then update estimate.</p>}
+      <label className="field"><span>Balance carried forward</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)}><option value="no_balance">No balance carried forward</option><option value="known">I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
+      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} /></>}
+      {form.interest_input_basis === "unknown" && <p className="staleHint">Interest cost will stay unknown until you provide carried balance details.</p>}
+      <button className="primaryButton" disabled={loading}>{loading ? "Updating estimate..." : "Update estimate"}</button></form></section>
     {isStale && <p className="staleHint" role="status">Inputs changed. Update estimate before opening the next-step screens.</p>}
     <div className="buttonRow"><button type="button" className="primaryButton" disabled={!canOpenContinuation} onClick={() => { setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
     {error && <ErrorState message={error} />}
@@ -363,17 +459,22 @@ export default function MoneyValuePage() {
         <button type="button" className={`rewardOption${form.reward_type === "cashback" ? " isSelected" : ""}`} onClick={() => setRewardType("cashback")}>Cashback</button>
         <button type="button" className={`rewardOption${form.reward_type === "points" ? " isSelected" : ""}`} onClick={() => setRewardType("points")}>Points</button>
         <button type="button" className={`rewardOption${form.reward_type === "miles" ? " isSelected" : ""}`} onClick={() => setRewardType("miles")}>Miles</button>
-        <button type="button" className={`rewardOption${form.reward_type === "not_sure" ? " isSelected" : ""}`} onClick={() => setRewardType("not_sure")}>I am not sure</button>
+        <button type="button" className={`rewardOption${form.reward_type === "not_sure" ? " isSelected" : ""}`} onClick={() => setRewardType("not_sure")}>I&apos;m not sure</button>
       </div></section>
-      {form.reward_type === "cashback" && <label className="field"><span>Cashback input type</span><select className="selectInput" value={form.reward_input_basis} onChange={setRewardBasis}><option value="cashback_amount">Known cashback amount</option><option value="rate_percent">Estimated reward rate (%)</option></select></label>}
-      {form.reward_type === "cashback" && form.reward_input_basis === "rate_percent" && <FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} />}
-      {form.reward_type === "cashback" && form.reward_input_basis === "cashback_amount" && <FinancialInput label="Cashback amount" type="number" min="0" required value={form.cashback_amount} onChange={set("cashback_amount")} />}
-      {form.reward_type === "cashback" && form.reward_input_basis === "cashback_amount" && <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>}
-      {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <FinancialInput label={form.reward_type === "points" ? "Points earned" : "Miles earned"} type="number" min="0" required value={form.reward_units_earned} onChange={set("reward_units_earned")} />}
-      {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <label className="field"><span>Points/miles period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>}
-      {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && !form.reward_value_unknown && <FinancialInput label="Rupee value per point/mile" type="number" min="0.01" step="0.01" required value={form.rupee_value_per_reward_unit} onChange={set("rupee_value_per_reward_unit")} />}
-      {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <label className="checkRow"><input type="checkbox" checked={form.reward_value_unknown} onChange={(event) => { setIsStale(true); setForm({ ...form, reward_value_unknown: event.target.checked }); }} />I do not know the rupee value per point/mile yet</label>}
-      <FinancialInput label="Balance carried forward" optional type="number" min="0" value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" optional type="number" min="0" value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} />
-      <div className="formActions"><ExampleValuesButton onClick={() => { setExampleMode(true); setForm({ monthly_card_spend: "75000", annual_card_fee: "4000", estimated_reward_rate_percent: "", reward_type: "cashback", reward_input_basis: "cashback_amount", reward_period: "monthly", cashback_amount: "900", reward_units_earned: "", rupee_value_per_reward_unit: "", reward_value_unknown: false, revolving_balance: "0", annual_interest_rate_percent: "0" }); setSpendSliderMax(nextExpandedMax(SPEND_SLIDER_MAX, 75000, SPEND_SLIDER_EXPAND_BY)); setFeeSliderMax(nextExpandedMax(FEE_SLIDER_MAX, 4000, FEE_SLIDER_EXPAND_BY)); setIsStale(true); }} /><button type="submit" className="primaryButton" disabled={loading}>Check my money value</button></div>
+      {form.reward_type === "cashback" && <>
+        <FinancialInput label="How much cashback did you receive?" type="number" min="0" required={form.cashback_knowledge === "known" && form.reward_input_basis === "cashback_amount"} value={form.cashback_amount} onChange={set("cashback_amount")} />
+        <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label>
+        <label className="checkRow"><input type="checkbox" checked={form.reward_input_basis === "rate_percent"} onChange={(event) => setCashbackPercentageMode(event.target.checked)} />I know my cashback percentage</label>
+        {form.reward_input_basis === "rate_percent" && <FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} />}
+        <label className="checkRow"><input type="checkbox" checked={form.cashback_knowledge === "unknown"} onChange={(event) => setCashbackKnowledge(event.target.checked ? "unknown" : "known")} />I&apos;m not sure</label>
+      </>}
+      {(form.reward_type === "points" || form.reward_type === "miles") && <>
+        <label className="field"><span>Do you know the approximate cash value of the rewards you earned in this period?</span><select className="selectInput" value={form.points_miles_knowledge} onChange={(event) => setPointsMilesKnowledge(event.target.value as PointsMilesKnowledge)} required><option value="">Select one</option><option value="yes">Yes, I know the amount</option><option value="unknown">I&apos;m not sure</option></select></label>
+        {form.points_miles_knowledge === "yes" && <><FinancialInput label="Approximate reward value (₹)" type="number" min="0" required value={form.reward_value_amount} onChange={set("reward_value_amount")} /><label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Per month</option><option value="yearly">Per year</option></select></label><p className="staleHint">Use the value of rewards earned during this period, not your total accumulated balance or a redemption from earlier years.</p></>}
+      </>}
+      <label className="field"><span>Balance carried forward</span><select className="selectInput" value={form.interest_input_basis} onChange={(event) => setInterestBasis(event.target.value as InterestInputBasis)}><option value="no_balance">No balance carried forward</option><option value="known">I know my carried balance and interest rate</option><option value="unknown">I&apos;m not sure</option></select></label>
+      {form.interest_input_basis === "known" && <><FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} /></>}
+      {form.interest_input_basis === "unknown" && <p className="staleHint">Interest cost will stay unknown until you provide carried balance details.</p>}
+      <div className="formActions"><ExampleValuesButton onClick={() => { setExampleMode(true); setForm({ monthly_card_spend: "75000", annual_card_fee: "4000", estimated_reward_rate_percent: "", reward_type: "cashback", reward_input_basis: "cashback_amount", reward_period: "monthly", reward_value_amount: "", points_miles_knowledge: "", cashback_knowledge: "known", cashback_amount: "900", reward_value_unknown: false, interest_input_basis: "no_balance", revolving_balance: "", annual_interest_rate_percent: "" }); setSpendSliderMax(nextExpandedMax(SPEND_SLIDER_MAX, 75000, SPEND_SLIDER_EXPAND_BY)); setFeeSliderMax(nextExpandedMax(FEE_SLIDER_MAX, 4000, FEE_SLIDER_EXPAND_BY)); setIsStale(true); }} /><button type="submit" className="primaryButton" disabled={loading}>{loading ? "Checking..." : "Check my money value"}</button></div>
     </form>{loading && <LoadingState />}{error && <ErrorState message={error} retry={() => setError("")} />}</main>;
 }

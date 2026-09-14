@@ -28,18 +28,27 @@ Reward input supports both legacy and extended forms:
 - Legacy compatibility: `estimated_reward_rate_percent`.
 - Cashback amount mode: `reward_type=cashback`,
   `reward_input_basis=cashback_amount`, `cashback_amount`, `reward_period`.
+- Known reward value mode: `reward_type=points|miles`,
+    `reward_input_basis=known_reward_value`, `reward_value_amount`,
+    `reward_period`.
 - Points/miles mode: `reward_type=points|miles`,
   `reward_input_basis=earned_units`, `reward_units_earned`, `reward_period`,
   and either `rupee_value_per_reward_unit` or `reward_value_unknown=true`.
 - Unknown mode: `reward_type=not_sure` sets an explicit unknown-value outcome.
 
+Interest input supports additive completeness fields:
+- `interest_input_basis=no_balance` for confirmed no carried balance.
+- `interest_input_basis=known` with `revolving_balance` and
+    `annual_interest_rate_percent`.
+- `interest_input_basis=unknown` with `interest_value_unknown=true`.
+
 The response includes `policy_version=alpha50-money-value-v0.1`,
 `reward_type`, `reward_input_basis`, `reward_period`, `annual_spend`,
 `estimated_annual_rewards`, `annual_card_fee`,
+`interest_input_basis`, `interest_value_known`,
 `estimated_annual_interest_cost`, `estimated_net_annual_value`,
 `reward_value_known`, optional `unknown_value_reason`, `value_status`,
-`reason_codes`, `next_best_action`, `guidance_disclaimer`, and
-`audit_event_id`.
+`reason_codes`, `next_best_action`, `guidance_disclaimer`, and `audit_event_id`.
 
 ## Compatibility routes
 

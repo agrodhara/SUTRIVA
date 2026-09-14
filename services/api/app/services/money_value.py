@@ -57,6 +57,10 @@ UNKNOWN_VALUE_ACTION = (
     "Add your reward details when you can so this estimate can calculate card value more reliably."
 )
 
+UNKNOWN_INTEREST_ACTION = (
+    "Add your carried balance details when you can so this estimate can include interest cost reliably."
+)
+
 
 def classify_value_status(net_annual_value: float) -> str:
     if net_annual_value > NET_VALUE_POSITIVE_THRESHOLD:
@@ -100,6 +104,8 @@ def estimate_annual_rewards(payload: MoneyValueCheckRequest) -> tuple[float | No
             basis = "rate_percent"
         elif payload.reward_type == "cashback" and payload.cashback_amount is not None:
             basis = "cashback_amount"
+        elif payload.reward_type in {"points", "miles"} and payload.reward_value_amount is not None:
+            basis = "known_reward_value"
         elif payload.reward_type in {"points", "miles"} and payload.reward_units_earned is not None:
             basis = "earned_units"
 
@@ -118,6 +124,12 @@ def estimate_annual_rewards(payload: MoneyValueCheckRequest) -> tuple[float | No
         multiplier = 12 if payload.reward_period == "monthly" else 1
         return payload.cashback_amount * multiplier, None
 
+    if basis == "known_reward_value":
+        if payload.reward_value_amount is None or payload.reward_period is None:
+            return None, "REWARD_VALUE_INPUT_INCOMPLETE"
+        multiplier = 12 if payload.reward_period == "monthly" else 1
+        return payload.reward_value_amount * multiplier, None
+
     if basis == "earned_units":
         if payload.reward_units_earned is None or payload.reward_period is None:
             return None, "REWARD_UNITS_INPUT_INCOMPLETE"
@@ -130,19 +142,49 @@ def estimate_annual_rewards(payload: MoneyValueCheckRequest) -> tuple[float | No
     return None, "REWARD_INPUT_UNKNOWN"
 
 
+def estimate_annual_interest_cost(payload: MoneyValueCheckRequest) -> tuple[float | None, str | None, str]:
+    basis = payload.interest_input_basis
+    if basis is None:
+        if payload.interest_value_unknown:
+            basis = "unknown"
+        elif payload.revolving_balance is None and payload.annual_interest_rate_percent is None:
+            basis = "no_balance"
+        else:
+            basis = "known"
+
+    if basis == "unknown" or payload.interest_value_unknown:
+        return None, "INTEREST_VALUE_UNKNOWN", "unknown"
+
+    if basis == "no_balance":
+        return 0.0, None, "no_balance"
+
+    revolving_balance = payload.revolving_balance or 0.0
+    annual_interest_rate_percent = payload.annual_interest_rate_percent or 0.0
+    return revolving_balance * (annual_interest_rate_percent / 100), None, "known"
+
+
 def run_money_value_check(payload: MoneyValueCheckRequest) -> dict:
     """Run the Money Value Check calculation. Backend owns all calculations."""
     annual_spend = payload.monthly_card_spend * 12
     estimated_annual_rewards, unknown_reason = estimate_annual_rewards(payload)
-    estimated_annual_interest_cost = payload.revolving_balance * (payload.annual_interest_rate_percent / 100)
+    estimated_annual_interest_cost, interest_unknown_reason, resolved_interest_basis = estimate_annual_interest_cost(payload)
 
+    missing_reasons: List[str] = []
     if estimated_annual_rewards is None:
+        missing_reasons.append(unknown_reason or "REWARD_VALUE_UNKNOWN")
+    if estimated_annual_interest_cost is None:
+        missing_reasons.append(interest_unknown_reason or "INTEREST_VALUE_UNKNOWN")
+
+    if missing_reasons:
         value_status = UNKNOWN_VALUE_STATUS
-        reason_codes = [unknown_reason or "REWARD_VALUE_UNKNOWN"]
-        if estimated_annual_interest_cost > 0:
+        reason_codes = missing_reasons
+        if estimated_annual_interest_cost is not None and estimated_annual_interest_cost > 0:
             reason_codes.append("REVOLVING_INTEREST_DRAG")
         estimated_net_annual_value = None
-        next_best_action = UNKNOWN_VALUE_ACTION
+        if unknown_reason is not None:
+            next_best_action = UNKNOWN_VALUE_ACTION
+        else:
+            next_best_action = UNKNOWN_INTEREST_ACTION
     else:
         estimated_net_annual_value = (
             estimated_annual_rewards - payload.annual_card_fee - estimated_annual_interest_cost
@@ -163,6 +205,8 @@ def run_money_value_check(payload: MoneyValueCheckRequest) -> dict:
             basis = "rate_percent"
         elif payload.reward_type == "cashback" and payload.cashback_amount is not None:
             basis = "cashback_amount"
+        elif payload.reward_type in {"points", "miles"} and payload.reward_value_amount is not None:
+            basis = "known_reward_value"
         elif payload.reward_type in {"points", "miles"} and payload.reward_units_earned is not None:
             basis = "earned_units"
 
@@ -171,13 +215,16 @@ def run_money_value_check(payload: MoneyValueCheckRequest) -> dict:
         "reward_type": payload.reward_type,
         "reward_input_basis": basis,
         "reward_period": payload.reward_period,
+        "reward_value_amount": round(payload.reward_value_amount, 2) if payload.reward_value_amount is not None else None,
         "annual_spend": round(annual_spend, 2),
         "estimated_annual_rewards": round(estimated_annual_rewards, 2) if estimated_annual_rewards is not None else None,
         "annual_card_fee": round(payload.annual_card_fee, 2),
-        "estimated_annual_interest_cost": round(estimated_annual_interest_cost, 2),
+        "interest_input_basis": resolved_interest_basis,
+        "interest_value_known": estimated_annual_interest_cost is not None,
+        "estimated_annual_interest_cost": round(estimated_annual_interest_cost, 2) if estimated_annual_interest_cost is not None else None,
         "estimated_net_annual_value": round(estimated_net_annual_value, 2) if estimated_net_annual_value is not None else None,
         "reward_value_known": estimated_annual_rewards is not None,
-        "unknown_value_reason": unknown_reason,
+        "unknown_value_reason": (missing_reasons[0] if missing_reasons else None),
         "value_status": value_status,
         "reason_codes": reason_codes,
         "next_best_action": next_best_action,

@@ -360,42 +360,40 @@ def test_money_value_check_cashback_amount_yearly():
     assert body["reward_period"] == "yearly"
 
 
-def test_money_value_check_points_conversion():
+def test_money_value_check_points_known_reward_value_monthly():
     response = client.post("/v1/financial-intelligence/money-value-check", json={
         "monthly_card_spend": 60000,
         "annual_card_fee": 4000,
         "reward_type": "points",
-        "reward_input_basis": "earned_units",
-        "reward_units_earned": 1000,
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 500,
         "reward_period": "monthly",
-        "rupee_value_per_reward_unit": 0.5,
-        "revolving_balance": 0,
-        "annual_interest_rate_percent": 0,
+        "interest_input_basis": "no_balance",
     })
     assert response.status_code == 200
     body = response.json()
     assert body["estimated_annual_rewards"] == 6000
     assert body["estimated_net_annual_value"] == 2000
     assert body["reward_value_known"] is True
+    assert body["reward_input_basis"] == "known_reward_value"
 
 
-def test_money_value_check_miles_conversion_known_value():
+def test_money_value_check_miles_known_reward_value_yearly():
     response = client.post("/v1/financial-intelligence/money-value-check", json={
         "monthly_card_spend": 60000,
         "annual_card_fee": 4000,
         "reward_type": "miles",
-        "reward_input_basis": "earned_units",
-        "reward_units_earned": 2500,
-        "reward_period": "monthly",
-        "rupee_value_per_reward_unit": 0.4,
-        "revolving_balance": 0,
-        "annual_interest_rate_percent": 0,
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 12000,
+        "reward_period": "yearly",
+        "interest_input_basis": "no_balance",
     })
     assert response.status_code == 200
     body = response.json()
     assert body["estimated_annual_rewards"] == 12000
     assert body["estimated_net_annual_value"] == 8000
     assert body["reward_value_known"] is True
+    assert body["reward_period"] == "yearly"
 
 
 def test_money_value_check_points_unknown_value_not_zeroed():
@@ -403,9 +401,6 @@ def test_money_value_check_points_unknown_value_not_zeroed():
         "monthly_card_spend": 60000,
         "annual_card_fee": 4000,
         "reward_type": "points",
-        "reward_input_basis": "earned_units",
-        "reward_units_earned": 3000,
-        "reward_period": "yearly",
         "reward_value_unknown": True,
     })
     assert response.status_code == 200
@@ -421,9 +416,6 @@ def test_money_value_check_unknown_reward_value_not_zeroed():
         "monthly_card_spend": 60000,
         "annual_card_fee": 4000,
         "reward_type": "miles",
-        "reward_input_basis": "earned_units",
-        "reward_units_earned": 3000,
-        "reward_period": "yearly",
         "reward_value_unknown": True,
         "revolving_balance": 50000,
         "annual_interest_rate_percent": 24,
@@ -449,6 +441,146 @@ def test_money_value_check_not_sure_reward_type_is_unknown_value_path():
     assert body["reward_value_known"] is False
     assert body["estimated_annual_rewards"] is None
     assert body["value_status"] == "UNKNOWN_VALUE"
+
+
+def test_money_value_check_blank_amount_vs_explicit_zero_for_known_reward_value():
+    missing_amount = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "known_reward_value",
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    assert missing_amount.status_code == 422
+
+    explicit_zero = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 0,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    assert explicit_zero.status_code == 200
+    body = explicit_zero.json()
+    assert body["estimated_annual_rewards"] == 0
+    assert body["reward_value_known"] is True
+
+
+def test_money_value_check_unknown_interest_vs_no_balance():
+    unknown_interest = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 900,
+        "reward_period": "monthly",
+        "interest_input_basis": "unknown",
+        "interest_value_unknown": True,
+    })
+    assert unknown_interest.status_code == 200
+    unknown_body = unknown_interest.json()
+    assert unknown_body["estimated_annual_rewards"] == 10800
+    assert unknown_body["estimated_annual_interest_cost"] is None
+    assert unknown_body["estimated_net_annual_value"] is None
+    assert unknown_body["value_status"] == "UNKNOWN_VALUE"
+    assert "INTEREST_VALUE_UNKNOWN" in unknown_body["reason_codes"]
+
+    no_balance = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 900,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    assert no_balance.status_code == 200
+    no_balance_body = no_balance.json()
+    assert no_balance_body["estimated_annual_interest_cost"] == 0
+    assert no_balance_body["interest_value_known"] is True
+    assert no_balance_body["estimated_net_annual_value"] == 6800
+
+
+def test_money_value_check_monthly_yearly_annualization_for_known_reward_value():
+    monthly = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 500,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    yearly = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 6000,
+        "reward_period": "yearly",
+        "interest_input_basis": "no_balance",
+    })
+    assert monthly.status_code == 200
+    assert yearly.status_code == 200
+    assert monthly.json()["estimated_annual_rewards"] == yearly.json()["estimated_annual_rewards"] == 6000
+
+
+def test_money_value_check_fixed_reward_amount_unaffected_by_spend_change():
+    low_spend = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 10000,
+        "annual_card_fee": 4000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 900,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    high_spend = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 200000,
+        "annual_card_fee": 4000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 900,
+        "reward_period": "monthly",
+        "interest_input_basis": "no_balance",
+    })
+    assert low_spend.status_code == 200
+    assert high_spend.status_code == 200
+    assert low_spend.json()["estimated_annual_rewards"] == high_spend.json()["estimated_annual_rewards"] == 10800
+
+
+def test_money_value_check_legacy_earned_units_compatibility():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "earned_units",
+        "reward_units_earned": 1000,
+        "reward_period": "monthly",
+        "rupee_value_per_reward_unit": 0.5,
+        "interest_input_basis": "no_balance",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_annual_rewards"] == 6000
+    assert body["reward_input_basis"] == "earned_units"
+
+
+def test_money_value_check_rejects_incompatible_fields_after_reward_type_switch():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 3000,
+        "reward_type": "miles",
+        "reward_input_basis": "known_reward_value",
+        "reward_value_amount": 3000,
+        "reward_period": "monthly",
+        "cashback_amount": 500,
+        "interest_input_basis": "no_balance",
+    })
+    assert response.status_code == 422
 
 
 def test_money_value_check_rejects_invalid_mixed_reward_fields():

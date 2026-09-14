@@ -56,7 +56,9 @@ export const reasonCodeLabels: Record<string, string> = {
   REWARD_CONVERSION_UNKNOWN: "A rupee value per point/mile is needed for conversion.",
   REWARD_RATE_MISSING: "A reward rate is needed for this reward input type.",
   CASHBACK_INPUT_INCOMPLETE: "Cashback amount and period are needed to calculate annual rewards.",
+  REWARD_VALUE_INPUT_INCOMPLETE: "Reward value and period are needed to calculate annual rewards.",
   REWARD_UNITS_INPUT_INCOMPLETE: "Reward units and period are needed to calculate annual rewards.",
+  INTEREST_VALUE_UNKNOWN: "Interest cost is unknown until carried balance details are provided.",
   REWARD_INPUT_UNKNOWN: "Reward input is incomplete for this check.",
 };
 

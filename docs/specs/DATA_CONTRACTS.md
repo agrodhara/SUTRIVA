@@ -38,9 +38,16 @@ user-declared estimates.
 Supported reward inputs:
 - `estimated_reward_rate_percent` (legacy compatibility).
 - Cashback amount mode with period (`cashback_amount` and `reward_period`).
+- Known reward value mode for points/miles (`reward_value_amount` and
+  `reward_period` with `reward_input_basis=known_reward_value`).
 - Points/miles mode with period and optional rupee conversion
   (`reward_units_earned`, `reward_period`, `rupee_value_per_reward_unit`).
 - Unknown-value mode (`reward_type=not_sure` or `reward_value_unknown=true`).
+
+Interest completeness (additive and backward-compatible):
+- `interest_input_basis=no_balance` for confirmed no carried balance.
+- `interest_input_basis=known` for known carried balance inputs.
+- `interest_input_basis=unknown` with `interest_value_unknown=true`.
 
 Output status can be `POSITIVE`, `NEUTRAL`, `VALUE_LEAKAGE`, or
 `UNKNOWN_VALUE`. Unknown value is explicit and does not coerce rewards or net
