@@ -39,11 +39,49 @@ type FormState = {
 
 type FormTextKey = Exclude<keyof FormState, "reward_value_unknown">;
 
+const SPEND_SLIDER_MIN = 0;
+const SPEND_SLIDER_MAX = 200000;
+const SPEND_SLIDER_STEP = 500;
+const SPEND_SLIDER_EXPAND_BY = 25000;
+
+const FEE_SLIDER_MIN = 0;
+const FEE_SLIDER_MAX = 50000;
+const FEE_SLIDER_STEP = 100;
+const FEE_SLIDER_EXPAND_BY = 5000;
+
+const INDIAN_NUMBER = new Intl.NumberFormat("en-IN");
+
 function guidanceParagraphs(text: string): string[] {
   return text
     .split("|")
     .map((part) => part.trim())
     .filter(Boolean);
+}
+
+function parseNonNegativeWholeAmount(value: string): string {
+  const digitsOnly = value.replace(/[^\d]/g, "");
+  if (!digitsOnly) return "";
+  return String(Number(digitsOnly));
+}
+
+function formatAmountInput(raw: string): string {
+  if (!raw) return "";
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) return "";
+  return `₹ ${INDIAN_NUMBER.format(numeric)}`;
+}
+
+function nextExpandedMax(currentMax: number, value: number, expandBy: number): number {
+  if (value <= currentMax) return currentMax;
+  return Math.ceil(value / expandBy) * expandBy;
+}
+
+function sliderValueForDisplay(raw: string, min: number, max: number, step: number): string {
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) return String(min);
+  const clamped = Math.max(min, Math.min(max, numeric));
+  const steps = Math.round((clamped - min) / step);
+  return String(min + steps * step);
 }
 
 export default function MoneyValuePage() {
@@ -52,7 +90,7 @@ export default function MoneyValuePage() {
     annual_card_fee: "",
     estimated_reward_rate_percent: "",
     reward_type: "cashback" as RewardType,
-    reward_input_basis: "rate_percent" as RewardInputBasis,
+    reward_input_basis: "cashback_amount" as RewardInputBasis,
     reward_period: "monthly",
     cashback_amount: "",
     reward_units_earned: "",
@@ -69,6 +107,10 @@ export default function MoneyValuePage() {
   const [exampleMode, setExampleMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [spendSliderMax, setSpendSliderMax] = useState(SPEND_SLIDER_MAX);
+  const [feeSliderMax, setFeeSliderMax] = useState(FEE_SLIDER_MAX);
+
   const set = (key: FormTextKey) => (event: ChangeEvent<HTMLInputElement>) => {
     setExampleMode(false);
     setIsStale(true);
@@ -81,16 +123,75 @@ export default function MoneyValuePage() {
     setForm({ ...form, [key]: event.target.value });
   };
 
+  const setRewardBasis = (event: ChangeEvent<HTMLSelectElement>) => {
+    const basis = event.target.value as RewardInputBasis;
+    setExampleMode(false);
+    setIsStale(true);
+    setForm((previous) => ({
+      ...previous,
+      reward_input_basis: basis,
+      estimated_reward_rate_percent: basis === "rate_percent" ? previous.estimated_reward_rate_percent : "",
+      cashback_amount: basis === "cashback_amount" ? previous.cashback_amount : "",
+      reward_units_earned: basis === "earned_units" ? previous.reward_units_earned : "",
+      rupee_value_per_reward_unit: basis === "earned_units" ? previous.rupee_value_per_reward_unit : "",
+      reward_value_unknown: basis === "earned_units" ? previous.reward_value_unknown : false,
+    }));
+  };
+
   const setRewardType = (rewardType: RewardType) => {
     setExampleMode(false);
     setIsStale(true);
     setForm((previous) => ({
       ...previous,
       reward_type: rewardType,
-      reward_input_basis:
-        rewardType === "cashback" ? "rate_percent" : rewardType === "not_sure" ? previous.reward_input_basis : "earned_units",
-      reward_value_unknown: rewardType === "not_sure" ? true : previous.reward_value_unknown,
+      reward_input_basis: rewardType === "cashback" ? "cashback_amount" : rewardType === "not_sure" ? previous.reward_input_basis : "earned_units",
+      estimated_reward_rate_percent: rewardType === "cashback" ? previous.estimated_reward_rate_percent : "",
+      cashback_amount: rewardType === "cashback" ? previous.cashback_amount : "",
+      reward_units_earned:
+        (previous.reward_type === "points" && rewardType === "miles") || (previous.reward_type === "miles" && rewardType === "points")
+          ? ""
+          : rewardType === "points" || rewardType === "miles"
+            ? previous.reward_units_earned
+            : "",
+      rupee_value_per_reward_unit:
+        (previous.reward_type === "points" && rewardType === "miles") || (previous.reward_type === "miles" && rewardType === "points")
+          ? ""
+          : rewardType === "points" || rewardType === "miles"
+            ? previous.rupee_value_per_reward_unit
+            : "",
+      reward_value_unknown: rewardType === "not_sure" ? true : rewardType === "points" || rewardType === "miles" ? previous.reward_value_unknown : false,
     }));
+  };
+
+  const setSliderAmount = (key: "monthly_card_spend" | "annual_card_fee", max: number) => (event: ChangeEvent<HTMLInputElement>) => {
+    setExampleMode(false);
+    setIsStale(true);
+    const nextValue = String(Number(event.target.value));
+    setForm((previous) => ({ ...previous, [key]: nextValue }));
+
+    if (key === "monthly_card_spend") {
+      setSpendSliderMax(nextExpandedMax(max, Number(nextValue), SPEND_SLIDER_EXPAND_BY));
+    }
+    if (key === "annual_card_fee") {
+      setFeeSliderMax(nextExpandedMax(max, Number(nextValue), FEE_SLIDER_EXPAND_BY));
+    }
+  };
+
+  const setTypedAmount = (key: "monthly_card_spend" | "annual_card_fee") => (event: ChangeEvent<HTMLInputElement>) => {
+    setExampleMode(false);
+    setIsStale(true);
+    const normalized = parseNonNegativeWholeAmount(event.target.value);
+    setForm((previous) => ({ ...previous, [key]: normalized }));
+
+    if (!normalized) return;
+
+    const numeric = Number(normalized);
+    if (key === "monthly_card_spend") {
+      setSpendSliderMax((current) => nextExpandedMax(current, numeric, SPEND_SLIDER_EXPAND_BY));
+    }
+    if (key === "annual_card_fee") {
+      setFeeSliderMax((current) => nextExpandedMax(current, numeric, FEE_SLIDER_EXPAND_BY));
+    }
   };
 
   const buildPayload = () => {
@@ -196,14 +297,61 @@ export default function MoneyValuePage() {
     </div><p className="status">{moneyValueStatusLabels[displayResult.value_status] ?? "Your money value result is ready"}</p></InsightBlock>
     <InsightBlock title="2. Why does it matter?"><div className="reasonParagraphs">{displayResult.reason_codes.map((code, index) => <p key={`${code}-${index}`}>{reasonCodeLabels[code] ?? "One or more costs may be affecting the value you receive."}</p>)}</div></InsightBlock>
     <InsightBlock title="3. What should I do next?"><div className="reasonParagraphs">{guidanceParagraphs(displayResult.next_best_action).map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div></InsightBlock>
-    <section className="whatIfCard"><h2>Want to see what could improve this?</h2><p>Adjust only the information you already entered.</p><form onSubmit={runWhatIf}><FinancialInput label="Monthly card spend" type="number" min="0" required value={form.monthly_card_spend} onChange={set("monthly_card_spend")} /><FinancialInput label="Annual card fee" type="number" min="0" required value={form.annual_card_fee} onChange={set("annual_card_fee")} />
+    <section className="whatIfCard"><h2>Want to see what could improve this?</h2><p>Adjust only the information you already entered.</p><form onSubmit={runWhatIf}>
+      <label className="sliderField">
+        <span>Monthly card spend</span>
+        <div className="sliderFieldRow">
+          <input
+            type="range"
+            min={String(SPEND_SLIDER_MIN)}
+            max={String(spendSliderMax)}
+            step={String(SPEND_SLIDER_STEP)}
+            value={sliderValueForDisplay(form.monthly_card_spend, SPEND_SLIDER_MIN, spendSliderMax, SPEND_SLIDER_STEP)}
+            onChange={setSliderAmount("monthly_card_spend", spendSliderMax)}
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            className="amountTextInput"
+            value={formatAmountInput(form.monthly_card_spend)}
+            onChange={setTypedAmount("monthly_card_spend")}
+            aria-label="Monthly card spend"
+            required
+          />
+        </div>
+        <div className="sliderEndpoints"><span>{formatAmountInput(String(SPEND_SLIDER_MIN)) || "₹ 0"}</span><span>{formatAmountInput(String(spendSliderMax))}</span></div>
+      </label>
+      <label className="sliderField">
+        <span>Annual card fee</span>
+        <div className="sliderFieldRow">
+          <input
+            type="range"
+            min={String(FEE_SLIDER_MIN)}
+            max={String(feeSliderMax)}
+            step={String(FEE_SLIDER_STEP)}
+            value={sliderValueForDisplay(form.annual_card_fee, FEE_SLIDER_MIN, feeSliderMax, FEE_SLIDER_STEP)}
+            onChange={setSliderAmount("annual_card_fee", feeSliderMax)}
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            className="amountTextInput"
+            value={formatAmountInput(form.annual_card_fee)}
+            onChange={setTypedAmount("annual_card_fee")}
+            aria-label="Annual card fee"
+            required
+          />
+        </div>
+        <div className="sliderEndpoints"><span>{formatAmountInput(String(FEE_SLIDER_MIN)) || "₹ 0"}</span><span>{formatAmountInput(String(feeSliderMax))}</span></div>
+      </label>
       {form.reward_type === "cashback" && form.reward_input_basis === "rate_percent" && <FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} />}
       {form.reward_type === "cashback" && form.reward_input_basis === "cashback_amount" && <FinancialInput label="Cashback amount" type="number" min="0" required value={form.cashback_amount} onChange={set("cashback_amount")} />}
+      {form.reward_type === "cashback" && form.reward_input_basis === "cashback_amount" && <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>}
       {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <FinancialInput label={form.reward_type === "points" ? "Points earned" : "Miles earned"} type="number" min="0" required value={form.reward_units_earned} onChange={set("reward_units_earned")} />}
-      {form.reward_type !== "not_sure" && form.reward_input_basis !== "rate_percent" && <label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>}
+      {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && form.reward_input_basis === "earned_units" && <label className="field"><span>Reward period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>}
       {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && !form.reward_value_unknown && <FinancialInput label="Rupee value per point/mile" type="number" min="0.01" step="0.01" required value={form.rupee_value_per_reward_unit} onChange={set("rupee_value_per_reward_unit")} />}
       {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <label className="checkRow"><input type="checkbox" checked={form.reward_value_unknown} onChange={(event) => { setIsStale(true); setForm({ ...form, reward_value_unknown: event.target.checked }); }} />I do not know the rupee value per point/mile yet</label>}
-      <FinancialInput label="Revolving balance" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} /><button className="primaryButton" disabled={loading}>Update estimate</button></form></section>
+      <FinancialInput label="Balance carried forward" type="number" min="0" required value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" type="number" min="0" required value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} /><button className="primaryButton" disabled={loading}>Update estimate</button></form></section>
     {isStale && <p className="staleHint" role="status">Inputs changed. Update estimate before opening the next-step screens.</p>}
     <div className="buttonRow"><button type="button" className="primaryButton" disabled={!canOpenContinuation} onClick={() => { setTrackStep("reveal"); setViewMode("continuation"); }}>See what I could check next</button></div>
     {error && <ErrorState message={error} />}
@@ -217,7 +365,7 @@ export default function MoneyValuePage() {
         <button type="button" className={`rewardOption${form.reward_type === "miles" ? " isSelected" : ""}`} onClick={() => setRewardType("miles")}>Miles</button>
         <button type="button" className={`rewardOption${form.reward_type === "not_sure" ? " isSelected" : ""}`} onClick={() => setRewardType("not_sure")}>I am not sure</button>
       </div></section>
-      {form.reward_type === "cashback" && <label className="field"><span>Cashback input type</span><select className="selectInput" value={form.reward_input_basis} onChange={setSelect("reward_input_basis")}><option value="rate_percent">Estimated reward rate (%)</option><option value="cashback_amount">Known cashback amount</option></select></label>}
+      {form.reward_type === "cashback" && <label className="field"><span>Cashback input type</span><select className="selectInput" value={form.reward_input_basis} onChange={setRewardBasis}><option value="cashback_amount">Known cashback amount</option><option value="rate_percent">Estimated reward rate (%)</option></select></label>}
       {form.reward_type === "cashback" && form.reward_input_basis === "rate_percent" && <FinancialInput label="Estimated reward rate %" type="number" min="0" step="0.1" required value={form.estimated_reward_rate_percent} onChange={set("estimated_reward_rate_percent")} />}
       {form.reward_type === "cashback" && form.reward_input_basis === "cashback_amount" && <FinancialInput label="Cashback amount" type="number" min="0" required value={form.cashback_amount} onChange={set("cashback_amount")} />}
       {form.reward_type === "cashback" && form.reward_input_basis === "cashback_amount" && <label className="field"><span>Cashback period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>}
@@ -225,7 +373,7 @@ export default function MoneyValuePage() {
       {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <label className="field"><span>Points/miles period</span><select className="selectInput" value={form.reward_period} onChange={setSelect("reward_period")}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>}
       {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && !form.reward_value_unknown && <FinancialInput label="Rupee value per point/mile" type="number" min="0.01" step="0.01" required value={form.rupee_value_per_reward_unit} onChange={set("rupee_value_per_reward_unit")} />}
       {form.reward_type !== "cashback" && form.reward_type !== "not_sure" && <label className="checkRow"><input type="checkbox" checked={form.reward_value_unknown} onChange={(event) => { setIsStale(true); setForm({ ...form, reward_value_unknown: event.target.checked }); }} />I do not know the rupee value per point/mile yet</label>}
-      <FinancialInput label="Revolving balance" optional type="number" min="0" value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" optional type="number" min="0" value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} />
-      <div className="formActions"><ExampleValuesButton onClick={() => { setExampleMode(true); setForm({ monthly_card_spend: "75000", annual_card_fee: "4000", estimated_reward_rate_percent: "1.2", reward_type: "cashback", reward_input_basis: "rate_percent", reward_period: "monthly", cashback_amount: "", reward_units_earned: "", rupee_value_per_reward_unit: "", reward_value_unknown: false, revolving_balance: "0", annual_interest_rate_percent: "0" }); setIsStale(true); }} /><button type="submit" className="primaryButton" disabled={loading}>Check my money value</button></div>
+      <FinancialInput label="Balance carried forward" optional type="number" min="0" value={form.revolving_balance} onChange={set("revolving_balance")} /><FinancialInput label="Annual interest rate %" optional type="number" min="0" value={form.annual_interest_rate_percent} onChange={set("annual_interest_rate_percent")} />
+      <div className="formActions"><ExampleValuesButton onClick={() => { setExampleMode(true); setForm({ monthly_card_spend: "75000", annual_card_fee: "4000", estimated_reward_rate_percent: "", reward_type: "cashback", reward_input_basis: "cashback_amount", reward_period: "monthly", cashback_amount: "900", reward_units_earned: "", rupee_value_per_reward_unit: "", reward_value_unknown: false, revolving_balance: "0", annual_interest_rate_percent: "0" }); setSpendSliderMax(nextExpandedMax(SPEND_SLIDER_MAX, 75000, SPEND_SLIDER_EXPAND_BY)); setFeeSliderMax(nextExpandedMax(FEE_SLIDER_MAX, 4000, FEE_SLIDER_EXPAND_BY)); setIsStale(true); }} /><button type="submit" className="primaryButton" disabled={loading}>Check my money value</button></div>
     </form>{loading && <LoadingState />}{error && <ErrorState message={error} retry={() => setError("")} />}</main>;
 }

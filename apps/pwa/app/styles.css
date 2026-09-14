@@ -542,6 +542,25 @@ h1 .highlight {
   font: inherit;
 }
 
+.amountTextInput {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cbc9bd;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #171717;
+  font: inherit;
+}
+
+.sliderEndpoints {
+  display: flex;
+  justify-content: space-between;
+  color: #5c5b55;
+  font-size: 12px;
+}
+
 .staleHint {
   margin-top: 14px;
   color: #7a4d0a;
