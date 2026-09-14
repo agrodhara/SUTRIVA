@@ -66,6 +66,7 @@ type FlowProps<TIntent extends ProductEventIntent, TReason extends ProductEventR
   journey: Journey;
   step: Track11ContinuationStep;
   resultVariant: Track11ResultVariant;
+  returnLabel?: string;
   onNavigate: (step: Track11ContinuationStep) => void;
   onReturnToResult: () => void;
   config: FlowConfig<TIntent, TReason>;
@@ -81,7 +82,8 @@ function useHeadingFocus(step: Track11ContinuationStep) {
   return headingRef;
 }
 
-function resultBackLabel(resultVariant: Track11ResultVariant) {
+function resultBackLabel(resultVariant: Track11ResultVariant, returnLabel?: string) {
+  if (returnLabel) return returnLabel;
   return resultVariant === "what_if" ? "← Back to what-if" : "← Back to my estimate";
 }
 
@@ -89,17 +91,19 @@ function TerminalScreen({
   title,
   body,
   resultVariant,
+  returnLabel,
   headingRef,
   onReturnToResult,
 }: TerminalCopy & {
   resultVariant: Track11ResultVariant;
+  returnLabel?: string;
   headingRef: RefObject<HTMLHeadingElement>;
   onReturnToResult: () => void;
 }) {
   return (
     <section className="track11Screen">
       <a className="backLink" href="#" onClick={(event) => { event.preventDefault(); onReturnToResult(); }}>
-        {resultBackLabel(resultVariant)}
+        {resultBackLabel(resultVariant, returnLabel)}
       </a>
       <p className="track11Badge">Possible next step</p>
       <h1 tabIndex={-1} ref={headingRef}>
@@ -108,7 +112,7 @@ function TerminalScreen({
       <p className="track11TerminalBody">{body}</p>
       <div className="track11TerminalActions">
         <button type="button" className="primaryButton" onClick={onReturnToResult}>
-          {resultBackLabel(resultVariant)}
+          {resultBackLabel(resultVariant, returnLabel)}
         </button>
         <a className="track11HomeLink" href="/">
           Back to home
@@ -122,6 +126,7 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
   journey,
   step,
   resultVariant,
+  returnLabel,
   onNavigate,
   onReturnToResult,
   config,
@@ -140,6 +145,7 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
         title={config.closure.yesTerminal.title}
         body={config.closure.yesTerminal.body}
         resultVariant={resultVariant}
+        returnLabel={returnLabel}
         headingRef={headingRef}
         onReturnToResult={onReturnToResult}
       />
@@ -152,6 +158,7 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
         title={config.closure.noTerminal.title}
         body={config.closure.noTerminal.body}
         resultVariant={resultVariant}
+        returnLabel={returnLabel}
         headingRef={headingRef}
         onReturnToResult={onReturnToResult}
       />
@@ -164,6 +171,7 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
         title={config.intent.skipTerminal.title}
         body={config.intent.skipTerminal.body}
         resultVariant={resultVariant}
+        returnLabel={returnLabel}
         headingRef={headingRef}
         onReturnToResult={onReturnToResult}
       />
@@ -298,7 +306,7 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
   return (
     <section className="track11Screen">
       <a className="backLink" href="#" onClick={(event) => { event.preventDefault(); onReturnToResult(); }}>
-        {resultBackLabel(resultVariant)}
+        {resultBackLabel(resultVariant, returnLabel)}
       </a>
       <p className="track11Eyebrow">{config.resultLink.label}</p>
       <h1 tabIndex={-1} ref={headingRef}>
@@ -337,6 +345,7 @@ export function BorrowBetterContinuationFlow({
   journey,
   step,
   resultVariant,
+  returnLabel,
   onNavigate,
   onReturnToResult,
   statusLabel,
@@ -345,6 +354,7 @@ export function BorrowBetterContinuationFlow({
   journey: Journey;
   step: Track11ContinuationStep;
   resultVariant: Track11ResultVariant;
+  returnLabel?: string;
   onNavigate: (step: Track11ContinuationStep) => void;
   onReturnToResult: () => void;
   statusLabel: string;
@@ -355,6 +365,7 @@ export function BorrowBetterContinuationFlow({
       journey={journey}
       step={step}
       resultVariant={resultVariant}
+      returnLabel={returnLabel}
       onNavigate={onNavigate}
       onReturnToResult={onReturnToResult}
       config={{
@@ -438,6 +449,7 @@ export function MoneyValueContinuationFlow({
   journey,
   step,
   resultVariant,
+  returnLabel,
   onNavigate,
   onReturnToResult,
   netAnnualValue,
@@ -445,6 +457,7 @@ export function MoneyValueContinuationFlow({
   journey: Journey;
   step: Track11ContinuationStep;
   resultVariant: Track11ResultVariant;
+  returnLabel?: string;
   onNavigate: (step: Track11ContinuationStep) => void;
   onReturnToResult: () => void;
   netAnnualValue: string;
@@ -454,6 +467,7 @@ export function MoneyValueContinuationFlow({
       journey={journey}
       step={step}
       resultVariant={resultVariant}
+      returnLabel={returnLabel}
       onNavigate={onNavigate}
       onReturnToResult={onReturnToResult}
       config={{

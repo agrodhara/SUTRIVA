@@ -37,6 +37,7 @@ export const moneyValueStatusLabels: Record<string, string> = {
   POSITIVE: "Your card appears to create value",
   NEUTRAL: "Your card value appears roughly balanced",
   VALUE_LEAKAGE: "Your card may be costing more than it returns",
+  UNKNOWN_VALUE: "We need reward details to estimate card value",
 };
 
 export const reasonCodeLabels: Record<string, string> = {
@@ -51,6 +52,12 @@ export const reasonCodeLabels: Record<string, string> = {
   ANNUAL_FEE_DRAG: "The annual fee may be reducing the value you receive.",
   REVOLVING_INTEREST_DRAG: "Revolving interest may be reducing the value you receive.",
   LOW_REWARD_CAPTURE: "The estimated reward rate is relatively low.",
+  REWARD_VALUE_UNKNOWN: "You marked reward value as unknown.",
+  REWARD_CONVERSION_UNKNOWN: "A rupee value per point/mile is needed for conversion.",
+  REWARD_RATE_MISSING: "A reward rate is needed for this reward input type.",
+  CASHBACK_INPUT_INCOMPLETE: "Cashback amount and period are needed to calculate annual rewards.",
+  REWARD_UNITS_INPUT_INCOMPLETE: "Reward units and period are needed to calculate annual rewards.",
+  REWARD_INPUT_UNKNOWN: "Reward input is incomplete for this check.",
 };
 
 export const currency = (value: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);

@@ -51,6 +51,12 @@ NEXT_BEST_ACTIONS = {
     ),
 }
 
+UNKNOWN_VALUE_STATUS = "UNKNOWN_VALUE"
+
+UNKNOWN_VALUE_ACTION = (
+    "Add your reward details when you can so this estimate can calculate card value more reliably."
+)
+
 
 def classify_value_status(net_annual_value: float) -> str:
     if net_annual_value > NET_VALUE_POSITIVE_THRESHOLD:
@@ -79,38 +85,101 @@ def build_reason_codes(
         codes.append("ANNUAL_FEE_DRAG")
     if estimated_annual_interest_cost > 0:
         codes.append("REVOLVING_INTEREST_DRAG")
-    if payload.estimated_reward_rate_percent < LOW_REWARD_RATE_THRESHOLD_PERCENT:
+    if (
+        payload.estimated_reward_rate_percent is not None
+        and payload.estimated_reward_rate_percent < LOW_REWARD_RATE_THRESHOLD_PERCENT
+    ):
         codes.append("LOW_REWARD_CAPTURE")
     return codes
+
+
+def estimate_annual_rewards(payload: MoneyValueCheckRequest) -> tuple[float | None, str | None]:
+    basis = payload.reward_input_basis
+    if basis is None:
+        if payload.estimated_reward_rate_percent is not None:
+            basis = "rate_percent"
+        elif payload.reward_type == "cashback" and payload.cashback_amount is not None:
+            basis = "cashback_amount"
+        elif payload.reward_type in {"points", "miles"} and payload.reward_units_earned is not None:
+            basis = "earned_units"
+
+    if payload.reward_value_unknown or payload.reward_type == "not_sure":
+        return None, "REWARD_VALUE_UNKNOWN"
+
+    if basis == "rate_percent":
+        if payload.estimated_reward_rate_percent is None:
+            return None, "REWARD_RATE_MISSING"
+        annual_spend = payload.monthly_card_spend * 12
+        return annual_spend * (payload.estimated_reward_rate_percent / 100), None
+
+    if basis == "cashback_amount":
+        if payload.cashback_amount is None or payload.reward_period is None:
+            return None, "CASHBACK_INPUT_INCOMPLETE"
+        multiplier = 12 if payload.reward_period == "monthly" else 1
+        return payload.cashback_amount * multiplier, None
+
+    if basis == "earned_units":
+        if payload.reward_units_earned is None or payload.reward_period is None:
+            return None, "REWARD_UNITS_INPUT_INCOMPLETE"
+        if payload.rupee_value_per_reward_unit is None:
+            return None, "REWARD_CONVERSION_UNKNOWN"
+        units_multiplier = 12 if payload.reward_period == "monthly" else 1
+        annual_units = payload.reward_units_earned * units_multiplier
+        return annual_units * payload.rupee_value_per_reward_unit, None
+
+    return None, "REWARD_INPUT_UNKNOWN"
 
 
 def run_money_value_check(payload: MoneyValueCheckRequest) -> dict:
     """Run the Money Value Check calculation. Backend owns all calculations."""
     annual_spend = payload.monthly_card_spend * 12
-    estimated_annual_rewards = annual_spend * (payload.estimated_reward_rate_percent / 100)
+    estimated_annual_rewards, unknown_reason = estimate_annual_rewards(payload)
     estimated_annual_interest_cost = payload.revolving_balance * (payload.annual_interest_rate_percent / 100)
-    estimated_net_annual_value = (
-        estimated_annual_rewards - payload.annual_card_fee - estimated_annual_interest_cost
-    )
 
-    value_status = classify_value_status(estimated_net_annual_value)
-    reason_codes = build_reason_codes(
-        payload,
-        value_status,
-        payload.annual_card_fee,
-        estimated_annual_rewards,
-        estimated_annual_interest_cost,
-    )
+    if estimated_annual_rewards is None:
+        value_status = UNKNOWN_VALUE_STATUS
+        reason_codes = [unknown_reason or "REWARD_VALUE_UNKNOWN"]
+        if estimated_annual_interest_cost > 0:
+            reason_codes.append("REVOLVING_INTEREST_DRAG")
+        estimated_net_annual_value = None
+        next_best_action = UNKNOWN_VALUE_ACTION
+    else:
+        estimated_net_annual_value = (
+            estimated_annual_rewards - payload.annual_card_fee - estimated_annual_interest_cost
+        )
+        value_status = classify_value_status(estimated_net_annual_value)
+        reason_codes = build_reason_codes(
+            payload,
+            value_status,
+            payload.annual_card_fee,
+            estimated_annual_rewards,
+            estimated_annual_interest_cost,
+        )
+        next_best_action = NEXT_BEST_ACTIONS[value_status]
+
+    basis = payload.reward_input_basis
+    if basis is None:
+        if payload.estimated_reward_rate_percent is not None:
+            basis = "rate_percent"
+        elif payload.reward_type == "cashback" and payload.cashback_amount is not None:
+            basis = "cashback_amount"
+        elif payload.reward_type in {"points", "miles"} and payload.reward_units_earned is not None:
+            basis = "earned_units"
 
     return {
         "policy_version": POLICY_VERSION,
+        "reward_type": payload.reward_type,
+        "reward_input_basis": basis,
+        "reward_period": payload.reward_period,
         "annual_spend": round(annual_spend, 2),
-        "estimated_annual_rewards": round(estimated_annual_rewards, 2),
+        "estimated_annual_rewards": round(estimated_annual_rewards, 2) if estimated_annual_rewards is not None else None,
         "annual_card_fee": round(payload.annual_card_fee, 2),
         "estimated_annual_interest_cost": round(estimated_annual_interest_cost, 2),
-        "estimated_net_annual_value": round(estimated_net_annual_value, 2),
+        "estimated_net_annual_value": round(estimated_net_annual_value, 2) if estimated_net_annual_value is not None else None,
+        "reward_value_known": estimated_annual_rewards is not None,
+        "unknown_value_reason": unknown_reason,
         "value_status": value_status,
         "reason_codes": reason_codes,
-        "next_best_action": NEXT_BEST_ACTIONS[value_status],
+        "next_best_action": next_best_action,
         "guidance_disclaimer": GUIDANCE_DISCLAIMER,
     }

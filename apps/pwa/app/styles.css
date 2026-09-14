@@ -331,6 +331,34 @@ h1 .highlight {
   box-shadow: 0 0 0 3px rgba(22, 121, 79, 0.15);
 }
 
+.selectInput {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #cbc9bd;
+  border-radius: 12px;
+  background: #fcfcfa;
+  color: #171717;
+  font: inherit;
+  font-weight: 500;
+}
+
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: #35352f;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.checkRow input {
+  width: 18px;
+  height: 18px;
+}
+
 .formActions {
   display: flex;
   grid-column: 1 / -1;
@@ -410,6 +438,11 @@ h1 .highlight {
   line-height: 1.55;
 }
 
+.reasonParagraphs {
+  display: grid;
+  gap: 10px;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -473,6 +506,85 @@ h1 .highlight {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-top: 18px;
+}
+
+.sliderField {
+  display: grid;
+  gap: 8px;
+}
+
+.sliderField > span {
+  color: #23231f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sliderFieldRow {
+  display: grid;
+  grid-template-columns: 1fr minmax(120px, 160px);
+  gap: 12px;
+  align-items: center;
+}
+
+.sliderFieldRow input[type="range"] {
+  width: 100%;
+}
+
+.sliderFieldRow input[type="number"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cbc9bd;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #171717;
+  font: inherit;
+}
+
+.staleHint {
+  margin-top: 14px;
+  color: #7a4d0a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.rewardChooser {
+  grid-column: 1 / -1;
+  margin: 6px 0 4px;
+}
+
+.rewardChooser h2 {
+  margin: 0 0 10px;
+  color: #20201c;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.rewardChooserGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rewardOption {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cbc9bd;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #171717;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rewardOption.isSelected {
+  border-color: #16794f;
+  background: #e6f4ec;
+  color: #124e35;
 }
 
 .whatIfCard form button { grid-column: 1 / -1; justify-self: start; }
@@ -713,4 +825,6 @@ h1 .highlight {
   .track11BridgeText,
   .track11TerminalBody,
   .track11Disclosure { font-size: 14px; }
+  .rewardChooserGrid { grid-template-columns: 1fr; }
+  .sliderFieldRow { grid-template-columns: 1fr; }
 }

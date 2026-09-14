@@ -6,17 +6,34 @@ import { borrowingStatusLabels, currency, ErrorState, ExampleValuesButton, Finan
 import { BorrowBetterContinuationFlow, Track11ContinuationStep, Track11ResultVariant } from "../../components/Track11Flow";
 
 type Result = { comfort_status: string; estimated_new_monthly_commitment: number; total_monthly_commitment: number; commitment_ratio: number; reason_codes: string[]; next_best_action: string };
+type ViewMode = "result" | "continuation";
+
+const AMOUNT_MIN = 1;
+const AMOUNT_MAX = 10000000;
+const AMOUNT_STEP = 10000;
+const TENURE_MIN = 1;
+const TENURE_MAX = 360;
+const TENURE_STEP = 1;
 
 export default function BorrowBetterPage() {
   const [form, setForm] = useState({ monthly_income: "", existing_monthly_commitments: "", desired_borrowing_amount: "", desired_tenure_months: "" });
   const [result, setResult] = useState<Result>();
   const [whatIf, setWhatIf] = useState({ desired_borrowing_amount: "", desired_tenure_months: "" });
   const [resultVariant, setResultVariant] = useState<Track11ResultVariant>("original");
-  const [trackStep, setTrackStep] = useState<Track11ContinuationStep>("reveal");
+  const [trackStep, setTrackStep] = useState<Track11ContinuationStep>("intent");
+  const [viewMode, setViewMode] = useState<ViewMode>("result");
+  const [isStale, setIsStale] = useState(false);
   const [exampleMode, setExampleMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const set = (key: keyof typeof form) => (event: ChangeEvent<HTMLInputElement>) => { setExampleMode(false); setForm({ ...form, [key]: event.target.value }); };
+
+  const updateWhatIf = (key: keyof typeof whatIf) => (event: ChangeEvent<HTMLInputElement>) => {
+    setIsStale(true);
+    setWhatIf({ ...whatIf, [key]: event.target.value });
+  };
+
+  const canOpenContinuation = !!result && !isStale && !error;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -32,7 +49,14 @@ export default function BorrowBetterPage() {
         }),
       });
       if (!response.ok) throw new Error("We couldn’t complete your borrowing comfort check. Please check your inputs.");
-      const body = await response.json(); setResult(body); setResultVariant("original"); setTrackStep("reveal"); setWhatIf({ desired_borrowing_amount: form.desired_borrowing_amount, desired_tenure_months: form.desired_tenure_months }); trackEvent("check_completed", "comfortable_borrowing");
+      const body = await response.json();
+      setResult(body);
+      setResultVariant("original");
+      setTrackStep("intent");
+      setViewMode("result");
+      setIsStale(false);
+      setWhatIf({ desired_borrowing_amount: form.desired_borrowing_amount, desired_tenure_months: form.desired_tenure_months });
+      trackEvent("check_completed", "comfortable_borrowing");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally { setLoading(false); }
@@ -44,30 +68,59 @@ export default function BorrowBetterPage() {
     try {
       const response = await fetch(`${requireApiBaseUrl()}/v1/borrowing-intelligence/comfortable-borrowing-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, desired_borrowing_amount: Number(whatIf.desired_borrowing_amount), desired_tenure_months: Number(whatIf.desired_tenure_months) }) });
       if (!response.ok) throw new Error("We couldn’t update this what-if estimate.");
-      setResult(await response.json()); setResultVariant("what_if"); setTrackStep("reveal"); trackEvent("what_if_completed", "comfortable_borrowing");
+      setResult(await response.json());
+      setResultVariant("what_if");
+      setTrackStep("intent");
+      setViewMode("result");
+      setIsStale(false);
+      trackEvent("what_if_completed", "comfortable_borrowing");
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); } finally { setLoading(false); }
   }
   const displayResult = useMemo(() => result, [result]);
 
+  if (displayResult && viewMode === "continuation") {
+    return <main className="shell journey"><a className="backLink" href="#" onClick={(event) => { event.preventDefault(); setViewMode("result"); }}>← Back to estimate details</a>
+      <BorrowBetterContinuationFlow
+        journey="comfortable_borrowing"
+        step={trackStep}
+        resultVariant={resultVariant}
+        returnLabel="← Back to estimate details"
+        onNavigate={setTrackStep}
+        onReturnToResult={() => setViewMode("result")}
+        statusLabel={borrowingStatusLabels[displayResult.comfort_status] ?? "Your result is ready"}
+        commitmentRatio={`${percent(displayResult.commitment_ratio)}`}
+      />
+    </main>;
+  }
+
   if (displayResult) return <main className="shell journey"><a className="backLink" href="/borrow-better">← Update details</a><p className="eyebrow">Borrow Better</p><h1>Your borrowing comfort check</h1><p className="estimateLabel">{exampleMode ? "Example preview" : "Your estimate"}</p>
     <InsightBlock title="1. What did we find?"><div className="metrics"><ResultMetric label="Estimated monthly commitment" value={currency(displayResult.estimated_new_monthly_commitment)} /><ResultMetric label="Total monthly commitment" value={currency(displayResult.total_monthly_commitment)} /><ResultMetric label="Commitment ratio" value={percent(displayResult.commitment_ratio)} /></div><p className="status">{borrowingStatusLabels[displayResult.comfort_status] ?? "Your result is ready"}</p></InsightBlock>
-    <InsightBlock title="2. Why does it matter?"><p>{displayResult.reason_codes.map((code) => reasonCodeLabels[code] ?? "Your income, commitments and requested amount affect this estimate.").join(" ")}</p></InsightBlock>
+    <InsightBlock title="2. Why does it matter?"><div className="reasonParagraphs">{displayResult.reason_codes.map((code, index) => <p key={`${code}-${index}`}>{reasonCodeLabels[code] ?? "Your income, commitments and requested amount affect this estimate."}</p>)}</div></InsightBlock>
     <InsightBlock title="3. What should I do next?"><p>{displayResult.next_best_action}</p></InsightBlock>
-    <section className="whatIfCard"><h2>Want to improve this?</h2><p>Try another amount or tenure using the information you already entered.</p><form onSubmit={runWhatIf}><FinancialInput label="Desired borrowing amount" type="number" min="1" required value={whatIf.desired_borrowing_amount} onChange={(e) => setWhatIf({ ...whatIf, desired_borrowing_amount: e.target.value })} /><FinancialInput label="Desired tenure (months)" type="number" min="1" max="360" required value={whatIf.desired_tenure_months} onChange={(e) => setWhatIf({ ...whatIf, desired_tenure_months: e.target.value })} /><button className="primaryButton" disabled={loading}>Update estimate</button></form></section>
+    <section className="whatIfCard"><h2>Want to improve this?</h2><p>Try another amount or tenure using the information you already entered.</p><form onSubmit={runWhatIf}>
+      <label className="sliderField">
+        <span>Desired borrowing amount</span>
+        <div className="sliderFieldRow">
+          <input type="range" min={String(AMOUNT_MIN)} max={String(AMOUNT_MAX)} step={String(AMOUNT_STEP)} value={whatIf.desired_borrowing_amount || String(AMOUNT_MIN)} onChange={updateWhatIf("desired_borrowing_amount")} />
+          <input type="number" min={String(AMOUNT_MIN)} max={String(AMOUNT_MAX)} step={String(AMOUNT_STEP)} required value={whatIf.desired_borrowing_amount} onChange={updateWhatIf("desired_borrowing_amount")} />
+        </div>
+      </label>
+      <label className="sliderField">
+        <span>Desired tenure (months)</span>
+        <div className="sliderFieldRow">
+          <input type="range" min={String(TENURE_MIN)} max={String(TENURE_MAX)} step={String(TENURE_STEP)} value={whatIf.desired_tenure_months || String(TENURE_MIN)} onChange={updateWhatIf("desired_tenure_months")} />
+          <input type="number" min={String(TENURE_MIN)} max={String(TENURE_MAX)} step={String(TENURE_STEP)} required value={whatIf.desired_tenure_months} onChange={updateWhatIf("desired_tenure_months")} />
+        </div>
+      </label>
+      <button className="primaryButton" disabled={loading}>Update estimate</button>
+    </form></section>
+    {isStale && <p className="staleHint" role="status">Inputs changed. Update estimate before opening the next-step screens.</p>}
+    <div className="buttonRow"><button type="button" className="primaryButton" disabled={!canOpenContinuation} onClick={() => { setTrackStep("intent"); setViewMode("continuation"); }}>See what I could check next</button></div>
     {error && <ErrorState message={error} />}
-    <BorrowBetterContinuationFlow
-      journey="comfortable_borrowing"
-      step={trackStep}
-      resultVariant={resultVariant}
-      onNavigate={setTrackStep}
-      onReturnToResult={() => setTrackStep("reveal")}
-      statusLabel={borrowingStatusLabels[displayResult.comfort_status] ?? "Your result is ready"}
-      commitmentRatio={`${percent(displayResult.commitment_ratio)}`}
-    />
   </main>;
 
   return <main className="shell journey"><a className="backLink" href="/">← Home</a><p className="eyebrow">Borrow Better</p><h1>Know what feels comfortable before you borrow.</h1><p className="lede">Answer a few questions for an initial estimate.</p>
     <form onSubmit={submit}><FinancialInput label="Monthly income" type="number" min="1" required value={form.monthly_income} onChange={set("monthly_income")} /><FinancialInput label="Existing monthly commitments" type="number" min="0" required value={form.existing_monthly_commitments} onChange={set("existing_monthly_commitments")} /><FinancialInput label="Desired borrowing amount" type="number" min="1" required value={form.desired_borrowing_amount} onChange={set("desired_borrowing_amount")} /><FinancialInput label="Desired tenure (months)" type="number" min="1" max="360" required value={form.desired_tenure_months} onChange={set("desired_tenure_months")} />
-      <div className="formActions"><ExampleValuesButton onClick={() => { setExampleMode(true); setForm({ monthly_income: "100000", existing_monthly_commitments: "25000", desired_borrowing_amount: "500000", desired_tenure_months: "36" }); }} /><button type="submit" className="primaryButton" disabled={loading}>Check borrowing comfort</button></div>
+      <div className="formActions"><ExampleValuesButton onClick={() => { setExampleMode(true); setForm({ monthly_income: "100000", existing_monthly_commitments: "25000", desired_borrowing_amount: "500000", desired_tenure_months: "36" }); setWhatIf({ desired_borrowing_amount: "500000", desired_tenure_months: "36" }); setIsStale(true); }} /><button type="submit" className="primaryButton" disabled={loading}>Check borrowing comfort</button></div>
     </form>{loading && <LoadingState />}{error && <ErrorState message={error} retry={() => setError("")} />}</main>;
 }

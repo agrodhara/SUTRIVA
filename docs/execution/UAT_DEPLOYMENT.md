@@ -10,6 +10,18 @@ database is required for this UAT deployment.
 
 ## A. Deploy the FastAPI backend
 
+### AWS App Runner (preferred for AWS UAT)
+
+1. Create an App Runner service from the repository source.
+2. Use repository root context so `services/api` and `services/decision_engine`
+   are both available.
+3. Configure the runtime command equivalent to:
+   `PYTHONPATH=/app/services/api:/app/services/decision_engine python -m uvicorn app.main:app --app-dir /app/services/api --host 0.0.0.0 --port $PORT`
+4. Set:
+   - `ALLOWED_ORIGINS=https://<your-amplify-domain>`
+5. Deploy and verify `https://<apprunner-url>/health` returns JSON with
+   `"status": "ok"`.
+
 ### Render
 
 1. Create a Web Service from this repository.
@@ -39,6 +51,17 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 ## B. Deploy the PWA to Vercel
+
+### AWS Amplify Hosting (preferred for AWS UAT)
+
+1. Create an Amplify app from this repository.
+2. Set the app root to `apps/pwa`.
+3. Use build settings with install `npm ci` and build `npm run build`.
+4. Set:
+   - `NEXT_PUBLIC_API_BASE_URL=https://<apprunner-url>`
+5. Deploy after backend URL is available.
+
+### Vercel
 
 1. Import the repository into Vercel.
 2. Set **Root Directory** to `apps/pwa`.
@@ -81,6 +104,6 @@ to `http://localhost:3000` and `http://localhost:3001`.
 
 | Variable | Service | Value |
 | --- | --- | --- |
-| `ALLOWED_ORIGINS` | FastAPI | Exact Vercel HTTPS origin |
-| `NEXT_PUBLIC_API_BASE_URL` | Vercel | Backend HTTPS base URL |
+| `ALLOWED_ORIGINS` | FastAPI | Exact Amplify or Vercel HTTPS origin |
+| `NEXT_PUBLIC_API_BASE_URL` | Amplify or Vercel | Backend HTTPS base URL |
 
