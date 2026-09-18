@@ -11,6 +11,24 @@ client = TestClient(app)
 PROHIBITED_FIELDS = ["name", "email", "phone", "pan", "aadhaar", "account_number", "card_number"]
 
 
+def product_event_payload(**overrides):
+    payload = {
+        "event_id": "evt-123",
+        "event_type": "door_selected",
+        "anonymous_session_id": "anon-123",
+        "journey_run_id": "run-123",
+        "journey": "money_value",
+        "card_check_number": 1,
+        "version": "track-1.1a-prototype-2026-09-17",
+        "timestamp": "2026-09-17T00:00:00Z",
+        "decision_context": "local_demo",
+    }
+    payload.update(overrides)
+    if payload.get("journey") != "money_value":
+        payload.pop("card_check_number", None)
+    return payload
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -96,7 +114,12 @@ def test_comfortable_borrowing_check_preferred_endpoint(monkeypatch, tmp_path):
 
     response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
         "monthly_income": 100000,
-        "existing_monthly_commitments": 25000,
+        "existing_debt_payments": 25000,
+        "housing_rent": 20000,
+        "household_utilities": 5000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 1000,
+        "other_essential_commitments": 1000,
         "desired_borrowing_amount": 500000,
         "desired_tenure_months": 36
     })
@@ -105,9 +128,18 @@ def test_comfortable_borrowing_check_preferred_endpoint(monkeypatch, tmp_path):
 
     for field in [
         "policy_version",
+        "illustrative_annual_rate_percent",
         "estimated_new_monthly_commitment",
         "total_monthly_commitment",
         "commitment_ratio",
+        "debt_ratio_before",
+        "debt_ratio_after",
+        "committed_ratio_before",
+        "committed_ratio_after",
+        "breathing_room_before",
+        "breathing_room_after",
+        "total_repayment",
+        "total_interest",
         "comfort_status",
         "reason_codes",
         "next_best_action",
@@ -118,6 +150,7 @@ def test_comfortable_borrowing_check_preferred_endpoint(monkeypatch, tmp_path):
 
     assert isinstance(body["audit_event_id"], str)
     assert len(body["audit_event_id"]) > 0
+    assert body["illustrative_annual_rate_percent"] == 14
 
     lines = audit_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
@@ -132,8 +165,14 @@ def test_comfortable_borrowing_check_preferred_endpoint(monkeypatch, tmp_path):
 
 def test_comfortable_borrowing_commitment_ratio_includes_existing_and_proposed_emi():
     response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
         "monthly_income": 100000,
-        "existing_monthly_commitments": 25000,
+        "existing_debt_payments": 25000,
+        "housing_rent": 20000,
+        "household_utilities": 5000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 1000,
+        "other_essential_commitments": 1000,
         "desired_borrowing_amount": 500000,
         "desired_tenure_months": 36,
     })
@@ -143,6 +182,58 @@ def test_comfortable_borrowing_commitment_ratio_includes_existing_and_proposed_e
     assert body["estimated_new_monthly_commitment"] > 0
     expected_ratio = body["total_monthly_commitment"] / 100000
     assert abs(body["commitment_ratio"] - round(expected_ratio, 4)) <= 0.0001
+    assert body["debt_ratio_before"] == 0.25
+    assert body["debt_ratio_after"] > body["debt_ratio_before"]
+    assert body["committed_ratio_before"] == 0.55
+    assert body["committed_ratio_after"] == body["commitment_ratio"]
+    assert body["breathing_room_before"] == 45000
+    assert body["breathing_room_after"] == round(100000 - body["total_monthly_commitment"], 2)
+    assert body["total_repayment"] > 500000
+    assert body["total_interest"] > 0
+
+
+def test_comfortable_borrowing_legacy_mode_uses_single_commitment_field():
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "legacy_total_commitments",
+        "monthly_income": 100000,
+        "existing_monthly_commitments": 25000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36,
+    })
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["non_debt_commitments"] == 0
+    assert body["debt_ratio_before"] == 0.25
+    assert body["committed_ratio_before"] == 0.25
+    assert body["commitment_ratio"] == round(body["total_monthly_commitment"] / 100000, 4)
+
+
+def test_comfortable_borrowing_track_mode_rejects_incomplete_grouped_commitments():
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
+        "monthly_income": 100000,
+        "existing_debt_payments": 25000,
+        "housing_rent": 20000,
+        "household_utilities": 5000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 1000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36,
+    })
+    assert response.status_code == 422
+
+
+def test_comfortable_borrowing_rejects_mixed_legacy_and_track_fields():
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "legacy_total_commitments",
+        "monthly_income": 100000,
+        "existing_monthly_commitments": 25000,
+        "existing_debt_payments": 25000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36,
+    })
+    assert response.status_code == 422
 
 
 def test_comfortable_borrowing_check_caution_includes_commitment_ratio_reason_code(monkeypatch, tmp_path):
@@ -150,8 +241,14 @@ def test_comfortable_borrowing_check_caution_includes_commitment_ratio_reason_co
     monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_path))
 
     response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
         "monthly_income": 100000,
-        "existing_monthly_commitments": 25000,
+        "existing_debt_payments": 25000,
+        "housing_rent": 20000,
+        "household_utilities": 5000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 1000,
+        "other_essential_commitments": 1000,
         "desired_borrowing_amount": 500000,
         "desired_tenure_months": 36
     })
@@ -165,8 +262,14 @@ def test_comfortable_borrowing_check_caution_includes_commitment_ratio_reason_co
 
 def test_comfortable_borrowing_check_can_return_ok_when_income_verified():
     response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
         "monthly_income": 200000,
-        "existing_monthly_commitments": 10000,
+        "existing_debt_payments": 10000,
+        "housing_rent": 20000,
+        "household_utilities": 4000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 2000,
+        "other_essential_commitments": 1000,
         "desired_borrowing_amount": 100000,
         "desired_tenure_months": 60,
         "income_verified": True,
@@ -179,8 +282,14 @@ def test_comfortable_borrowing_check_can_return_ok_when_income_verified():
 
 def test_comfortable_borrowing_check_unverified_income_is_caution():
     response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
         "monthly_income": 200000,
-        "existing_monthly_commitments": 10000,
+        "existing_debt_payments": 10000,
+        "housing_rent": 20000,
+        "household_utilities": 4000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 2000,
+        "other_essential_commitments": 1000,
         "desired_borrowing_amount": 100000,
         "desired_tenure_months": 60,
         "income_verified": False,
@@ -189,6 +298,100 @@ def test_comfortable_borrowing_check_unverified_income_is_caution():
     body = response.json()
     assert body["comfort_status"] == "CAUTION"
     assert "INCOME_UNVERIFIED" in body["reason_codes"]
+
+
+def test_comfortable_borrowing_zero_rate_is_preserved_and_interest_is_zero():
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
+        "monthly_income": 100000,
+        "existing_debt_payments": 20000,
+        "housing_rent": 20000,
+        "household_utilities": 4000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 2000,
+        "other_essential_commitments": 1000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36,
+        "illustrative_annual_rate_percent": 0,
+    })
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["illustrative_annual_rate_percent"] == 0
+    assert round(body["estimated_new_monthly_commitment"], 2) == round(500000 / 36, 2)
+    assert abs(body["total_interest"]) <= 0.01
+
+
+def test_comfortable_borrowing_omitted_rate_uses_configured_default():
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
+        "monthly_income": 100000,
+        "existing_debt_payments": 20000,
+        "housing_rent": 20000,
+        "household_utilities": 4000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 2000,
+        "other_essential_commitments": 1000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36,
+    })
+    assert response.status_code == 200
+    assert response.json()["illustrative_annual_rate_percent"] == 14
+
+
+def test_comfortable_borrowing_non_default_rate_reaches_downstream_calculation():
+    base_payload = {
+        "calculation_mode": "track_11a_breakdown",
+        "monthly_income": 100000,
+        "existing_debt_payments": 20000,
+        "housing_rent": 20000,
+        "household_utilities": 4000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 2000,
+        "other_essential_commitments": 1000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36,
+    }
+    low = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={**base_payload, "illustrative_annual_rate_percent": 10})
+    high = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={**base_payload, "illustrative_annual_rate_percent": 18})
+
+    assert low.status_code == 200
+    assert high.status_code == 200
+    low_body = low.json()
+    high_body = high.json()
+
+    assert low_body["illustrative_annual_rate_percent"] == 10
+    assert high_body["illustrative_annual_rate_percent"] == 18
+    assert high_body["estimated_new_monthly_commitment"] > low_body["estimated_new_monthly_commitment"]
+    assert high_body["total_interest"] > low_body["total_interest"]
+
+
+def test_comfortable_borrowing_debt_vs_committed_ratio_fixture():
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
+        "monthly_income": 100000,
+        "existing_debt_payments": 20000,
+        "housing_rent": 20000,
+        "household_utilities": 4000,
+        "dependants_education": 3000,
+        "recurring_medical_insurance": 2000,
+        "other_essential_commitments": 1000,
+        "desired_borrowing_amount": 500000,
+        "desired_tenure_months": 36,
+        "illustrative_annual_rate_percent": 15,
+    })
+    assert response.status_code == 200
+    body = response.json()
+
+    emi = body["estimated_new_monthly_commitment"]
+    assert body["debt_ratio_before"] == 0.2
+    assert body["debt_ratio_after"] == round((20000 + emi) / 100000, 4)
+    assert body["committed_ratio_before"] == 0.5
+    assert body["committed_ratio_after"] == round((50000 + emi) / 100000, 4)
+    assert body["breathing_room_before"] == 50000
+    assert body["breathing_room_after"] == round(50000 - emi, 2)
+    assert abs(body["total_repayment"] - round(emi * 36, 2)) <= 0.2
+    assert body["total_interest"] == round(body["total_repayment"] - 500000, 2)
 
 
 def test_money_value_quick_check():
@@ -244,10 +447,7 @@ def test_default_generated_logs_use_runtime_path(monkeypatch):
         "requested_loan_amount": 500000,
         "requested_tenor_months": 36,
     })
-    event_response = client.post("/v1/events", json={
-        "event_type": "check_started",
-        "journey": "money_value",
-    })
+    event_response = client.post("/v1/events", json=product_event_payload(event_type="check_started"))
     assert audit_response.status_code == 200
     assert event_response.status_code == 200
     assert not (repo_root / "audit_events.jsonl").exists()
@@ -360,6 +560,23 @@ def test_money_value_check_cashback_amount_yearly():
     assert body["reward_period"] == "yearly"
 
 
+def test_money_value_check_cashback_amount_quarterly():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 50000,
+        "annual_card_fee": 3000,
+        "reward_type": "cashback",
+        "reward_input_basis": "cashback_amount",
+        "cashback_amount": 1500,
+        "reward_period": "quarterly",
+        "interest_input_basis": "no_balance",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estimated_annual_rewards"] == 6000
+    assert body["estimated_net_annual_value"] == 3000
+    assert body["reward_period"] == "quarterly"
+
+
 def test_money_value_check_points_known_reward_value_monthly():
     response = client.post("/v1/financial-intelligence/money-value-check", json={
         "monthly_card_spend": 60000,
@@ -425,9 +642,30 @@ def test_money_value_check_unknown_reward_value_not_zeroed():
     assert body["reward_value_known"] is False
     assert body["estimated_annual_rewards"] is None
     assert body["estimated_net_annual_value"] is None
+    assert body["annualized_reward_units"] is None
     assert body["value_status"] == "UNKNOWN_VALUE"
     assert "REWARD_VALUE_UNKNOWN" in body["reason_codes"]
     assert "REVOLVING_INTEREST_DRAG" in body["reason_codes"]
+
+
+def test_money_value_check_points_unknown_conversion_shows_annualized_units_only():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "points",
+        "reward_input_basis": "earned_units",
+        "reward_units_earned": 1000,
+        "reward_period": "quarterly",
+        "reward_value_unknown": True,
+        "interest_input_basis": "no_balance",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["annualized_reward_units"] == 4000
+    assert body["estimated_annual_rewards"] is None
+    assert body["estimated_net_annual_value"] is None
+    assert body["reward_value_known"] is False
+    assert body["value_status"] == "UNKNOWN_VALUE"
 
 
 def test_money_value_check_not_sure_reward_type_is_unknown_value_path():
@@ -441,6 +679,18 @@ def test_money_value_check_not_sure_reward_type_is_unknown_value_path():
     assert body["reward_value_known"] is False
     assert body["estimated_annual_rewards"] is None
     assert body["value_status"] == "UNKNOWN_VALUE"
+
+
+def test_money_value_check_not_sure_rejects_numeric_reward_fields():
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 60000,
+        "annual_card_fee": 4000,
+        "reward_type": "not_sure",
+        "reward_input_basis": "earned_units",
+        "reward_units_earned": 1200,
+        "reward_period": "monthly",
+    })
+    assert response.status_code == 422
 
 
 def test_money_value_check_blank_amount_vs_explicit_zero_for_known_reward_value():
@@ -715,16 +965,16 @@ def test_financial_intelligence_money_value_check_preferred_route():
 def test_record_product_event(tmp_path, monkeypatch):
     event_file = tmp_path / "product_events.jsonl"
     monkeypatch.setenv("PRODUCT_EVENT_LOG_PATH", str(event_file))
-    response = client.post("/v1/events", json={
-        "event_type": "door_selected",
-        "journey": "money_value",
-        "decision_context": "local_demo",
-    })
+    response = client.post("/v1/events", json=product_event_payload())
     assert response.status_code == 200
     body = response.json()
     assert body["event_type"] == "door_selected"
     assert body["journey"] == "money_value"
-    assert body["event_id"]
+    assert body["event_id"] == "evt-123"
+    assert body["anonymous_session_id"] == "anon-123"
+    assert body["journey_run_id"] == "run-123"
+    assert body["version"] == "track-1.1a-prototype-2026-09-17"
+    assert body["timestamp"] == "2026-09-17T00:00:00Z"
     assert body["created_at"]
 
     event = json.loads(event_file.read_text(encoding="utf-8").strip())
@@ -735,11 +985,7 @@ def test_record_product_event(tmp_path, monkeypatch):
 
 
 def test_record_product_event_rejects_unknown_event_type():
-    response = client.post("/v1/events", json={
-        "event_type": "not_a_real_event",
-        "journey": "money_value",
-        "decision_context": "local_demo",
-    })
+    response = client.post("/v1/events", json=product_event_payload(event_type="not_a_real_event"))
     assert response.status_code == 422
 
 
@@ -747,12 +993,13 @@ def test_record_product_event_accepts_new_track_11_fields(tmp_path, monkeypatch)
     event_file = tmp_path / "product_events.jsonl"
     monkeypatch.setenv("PRODUCT_EVENT_LOG_PATH", str(event_file))
 
-    response = client.post("/v1/events", json={
-        "event_type": "next_interest_selected",
-        "journey": "comfortable_borrowing",
-        "decision_context": "local_demo",
-        "intent": "actual_obligations",
-    })
+    response = client.post("/v1/events", json=product_event_payload(
+        event_id="evt-next",
+        event_type="next_interest_selected",
+        journey="comfortable_borrowing",
+        journey_run_id="run-borrow",
+        intent="actual_obligations",
+    ))
     assert response.status_code == 200
     body = response.json()
     assert body["intent"] == "actual_obligations"
@@ -764,48 +1011,67 @@ def test_record_product_event_accepts_new_track_11_fields(tmp_path, monkeypatch)
 
 
 def test_record_product_event_validates_track_11_payload_combinations():
-    accepted = client.post("/v1/events", json={
-        "event_type": "decline_reason_selected",
-        "journey": "money_value",
-        "decision_context": "local_demo",
-        "intent": "actual_card_value",
-        "reason": "statement_sharing_declined",
-    })
+    accepted = client.post("/v1/events", json=product_event_payload(
+        event_id="evt-decline",
+        event_type="decline_reason_selected",
+        intent="actual_card_value",
+        reason="statement_sharing_declined",
+    ))
     assert accepted.status_code == 200
 
-    invalid_intent = client.post("/v1/events", json={
-        "event_type": "next_interest_selected",
-        "journey": "money_value",
-        "decision_context": "local_demo",
-        "reason": "not_useful",
-    })
+    invalid_intent = client.post("/v1/events", json=product_event_payload(
+        event_id="evt-invalid-intent",
+        event_type="next_interest_selected",
+        reason="not_useful",
+    ))
     assert invalid_intent.status_code == 422
 
-    invalid_reason = client.post("/v1/events", json={
-        "event_type": "decline_reason_selected",
-        "journey": "comfortable_borrowing",
-        "decision_context": "local_demo",
-        "intent": "actual_obligations",
-    })
+    invalid_reason = client.post("/v1/events", json=product_event_payload(
+        event_id="evt-invalid-reason",
+        event_type="decline_reason_selected",
+        journey="comfortable_borrowing",
+        intent="actual_obligations",
+    ))
     assert invalid_reason.status_code == 422
 
-    wrong_journey_intent = client.post("/v1/events", json={
-        "event_type": "next_interest_selected",
-        "journey": "comfortable_borrowing",
-        "decision_context": "local_demo",
-        "intent": "actual_card_value",
-    })
+    wrong_journey_intent = client.post("/v1/events", json=product_event_payload(
+        event_id="evt-wrong-journey",
+        event_type="next_interest_selected",
+        journey="comfortable_borrowing",
+        intent="actual_card_value",
+    ))
     assert wrong_journey_intent.status_code == 422
 
 
 def test_record_product_event_preserves_legacy_go_deeper_compatibility():
-    response = client.post("/v1/events", json={
-        "event_type": "go_deeper_selected",
-        "journey": "money_value",
-        "decision_context": "local_demo",
-    })
+    response = client.post("/v1/events", json=product_event_payload(
+        event_id="evt-go-deeper",
+        event_type="go_deeper_selected",
+    ))
     assert response.status_code == 200
     body = response.json()
     assert body["decision_context"] == "local_demo"
     assert body["intent"] is None
     assert body["reason"] is None
+
+
+def test_record_product_event_rejects_card_check_number_for_borrow_journey():
+    payload = product_event_payload(journey="comfortable_borrowing")
+    payload["card_check_number"] = 2
+    response = client.post("/v1/events", json=payload)
+    assert response.status_code == 422
+
+
+def test_record_product_event_idempotent_event_id(tmp_path, monkeypatch):
+    event_file = tmp_path / "product_events.jsonl"
+    monkeypatch.setenv("PRODUCT_EVENT_LOG_PATH", str(event_file))
+
+    payload = product_event_payload(event_id="evt-same")
+    first = client.post("/v1/events", json=payload)
+    second = client.post("/v1/events", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["event_id"] == second.json()["event_id"] == "evt-same"
+    lines = event_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1

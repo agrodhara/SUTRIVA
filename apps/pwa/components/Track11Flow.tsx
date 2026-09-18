@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Journey, ProductEventIntent, ProductEventReason, trackEvent } from "../lib/api";
+import { shouldEmitEventOnce } from "../lib/journeySession";
 
 export type Track11ResultVariant = "original" | "what_if";
 
@@ -64,6 +65,7 @@ type FlowConfig<TIntent extends ProductEventIntent, TReason extends ProductEvent
 
 type FlowProps<TIntent extends ProductEventIntent, TReason extends ProductEventReason> = {
   journey: Journey;
+  journeyRunId: string;
   step: Track11ContinuationStep;
   logicalEntryId: number;
   resultVariant: Track11ResultVariant;
@@ -74,6 +76,7 @@ type FlowProps<TIntent extends ProductEventIntent, TReason extends ProductEventR
 };
 
 const VIEW_EVENT_STORAGE_PREFIX = "track11:view-entry:";
+const ACTION_LOCK_MS = 250;
 
 function viewEntryKey(journey: Journey, step: "reveal" | "intent", logicalEntryId: number): string {
   return `${journey}:${step}:${logicalEntryId}`;
@@ -149,6 +152,7 @@ function TerminalScreen({
 
 function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends ProductEventReason>({
   journey,
+  journeyRunId,
   step,
   logicalEntryId,
   resultVariant,
@@ -162,6 +166,12 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
   const trackedViewEntries = useRef<Set<string>>(new Set());
   const inFlightActions = useRef<Set<string>>(new Set());
 
+  useEffect(() => {
+    const viewKey = `step_viewed:${journey}:${journeyRunId}:${logicalEntryId}:${step}`;
+    if (!shouldEmitEventOnce(viewKey)) return;
+    trackEvent("step_viewed", journey, { journeyRunId });
+  }, [journey, journeyRunId, logicalEntryId, step]);
+
   const runActionOnce = (actionKey: string, action: () => void) => {
     const scopedKey = `${journey}:${logicalEntryId}:${actionKey}`;
     if (inFlightActions.current.has(scopedKey)) return;
@@ -170,9 +180,9 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
     try {
       action();
     } finally {
-      queueMicrotask(() => {
+      setTimeout(() => {
         inFlightActions.current.delete(scopedKey);
-      });
+      }, ACTION_LOCK_MS);
     }
   };
 
@@ -188,9 +198,9 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
     trackedViewEntries.current.add(entryKey);
     markViewEntryTracked(entryKey);
 
-    if (step === "reveal") trackEvent("teaser_viewed", journey);
-    if (step === "intent") trackEvent("next_interest_viewed", journey);
-  }, [journey, logicalEntryId, step]);
+    if (step === "reveal") trackEvent("teaser_viewed", journey, { journeyRunId });
+    if (step === "intent") trackEvent("next_interest_viewed", journey, { journeyRunId });
+  }, [journey, journeyRunId, logicalEntryId, step]);
 
   if (step === "yes_terminal") {
     return (
@@ -249,7 +259,8 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
               onClick={() => {
                 runActionOnce(`next_interest_selected:${option.value}`, () => {
                   setSelectedIntent(option.value);
-                  trackEvent("next_interest_selected", journey, { intent: option.value });
+                  trackEvent("step_completed", journey, { journeyRunId });
+                  trackEvent("next_interest_selected", journey, { intent: option.value, journeyRunId });
                   onNavigate("closure");
                 });
               }}
@@ -268,8 +279,12 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
           type="button"
           className="track11TextButton"
           onClick={() => {
-            trackEvent("next_interest_skipped", journey);
-            onNavigate("skip_terminal");
+            runActionOnce("next_interest_skipped", () => {
+              trackEvent("step_completed", journey, { journeyRunId });
+              trackEvent("next_interest_skipped", journey, { journeyRunId });
+              trackEvent("journey_completed", journey, { journeyRunId });
+              onNavigate("skip_terminal");
+            });
           }}
         >
           {config.intent.skipLabel}
@@ -305,8 +320,13 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
             type="button"
             className="primaryButton"
             onClick={() => {
-              trackEvent("go_deeper_selected", journey, { intent: selectedIntent });
-              onNavigate("yes_terminal");
+              runActionOnce("go_deeper_selected", () => {
+                trackEvent("step_completed", journey, { journeyRunId });
+                trackEvent("pilot_cta_selected", journey, { journeyRunId });
+                trackEvent("go_deeper_selected", journey, { intent: selectedIntent, journeyRunId });
+                trackEvent("journey_completed", journey, { journeyRunId });
+                onNavigate("yes_terminal");
+              });
             }}
           >
             {config.closure.yesLabel}
@@ -315,8 +335,11 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
             type="button"
             className="secondaryButton"
             onClick={() => {
-              trackEvent("go_deeper_declined", journey, { intent: selectedIntent });
-              onNavigate("decline_reason");
+              runActionOnce("go_deeper_declined", () => {
+                trackEvent("step_completed", journey, { journeyRunId });
+                trackEvent("go_deeper_declined", journey, { intent: selectedIntent, journeyRunId });
+                onNavigate("decline_reason");
+              });
             }}
           >
             {config.closure.noLabel}
@@ -343,14 +366,28 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
               type="button"
               className="track11TextButton track11ReasonButton"
               onClick={() => {
-                trackEvent("decline_reason_selected", journey, { intent: selectedIntent, reason: reason.value });
-                onNavigate("no_terminal");
+                runActionOnce(`decline_reason_selected:${reason.value}`, () => {
+                  trackEvent("step_completed", journey, { journeyRunId });
+                  trackEvent("decline_reason_selected", journey, { intent: selectedIntent, reason: reason.value, journeyRunId });
+                  trackEvent("journey_completed", journey, { journeyRunId });
+                  onNavigate("no_terminal");
+                });
               }}
             >
               {reason.title}
             </button>
           ))}
-          <button type="button" className="secondaryButton track11FinishButton" onClick={() => onNavigate("no_terminal")}>
+          <button
+            type="button"
+            className="secondaryButton track11FinishButton"
+            onClick={() => {
+              runActionOnce("decline_reason_finish", () => {
+                trackEvent("step_completed", journey, { journeyRunId });
+                trackEvent("journey_completed", journey, { journeyRunId });
+                onNavigate("no_terminal");
+              });
+            }}
+          >
             {config.closure.noReason.finishLabel}
           </button>
         </div>
@@ -387,7 +424,8 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
         className="primaryButton track11PrimaryButton"
         onClick={() => {
           runActionOnce("teaser_cta_selected", () => {
-            trackEvent("teaser_cta_selected", journey);
+            trackEvent("step_completed", journey, { journeyRunId });
+            trackEvent("teaser_cta_selected", journey, { journeyRunId });
             onNavigate("intent");
           });
         }}
@@ -400,6 +438,7 @@ function ContinuationFlow<TIntent extends ProductEventIntent, TReason extends Pr
 
 export function BorrowBetterContinuationFlow({
   journey,
+  journeyRunId,
   step,
   logicalEntryId,
   resultVariant,
@@ -410,6 +449,7 @@ export function BorrowBetterContinuationFlow({
   commitmentRatio,
 }: {
   journey: Journey;
+  journeyRunId: string;
   step: Track11ContinuationStep;
   logicalEntryId: number;
   resultVariant: Track11ResultVariant;
@@ -422,6 +462,7 @@ export function BorrowBetterContinuationFlow({
   return (
     <ContinuationFlow
       journey={journey}
+      journeyRunId={journeyRunId}
       step={step}
       logicalEntryId={logicalEntryId}
       resultVariant={resultVariant}
@@ -507,6 +548,7 @@ export function BorrowBetterContinuationFlow({
 
 export function MoneyValueContinuationFlow({
   journey,
+  journeyRunId,
   step,
   logicalEntryId,
   resultVariant,
@@ -516,6 +558,7 @@ export function MoneyValueContinuationFlow({
   netAnnualValue,
 }: {
   journey: Journey;
+  journeyRunId: string;
   step: Track11ContinuationStep;
   logicalEntryId: number;
   resultVariant: Track11ResultVariant;
@@ -527,6 +570,7 @@ export function MoneyValueContinuationFlow({
   return (
     <ContinuationFlow
       journey={journey}
+      journeyRunId={journeyRunId}
       step={step}
       logicalEntryId={logicalEntryId}
       resultVariant={resultVariant}
