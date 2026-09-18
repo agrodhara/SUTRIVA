@@ -33,8 +33,8 @@ def quick_check(payload: BorrowBetterQuickCheckRequest) -> BorrowBetterQuickChec
     record = record_audit_event(
         event_type="borrow_better_quick_check",
         policy_version=decision.policy_version,
-        input_snapshot=payload.model_dump(),
-        output_snapshot=response.model_dump(),
+        input_snapshot=payload,
+        output_snapshot=response,
         decision_context="local_demo",
     )
     response.audit_event_id = record["audit_event_id"]

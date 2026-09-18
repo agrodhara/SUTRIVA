@@ -49,7 +49,7 @@ def quick_check(payload: MoneyValueQuickCheckRequest) -> MoneyValueQuickCheckRes
     record_audit_event(
         event_type="money_value_quick_check",
         policy_version="money_value_v0_1",
-        input_snapshot=payload.model_dump(),
-        output_snapshot=response.model_dump(),
+        input_snapshot=payload,
+        output_snapshot=response,
     )
     return response
