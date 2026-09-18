@@ -15,31 +15,11 @@ def money_value_check(payload: MoneyValueCheckRequest) -> MoneyValueCheckRespons
     ranking, marketplace, offer or apply flow.
     """
     result = money_value_service.run_money_value_check(payload)
-    output_snapshot = {
-        key: result[key]
-        for key in (
-            "reward_type",
-            "reward_input_basis",
-            "reward_period",
-            "reward_value_amount",
-            "annualized_reward_units",
-            "annual_spend",
-            "estimated_annual_rewards",
-            "interest_input_basis",
-            "interest_value_known",
-            "estimated_annual_interest_cost",
-            "estimated_net_annual_value",
-            "reward_value_known",
-            "unknown_value_reason",
-            "value_status",
-            "reason_codes",
-        )
-    }
     event = record_audit_event(
         event_type="money_value_check",
         policy_version=result["policy_version"],
-        input_snapshot=payload.model_dump(),
-        output_snapshot=output_snapshot,
+        input_snapshot=payload,
+        output_snapshot=result,
     )
     return MoneyValueCheckResponse(
         **result,

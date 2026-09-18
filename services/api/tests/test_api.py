@@ -5,10 +5,13 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from app.main import app
+from app.services.audit import record_audit_event
 
 client = TestClient(app)
 
 PROHIBITED_FIELDS = ["name", "email", "phone", "pan", "aadhaar", "account_number", "card_number"]
+MONEY_SENTINELS = ["54321.98", "4321.09", "987.65", "654.32", "321.45", "111.22", "19.75"]
+BORROW_SENTINELS = ["98765.43", "21098.76", "543210.98", "13.37", "4321.55"]
 
 
 def product_event_payload(**overrides):
@@ -941,12 +944,211 @@ def test_money_value_check_audit_persistence(tmp_path, monkeypatch):
     assert event["decision_context"] == "local_demo"
     assert event["created_at"]
     assert event["event_time_utc"]
-    for key, value in payload.items():
-        assert event["input_snapshot"][key] == value
+    assert event["audit_schema_version"] == "audit-redacted-v1"
+    assert event["input_snapshot"]["journey"] == "money_value"
+    assert event["input_snapshot"]["request_kind"] == "preferred_public_route"
     assert event["input_snapshot"]["reward_type"] == "cashback"
+    assert event["input_snapshot"]["declared_fields"]["spend"] is True
     assert event["output_snapshot"]["value_status"] == "POSITIVE"
+    assert event["output_snapshot"]["reason_codes"]
     for prohibited in PROHIBITED_FIELDS:
         assert f'"{prohibited}"' not in json.dumps(event).lower()
+
+
+def test_money_value_check_redacts_raw_values_for_legacy_and_enhanced_audit(monkeypatch, tmp_path):
+    audit_file = tmp_path / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_file))
+
+    legacy_payload = {
+        "monthly_card_spend": 54321.98,
+        "annual_card_fee": 4321.09,
+        "reward_rate_percent": 1.82,
+        "revolving_balance": 987.65,
+        "revolving_interest_rate_pa": 0.4132,
+        "unused_subscription_cost_monthly": 321.45,
+    }
+    enhanced_payload = {
+        "monthly_card_spend": 65432.19,
+        "annual_card_fee": 3210.45,
+        "reward_type": "points",
+        "reward_input_basis": "earned_units",
+        "reward_units_earned": 111.22,
+        "reward_period": "monthly",
+        "rupee_value_per_reward_unit": 19.75,
+        "interest_input_basis": "known",
+        "revolving_balance": 654.32,
+        "annual_interest_rate_percent": 28.4,
+    }
+
+    legacy_response = client.post("/v1/money-value/quick-check", json=legacy_payload)
+    enhanced_response = client.post("/v1/financial-intelligence/money-value-check", json=enhanced_payload)
+
+    assert legacy_response.status_code == 200
+    assert enhanced_response.status_code == 200
+
+    records = [json.loads(line) for line in audit_file.read_text(encoding="utf-8").strip().splitlines()]
+    assert len(records) == 2
+
+    legacy_event, enhanced_event = records
+    serialized = json.dumps(records)
+    for sentinel in MONEY_SENTINELS:
+        assert sentinel not in serialized
+
+    enhanced_body = enhanced_response.json()
+    for field in ["estimated_annual_rewards", "estimated_annual_interest_cost", "estimated_net_annual_value", "annual_spend"]:
+        assert json.dumps(enhanced_body[field]) not in serialized
+
+    assert legacy_event["output_snapshot"]["result_state"] in {"flags_present", "no_flags"}
+    assert enhanced_event["input_snapshot"]["rewards_mode"] == "earned_units"
+    assert enhanced_event["output_snapshot"]["value_status"] == enhanced_body["value_status"]
+    assert enhanced_event["output_snapshot"]["reason_codes"] == enhanced_body["reason_codes"]
+
+
+def test_money_value_check_validation_failure_does_not_persist_raw_audit(monkeypatch, tmp_path):
+    audit_file = tmp_path / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_file))
+
+    response = client.post("/v1/financial-intelligence/money-value-check", json={
+        "monthly_card_spend": 54321.98,
+        "annual_card_fee": 4321.09,
+        "reward_type": "points",
+        "reward_input_basis": "earned_units",
+        "reward_units_earned": -111.22,
+        "reward_period": "monthly",
+        "rupee_value_per_reward_unit": 19.75,
+    })
+
+    assert response.status_code == 422
+    assert not audit_file.exists() or audit_file.read_text(encoding="utf-8") == ""
+
+
+def test_comfortable_borrowing_audit_redacts_raw_values_for_legacy_and_track11a(monkeypatch, tmp_path):
+    audit_file = tmp_path / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_file))
+
+    legacy_response = client.post("/v1/borrow-better/quick-check", json={
+        "declared_monthly_income": 98765.43,
+        "existing_monthly_emi": 21098.76,
+        "requested_loan_amount": 543210.98,
+        "requested_tenor_months": 47,
+        "indicative_interest_rate_pa": 0.1337,
+        "monthly_non_emi_commitments": 4321.55,
+        "income_verified": True,
+    })
+    grouped_response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
+        "monthly_income": 98765.43,
+        "existing_debt_payments": 21098.76,
+        "housing_rent": 10001.11,
+        "household_utilities": 2002.22,
+        "dependants_education": 3003.33,
+        "recurring_medical_insurance": 4004.44,
+        "other_essential_commitments": 5005.55,
+        "desired_borrowing_amount": 543210.98,
+        "desired_tenure_months": 47,
+        "illustrative_annual_rate_percent": 13.37,
+        "income_verified": True,
+    })
+
+    assert legacy_response.status_code == 200
+    assert grouped_response.status_code == 200
+
+    records = [json.loads(line) for line in audit_file.read_text(encoding="utf-8").strip().splitlines()]
+    assert len(records) == 2
+
+    serialized = json.dumps(records)
+    for sentinel in BORROW_SENTINELS + ["10001.11", "2002.22", "3003.33", "4004.44", "5005.55"]:
+        assert sentinel not in serialized
+    for forbidden_key in [
+        "declared_monthly_income",
+        "monthly_income",
+        "existing_monthly_emi",
+        "existing_debt_payments",
+        "requested_loan_amount",
+        "desired_borrowing_amount",
+        "estimated_new_monthly_commitment",
+        "total_monthly_commitment",
+        "total_repayment",
+        "total_interest",
+    ]:
+        assert f'"{forbidden_key}"' not in serialized
+
+    grouped_body = grouped_response.json()
+    for field in [
+        "estimated_new_monthly_commitment",
+        "total_monthly_commitment",
+        "commitment_ratio",
+        "debt_ratio_before",
+        "debt_ratio_after",
+        "breathing_room_before",
+        "breathing_room_after",
+        "total_repayment",
+        "total_interest",
+    ]:
+        assert json.dumps(grouped_body[field]) not in serialized
+
+    assert records[0]["output_snapshot"]["decision"] == legacy_response.json()["decision"]
+    assert records[1]["input_snapshot"]["calculation_mode"] == "track_11a_breakdown"
+    assert records[1]["output_snapshot"]["comfort_status"] == grouped_body["comfort_status"]
+
+
+def test_comfortable_borrowing_validation_failure_does_not_persist_raw_audit(monkeypatch, tmp_path):
+    audit_file = tmp_path / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_file))
+
+    response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
+        "calculation_mode": "track_11a_breakdown",
+        "monthly_income": 98765.43,
+        "existing_debt_payments": 21098.76,
+        "housing_rent": 10001.11,
+        "household_utilities": 2002.22,
+        "dependants_education": 3003.33,
+        "recurring_medical_insurance": 4004.44,
+        "desired_borrowing_amount": 543210.98,
+        "desired_tenure_months": 47,
+    })
+
+    assert response.status_code == 422
+    assert not audit_file.exists() or audit_file.read_text(encoding="utf-8") == ""
+
+
+def test_record_audit_event_redacts_unknown_future_snapshot_keys(monkeypatch, tmp_path):
+    audit_file = tmp_path / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_file))
+
+    record = record_audit_event(
+        event_type="future_event",
+        policy_version="v-test",
+        input_snapshot={
+            "monthly_income": 98765.43,
+            "mobile_number": "9999999999",
+            "arbitrary_key": "should-not-pass",
+        },
+        output_snapshot={
+            "estimated_net_annual_value": 54321.98,
+            "reason_codes": ["NOT_SAFE"],
+            "arbitrary_key": "should-not-pass",
+        },
+    )
+
+    stored = json.loads(audit_file.read_text(encoding="utf-8").strip())
+    assert stored == record
+    assert stored["input_snapshot"] == {
+        "schema_version": "audit-redacted-v1",
+        "journey": "unknown",
+        "endpoint": "unknown",
+    }
+    assert stored["output_snapshot"] == {
+        "schema_version": "audit-redacted-v1",
+        "journey": "unknown",
+        "endpoint": "unknown",
+        "request_status": "succeeded",
+    }
+    serialized = json.dumps(stored)
+    assert "98765.43" not in serialized
+    assert "54321.98" not in serialized
+    assert "9999999999" not in serialized
+    assert "should-not-pass" not in serialized
 
 
 def test_financial_intelligence_money_value_check_preferred_route():

@@ -90,7 +90,7 @@ def comfortable_borrowing_check(payload: ComfortableBorrowingCheckRequest) -> Co
     audit_event = record_audit_event(
         event_type="comfortable_borrowing_check",
         policy_version=decision.policy_version,
-        input_snapshot=payload.model_dump(),
+        input_snapshot=payload,
         output_snapshot=response.model_dump(exclude={"audit_event_id", "audit_event"}),
         decision_context="local_demo",
     )
