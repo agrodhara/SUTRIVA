@@ -22,6 +22,7 @@ def money_value_check(payload: MoneyValueCheckRequest) -> MoneyValueCheckRespons
             "reward_input_basis",
             "reward_period",
             "reward_value_amount",
+            "annualized_reward_units",
             "annual_spend",
             "estimated_annual_rewards",
             "interest_input_basis",

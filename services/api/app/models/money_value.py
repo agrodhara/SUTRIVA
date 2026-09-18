@@ -33,7 +33,7 @@ class MoneyValueCheckRequest(BaseModel):
     estimated_reward_rate_percent: Optional[float] = Field(default=None, ge=0)
     reward_type: Literal["cashback", "points", "miles", "not_sure"] = "cashback"
     reward_input_basis: Optional[Literal["rate_percent", "cashback_amount", "earned_units", "known_reward_value"]] = None
-    reward_period: Optional[Literal["monthly", "yearly"]] = None
+    reward_period: Optional[Literal["monthly", "quarterly", "yearly"]] = None
     cashback_amount: Optional[float] = Field(default=None, ge=0)
     reward_value_amount: Optional[float] = Field(default=None, ge=0)
     reward_units_earned: Optional[float] = Field(default=None, ge=0)
@@ -149,8 +149,9 @@ class MoneyValueCheckResponse(BaseModel):
     policy_version: str
     reward_type: Literal["cashback", "points", "miles", "not_sure"]
     reward_input_basis: Optional[Literal["rate_percent", "cashback_amount", "earned_units", "known_reward_value"]] = None
-    reward_period: Optional[Literal["monthly", "yearly"]] = None
+    reward_period: Optional[Literal["monthly", "quarterly", "yearly"]] = None
     reward_value_amount: Optional[float] = None
+    annualized_reward_units: Optional[float] = None
     annual_spend: float
     estimated_annual_rewards: Optional[float] = None
     annual_card_fee: float

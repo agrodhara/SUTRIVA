@@ -62,6 +62,14 @@ UNKNOWN_INTEREST_ACTION = (
 )
 
 
+def reward_period_multiplier(period: str) -> int:
+    if period == "monthly":
+        return 12
+    if period == "quarterly":
+        return 4
+    return 1
+
+
 def classify_value_status(net_annual_value: float) -> str:
     if net_annual_value > NET_VALUE_POSITIVE_THRESHOLD:
         return VALUE_STATUS_POSITIVE
@@ -121,13 +129,13 @@ def estimate_annual_rewards(payload: MoneyValueCheckRequest) -> tuple[float | No
     if basis == "cashback_amount":
         if payload.cashback_amount is None or payload.reward_period is None:
             return None, "CASHBACK_INPUT_INCOMPLETE"
-        multiplier = 12 if payload.reward_period == "monthly" else 1
+        multiplier = reward_period_multiplier(payload.reward_period)
         return payload.cashback_amount * multiplier, None
 
     if basis == "known_reward_value":
         if payload.reward_value_amount is None or payload.reward_period is None:
             return None, "REWARD_VALUE_INPUT_INCOMPLETE"
-        multiplier = 12 if payload.reward_period == "monthly" else 1
+        multiplier = reward_period_multiplier(payload.reward_period)
         return payload.reward_value_amount * multiplier, None
 
     if basis == "earned_units":
@@ -135,7 +143,7 @@ def estimate_annual_rewards(payload: MoneyValueCheckRequest) -> tuple[float | No
             return None, "REWARD_UNITS_INPUT_INCOMPLETE"
         if payload.rupee_value_per_reward_unit is None:
             return None, "REWARD_CONVERSION_UNKNOWN"
-        units_multiplier = 12 if payload.reward_period == "monthly" else 1
+        units_multiplier = reward_period_multiplier(payload.reward_period)
         annual_units = payload.reward_units_earned * units_multiplier
         return annual_units * payload.rupee_value_per_reward_unit, None
 
@@ -210,12 +218,17 @@ def run_money_value_check(payload: MoneyValueCheckRequest) -> dict:
         elif payload.reward_type in {"points", "miles"} and payload.reward_units_earned is not None:
             basis = "earned_units"
 
+    annualized_reward_units = None
+    if basis == "earned_units" and payload.reward_units_earned is not None and payload.reward_period is not None:
+        annualized_reward_units = payload.reward_units_earned * reward_period_multiplier(payload.reward_period)
+
     return {
         "policy_version": POLICY_VERSION,
         "reward_type": payload.reward_type,
         "reward_input_basis": basis,
         "reward_period": payload.reward_period,
         "reward_value_amount": round(payload.reward_value_amount, 2) if payload.reward_value_amount is not None else None,
+        "annualized_reward_units": round(annualized_reward_units, 2) if annualized_reward_units is not None else None,
         "annual_spend": round(annual_spend, 2),
         "estimated_annual_rewards": round(estimated_annual_rewards, 2) if estimated_annual_rewards is not None else None,
         "annual_card_fee": round(payload.annual_card_fee, 2),

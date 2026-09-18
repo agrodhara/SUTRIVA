@@ -1,3 +1,13 @@
+import { getAttributionTouches, syncAttributionTouches, type AttributionPayload } from "./attribution";
+import {
+  createEventId,
+  createJourneyRunId,
+  eventTimestamp,
+  getAnonymousSessionId,
+  getMoneyCardCheckNumber,
+  track11Version,
+} from "./journeySession";
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -28,6 +38,34 @@ export type ProductEventType =
   | "door_selected"
   | "check_started"
   | "check_completed"
+  | "journey_started"
+  | "step_viewed"
+  | "step_completed"
+  | "result_requested"
+  | "result_viewed"
+  | "result_failed"
+  | "result_action_selected"
+  | "illustrative_example_viewed"
+  | "pilot_cta_selected"
+  | "check_another_selected"
+  | "journey_completed"
+  | "balance_behavior_selected"
+  | "reward_type_selected"
+  | "reward_help_opened"
+  | "reward_help_outcome_selected"
+  | "reward_result_state_viewed"
+  | "month_end_position_selected"
+  | "borrow_result_state_viewed"
+  | "borrow_nudge_selected"
+  | "mobile_entry_started"
+  | "otp_requested"
+  | "otp_request_failed"
+  | "otp_verification_succeeded"
+  | "otp_verification_failed"
+  | "otp_expired"
+  | "pilot_consent_recorded"
+  | "marketing_consent_recorded"
+  | "consent_withdrawn"
   | "go_deeper_selected"
   | "go_deeper_declined"
   | "what_if_started"
@@ -40,7 +78,12 @@ export type ProductEventType =
   | "decline_reason_selected";
 
 export type TrackEventDetails = {
+  anonymousSessionId?: string;
+  cardCheckNumber?: number;
+  firstTouchAttribution?: AttributionPayload | null;
   intent?: ProductEventIntent;
+  journeyRunId?: string;
+  latestTouchAttribution?: AttributionPayload | null;
   reason?: ProductEventReason;
 };
 
@@ -52,14 +95,29 @@ export type TrackEventDetails = {
  */
 export function trackEvent(eventType: ProductEventType, journey: Journey, details: TrackEventDetails = {}): void {
   if (!API_BASE_URL) return;
+
+  const touchedAttribution = syncAttributionTouches();
+  const storedAttribution = getAttributionTouches();
+  const firstTouchAttribution = details.firstTouchAttribution ?? touchedAttribution.firstTouch ?? storedAttribution.firstTouch;
+  const latestTouchAttribution = details.latestTouchAttribution ?? touchedAttribution.latestTouch ?? storedAttribution.latestTouch;
+
   fetch(`${API_BASE_URL}/v1/events`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      event_id: createEventId(),
       event_type: eventType,
+      anonymous_session_id: details.anonymousSessionId ?? getAnonymousSessionId(),
+      journey_run_id: details.journeyRunId ?? createJourneyRunId(),
       journey,
+      version: track11Version(),
+      timestamp: eventTimestamp(),
       decision_context: "local_demo",
-      ...details,
+      card_check_number: journey === "money_value" ? details.cardCheckNumber ?? getMoneyCardCheckNumber() : undefined,
+      first_touch_attribution: firstTouchAttribution,
+      latest_touch_attribution: latestTouchAttribution,
+      intent: details.intent,
+      reason: details.reason,
     }),
   }).catch(() => {
     // Alpha note: event tracking is best-effort and must never block the user journey.
