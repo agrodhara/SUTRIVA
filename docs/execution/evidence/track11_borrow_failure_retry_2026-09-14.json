@@ -1,0 +1,17 @@
+{
+  "pass": true,
+  "checks": {
+    "initial_success_and_result_visible": true,
+    "exact_error_visible_on_failed_update": true,
+    "previous_result_preserved_on_failure": true,
+    "continuation_disabled_on_failure": true,
+    "retry_makes_another_request": true,
+    "retry_clears_error": true,
+    "retry_updates_result": true,
+    "initialMetric": "Estimated monthly commitment₹17,089",
+    "beforeFailureMetric": "Estimated monthly commitment₹13,937",
+    "failureMetric": "Estimated monthly commitment₹13,937",
+    "afterRetryMetric": "Estimated monthly commitment₹11,867",
+    "updateRequests": 4
+  }
+}

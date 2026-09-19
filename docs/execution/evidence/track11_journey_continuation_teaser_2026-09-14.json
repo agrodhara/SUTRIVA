@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "checks": {
+    "money_reveal_intent_closure": true,
+    "borrow_reveal_intent_closure": true,
+    "money_teaser_per_reveal_entry": true,
+    "borrow_teaser_per_reveal_entry": true,
+    "moneyTeaserDelta": 2,
+    "borrowTeaserDelta": 2
+  }
+}
