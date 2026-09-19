@@ -1,8 +1,10 @@
 import os
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.db.readiness import get_readiness_status
 from app.routers import (
     borrow_better,
     borrowing_intelligence,
@@ -37,6 +39,13 @@ app.add_middleware(
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": "sutriva-product-api", "version": "0.1.0"}
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    status = get_readiness_status()
+    status_code = 200 if status["status"] == "ok" else 503
+    return JSONResponse(status_code=status_code, content=status)
 
 
 app.include_router(borrowing_intelligence.router)
