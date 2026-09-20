@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactElement } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -285,7 +285,7 @@ describe("IllustrativeExampleBanner", () => {
   it("exposes no props, so no financial or user values can be interpolated", () => {
     expect(IllustrativeExampleBanner.length).toBe(0);
     // Extra props (if forced past the type system) are ignored, not rendered.
-    const Forced = IllustrativeExampleBanner as unknown as (props: Record<string, unknown>) => JSX.Element;
+    const Forced = IllustrativeExampleBanner as unknown as (props: Record<string, unknown>) => ReactElement;
     const { container } = render(<Forced amount="₹10,800" rate="14%" />);
     expect(container.textContent).not.toMatch(/10,800|14%/);
     expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");

@@ -24,12 +24,24 @@ integrations.
 ## Required environment variables
 
 Backend (App Runner):
-- `ALLOWED_ORIGINS=https://<frontend-domain>`
+- `ANONYMOUS_SESSION_ALLOWED_ORIGINS=https://<frontend-origin>`
+- `ANONYMOUS_SESSION_PRODUCTION_ORIGIN=https://<frontend-origin>`
+- `ANONYMOUS_SESSION_ALLOW_INSECURE_LOCALHOST` must stay unset or `false`.
 
-Frontend (Amplify):
+Frontend (Amplify), set in the build environment:
 - `NEXT_PUBLIC_API_BASE_URL=https://<apprunner-service-url>`
+- `NEXT_PUBLIC_TRACK_11A_ENABLED=true`
+- `NEXT_PUBLIC_TRACK_11B_ENABLED=false`
 
-Use exact HTTPS origins only. Do not include wildcard CORS origins.
+Use full, explicit HTTPS origins only, and include the deployed frontend origin.
+Do not use wildcard origins: the API sends credentialed responses and rejects
+`*` at startup. The anonymous-session cookie is `SameSite=Lax`, so the PWA and
+the API must be the same origin or sibling custom subdomains of one registrable
+domain. An App Runner default domain paired with an Amplify default domain is
+cross-site. The `NEXT_PUBLIC_*` values are build-time: changing any of them
+requires a rebuild and redeployment. The committed
+`shared/track11_config.json` is not edited for a deployment. See
+[UAT_DEPLOYMENT.md](../../docs/execution/UAT_DEPLOYMENT.md) sections C and C2.
 
 ## Health and smoke checks
 
@@ -57,7 +69,8 @@ Observability:
 Rollback:
 - Backend rollback: redeploy previous App Runner image revision.
 - Frontend rollback: redeploy previous Amplify build.
-- CORS rollback: revert `ALLOWED_ORIGINS` to last-known-good frontend origin.
+- CORS rollback: revert `ANONYMOUS_SESSION_ALLOWED_ORIGINS` and
+	`ANONYMOUS_SESSION_PRODUCTION_ORIGIN` to the last-known-good frontend origin.
 
 ## Cost assumptions for internal UAT
 

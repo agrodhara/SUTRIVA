@@ -125,7 +125,7 @@ function TerminalScreen({
 }: TerminalCopy & {
   resultVariant: Track11ResultVariant;
   returnLabel?: string;
-  headingRef: RefObject<HTMLHeadingElement>;
+  headingRef: RefObject<HTMLHeadingElement | null>;
   onReturnToResult: () => void;
 }) {
   return (

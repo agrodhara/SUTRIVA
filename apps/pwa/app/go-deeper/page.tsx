@@ -7,7 +7,7 @@ function normalizeJourney(value: string | string[] | undefined): string | undefi
   return candidate === "money_value" || candidate === "comfortable_borrowing" ? candidate : undefined;
 }
 
-export default function GoDeeperPage({ searchParams }: { searchParams?: SearchParams }) {
-  const journey = normalizeJourney(searchParams?.journey);
+export default async function GoDeeperPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
+  const journey = normalizeJourney((await searchParams)?.journey);
   redirect(journey === "comfortable_borrowing" ? "/borrow-better" : journey === "money_value" ? "/money-value" : "/");
 }
