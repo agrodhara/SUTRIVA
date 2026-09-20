@@ -40,7 +40,7 @@ stale until corrected.
 |---|---|---|
 | 1.1A | Steps 1-5: anonymous declared-data check and synthetic illustrative example for Rewards | Substantially implemented; exact screen separation, copy and phase-boundary alignment still required |
 | 1.1A | Steps 1-5: anonymous declared-data check and synthetic illustrative example for Borrow Better | Substantially implemented; exact values, screen separation and phase-boundary alignment still required |
-| 1.1B | Step 6 only: anonymous interest click, mobile/OTP verification, post-verification history linking, and a separate unchecked optional-updates choice | Deferred until both 1.1A journeys pass |
+| 1.1B | Anonymous pilot-interest click, mobile submission, OTP issuance and successful verification, anonymous-history linking only after successful OTP verification, and a separate optional-updates choice with optional updates unchecked by default (`optional_updates_opted_in`) | Deferred until both 1.1A journeys pass |
 | 1.2 | Steps 7-8: future purpose-specific statement/account/transaction/bureau permissions and connected-data results | Future-only; not in current scope |
 
 ## Completed

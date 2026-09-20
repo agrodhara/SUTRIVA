@@ -40,7 +40,7 @@ Steps 7-8 are future-only and outside the current anonymous implementation scope
 - Step 7: choose which future permissioned data to connect
 - Step 8: show the connected-data result
 
-The future connected-data steps must use the word “permission” rather than “consent” in any user-facing choice or supporting description.
+The future connected-data steps must use the word “permission” rather than “consent” in any user-facing choice or supporting description. Pilot interest is not data permission. OTP verification is not data permission. Optional product or pilot updates are not data permission. Step 7 contains future purpose-specific data-access permissions. Rewards statement permission is separate. Borrow transaction/account permission and bureau permission are independently selectable. Do not introduce a generic consent gate.
 
 These steps are not the current implementation target and must not be treated as a release blocker for the anonymous quick-check flow.
 
