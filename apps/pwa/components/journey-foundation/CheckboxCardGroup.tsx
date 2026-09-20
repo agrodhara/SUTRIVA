@@ -15,10 +15,16 @@ export type CheckboxCardGroupProps = {
    */
   maxSelections?: number;
   hint?: string;
+  /**
+   * ID of the inline error element for this group. Pass it only while that element is rendered;
+   * it is added to the fieldset's `aria-describedby` so assistive tech announces the error with the group.
+   */
+  errorId?: string;
 };
 
-export function CheckboxCardGroup({ legend, name, options, values, onChange, maxSelections, hint }: CheckboxCardGroupProps) {
+export function CheckboxCardGroup({ legend, name, options, values, onChange, maxSelections, hint, errorId }: CheckboxCardGroupProps) {
   const hintId = useId();
+  const describedBy = [hint ? hintId : null, errorId ?? null].filter(Boolean).join(" ") || undefined;
   const atLimit = maxSelections !== undefined && values.length >= maxSelections;
 
   function toggle(optionValue: string, checked: boolean) {
@@ -31,7 +37,7 @@ export function CheckboxCardGroup({ legend, name, options, values, onChange, max
   }
 
   return (
-    <fieldset className={styles.choiceGroup} aria-describedby={hint ? hintId : undefined}>
+    <fieldset className={styles.choiceGroup} aria-describedby={describedBy}>
       <legend className={styles.choiceLegend}>{legend}</legend>
       {hint ? (
         <p id={hintId} className={styles.choiceHint}>

@@ -167,6 +167,30 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(emitted()).not.toContainEqual(["step_completed", "rewards_card_behaviour"]);
     });
 
+    it("ties each unanswered question's inline error to its fieldset and clears it once answered", async () => {
+      const user = await renderJourney();
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(balanceGroup()).toHaveAccessibleDescription(/Choose how you pay your statement balance\./);
+      expect(balanceGroup()).toHaveAttribute("aria-describedby", expect.stringContaining("rewards-balance-error"));
+      expect(document.getElementById("rewards-balance-error")).toHaveTextContent("Choose how you pay your statement balance.");
+      expect(rewardTypeGroup()).toHaveAccessibleDescription("Choose the type of rewards your card offers.");
+      expect(rewardTypeGroup()).toHaveAttribute("aria-describedby", "rewards-reward-type-error");
+
+      await user.click(within(balanceGroup()).getByRole("radio", { name: "Not sure" }));
+      expect(document.getElementById("rewards-balance-error")).toBeNull();
+      expect(balanceGroup()).toHaveAccessibleDescription("This helps us understand your situation.");
+      expect(balanceGroup().getAttribute("aria-describedby")).not.toContain("rewards-balance-error");
+      expect(rewardTypeGroup()).toHaveAttribute("aria-describedby", "rewards-reward-type-error");
+    });
+
+    it("shows no inline choice errors before the first failed attempt", async () => {
+      await renderJourney();
+      expect(document.getElementById("rewards-balance-error")).toBeNull();
+      expect(document.getElementById("rewards-reward-type-error")).toBeNull();
+      expect(rewardTypeGroup()).not.toHaveAttribute("aria-describedby");
+    });
+
     it("treats 'Not sure' as an explicit answer, distinct from unanswered", async () => {
       const user = await renderJourney();
       await completeStep2(user, "Not sure", "Not sure");
@@ -222,6 +246,14 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent("Choose between 1 and 3 spending priorities.");
       expect(global.fetch).not.toHaveBeenCalled();
       expect(screen.getByRole("heading", { name: "Your priorities and inputs" })).toBeInTheDocument();
+
+      const group = screen.getByRole("group", { name: "What are your top spending priorities?" });
+      expect(group).toHaveAttribute("aria-describedby", expect.stringContaining("rewards-priorities-error"));
+      expect(group).toHaveAccessibleDescription("Select up to 3 categories. Choose between 1 and 3 spending priorities.");
+
+      await user.click(screen.getByRole("checkbox", { name: "Dining" }));
+      expect(document.getElementById("rewards-priorities-error")).toBeNull();
+      expect(group).toHaveAccessibleDescription("Select up to 3 categories.");
     });
 
     it("keeps blank and confirmed zero distinct", async () => {

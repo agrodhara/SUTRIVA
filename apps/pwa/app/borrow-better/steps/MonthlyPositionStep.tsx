@@ -62,10 +62,11 @@ export function MonthlyPositionStep({ form, errors, attempt, disabled, focusHead
             name="borrow-month-end-position"
             options={MONTH_END_OPTIONS}
             value={form.monthEndPosition}
+            errorId={errors.monthEndPosition ? "borrow-month-end-error" : undefined}
             onChange={(value) => onMonthEndChange(value as MonthEndPosition)}
           />
           {errors.monthEndPosition ? (
-            <p className={styles.errorText} role="alert">
+            <p id="borrow-month-end-error" className={styles.errorText} role="alert">
               {errors.monthEndPosition}
             </p>
           ) : null}

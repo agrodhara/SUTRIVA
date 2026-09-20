@@ -136,12 +136,17 @@ export function Step3PrioritiesInputs({
         options={PRIORITY_OPTIONS}
         values={form.priorities}
         maxSelections={MAX_PRIORITIES}
+        errorId={showErrors && errors.priorities ? "rewards-priorities-error" : undefined}
         onChange={(values) => onChange({ priorities: values as SpendingPriority[] })}
       />
       <p className={styles.limitNotice} aria-live="polite">
         {atPriorityLimit ? `You have chosen ${MAX_PRIORITIES}. Clear one to choose another.` : ""}
       </p>
-      {showErrors && errors.priorities ? <p className={styles.fieldError}>{errors.priorities}</p> : null}
+      {showErrors && errors.priorities ? (
+        <p id="rewards-priorities-error" className={styles.fieldError}>
+          {errors.priorities}
+        </p>
+      ) : null}
 
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Tell us a few details</h3>
@@ -205,9 +210,14 @@ export function Step3PrioritiesInputs({
               name="rewards-reward-knowledge"
               options={POINTS_MILES_KNOWLEDGE_OPTIONS}
               value={form.rewardKnowledge}
+              errorId={showErrors && errors.rewardKnowledge ? "rewards-knowledge-error" : undefined}
               onChange={(value) => onChange({ rewardKnowledge: value as RewardKnowledge })}
             />
-            {showErrors && errors.rewardKnowledge ? <p className={styles.fieldError}>{errors.rewardKnowledge}</p> : null}
+            {showErrors && errors.rewardKnowledge ? (
+              <p id="rewards-knowledge-error" className={styles.fieldError}>
+                {errors.rewardKnowledge}
+              </p>
+            ) : null}
 
             {knowledge === "amount" ? (
               <>
