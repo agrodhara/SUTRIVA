@@ -105,6 +105,29 @@ def build_reason_codes(
     return codes
 
 
+NUDGE_CODE = "COMPARE_REWARDS_FEE_INTEREST"
+
+
+def build_main_pressure_code(
+    estimated_annual_rewards: float | None,
+    annual_card_fee: float,
+    estimated_annual_interest_cost: float | None,
+) -> str:
+    """Bounded main-pressure code derived only from values already calculated above.
+
+    Precedence: unknown rewards, unknown interest effect, fee above rewards, any fee, no fee.
+    """
+    if estimated_annual_rewards is None:
+        return "REWARD_VALUE_UNKNOWN"
+    if estimated_annual_interest_cost is None:
+        return "INTEREST_EFFECT_UNKNOWN"
+    if annual_card_fee > estimated_annual_rewards:
+        return "FEE_EXCEEDS_REWARDS"
+    if annual_card_fee > 0:
+        return "FEE_REDUCES_VALUE"
+    return "NO_FEE_PRESSURE"
+
+
 def estimate_annual_rewards(payload: MoneyValueCheckRequest) -> tuple[float | None, str | None]:
     basis = payload.reward_input_basis
     if basis is None:
@@ -242,4 +265,26 @@ def run_money_value_check(payload: MoneyValueCheckRequest) -> dict:
         "reason_codes": reason_codes,
         "next_best_action": next_best_action,
         "guidance_disclaimer": GUIDANCE_DISCLAIMER,
+        "reward_amount_per_period": _entered_reward_amount(payload, basis),
+        "reward_units_per_period": (
+            round(payload.reward_units_earned, 2)
+            if basis == "earned_units" and payload.reward_units_earned is not None
+            else None
+        ),
+        "spending_priorities": list(payload.spending_priorities) if payload.spending_priorities else None,
+        # The card's category earning structure is not collected, so fit can never be determined here.
+        "spending_fit_status": "CATEGORY_FIT_UNDETERMINED" if payload.spending_priorities else "NOT_PROVIDED",
+        "main_pressure_code": build_main_pressure_code(
+            estimated_annual_rewards, payload.annual_card_fee, estimated_annual_interest_cost
+        ),
+        "nudge_code": NUDGE_CODE,
     }
+
+
+def _entered_reward_amount(payload: MoneyValueCheckRequest, basis: str | None) -> float | None:
+    """Echo the rupee reward amount the customer entered for the stated period, if any."""
+    if basis == "cashback_amount" and payload.cashback_amount is not None:
+        return round(payload.cashback_amount, 2)
+    if basis == "known_reward_value" and payload.reward_value_amount is not None:
+        return round(payload.reward_value_amount, 2)
+    return None

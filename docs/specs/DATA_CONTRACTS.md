@@ -53,6 +53,19 @@ Output status can be `POSITIVE`, `NEUTRAL`, `VALUE_LEAKAGE`, or
 `UNKNOWN_VALUE`. Unknown value is explicit and does not coerce rewards or net
 value to zero.
 
+Rewards Intelligence 1.1A additions (optional and backward-compatible):
+- `spending_priorities` (one to three unique allowlisted categories) and
+  `balance_behavior` (`pay_in_full`, `carry_balance`, `not_sure`) are accepted
+  on the request. `carry_balance` and `not_sure` produce an explicit unknown
+  interest effect, so `estimated_net_annual_value` is `null` rather than a
+  figure that ignores interest.
+- The response adds only echoed non-financial inputs and bounded codes
+  (`spending_fit_status`, `main_pressure_code`, `nudge_code`).
+- Unknown request fields are rejected.
+- Priorities and balance behaviour are transient. They are not written to the
+  audit log, the anonymous-continuity tables or product events. Audit
+  snapshots use fixed allow-listed keys, and none of them include these fields.
+
 ## Product event
 
 ```json

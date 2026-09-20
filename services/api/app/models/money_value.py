@@ -1,6 +1,20 @@
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+SpendingPriority = Literal["dining", "travel", "grocery", "everyday_bills"]
+BalanceBehavior = Literal["pay_in_full", "carry_balance", "not_sure"]
+SpendingFitStatus = Literal["CATEGORY_FIT_UNDETERMINED", "NOT_PROVIDED"]
+MainPressureCode = Literal[
+    "REWARD_VALUE_UNKNOWN",
+    "INTEREST_EFFECT_UNKNOWN",
+    "FEE_EXCEEDS_REWARDS",
+    "FEE_REDUCES_VALUE",
+    "NO_FEE_PRESSURE",
+]
+NudgeCode = Literal["COMPARE_REWARDS_FEE_INTEREST"]
+
+MAX_SPENDING_PRIORITIES = 3
 
 
 class MoneyValueQuickCheckRequest(BaseModel):
@@ -26,7 +40,11 @@ class MoneyValueCheckRequest(BaseModel):
 
     User-declared estimates only. No card number, issuer, PAN, customer ID,
     phone, email, account number, statement upload or transaction-level data.
+
+    Unknown request fields are rejected rather than silently ignored.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     monthly_card_spend: float = Field(ge=0)
     annual_card_fee: float = Field(ge=0)
@@ -44,6 +62,53 @@ class MoneyValueCheckRequest(BaseModel):
     interest_value_unknown: bool = False
     revolving_balance: Optional[float] = Field(default=None, ge=0)
     annual_interest_rate_percent: Optional[float] = Field(default=None, ge=0)
+    # Optional, additive. Older callers omit both. Neither is persisted or audited.
+    spending_priorities: Optional[List[SpendingPriority]] = None
+    balance_behavior: Optional[BalanceBehavior] = None
+
+    @field_validator("spending_priorities")
+    @classmethod
+    def validate_spending_priorities(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        if value is None:
+            return None
+        if not 1 <= len(value) <= MAX_SPENDING_PRIORITIES:
+            raise ValueError(f"spending_priorities must contain between 1 and {MAX_SPENDING_PRIORITIES} values")
+        if len(set(value)) != len(value):
+            raise ValueError("spending_priorities must not contain duplicates")
+        return value
+
+    @model_validator(mode="after")
+    def apply_balance_behavior(self) -> "MoneyValueCheckRequest":
+        """Map the customer's balance answer onto the interest basis without inventing a cost.
+
+        pay_in_full resolves to no_balance. carry_balance and not_sure resolve to an
+        explicit unknown interest effect unless a known balance is supplied for carry_balance.
+        """
+        behavior = self.balance_behavior
+        if behavior is None:
+            return self
+
+        if behavior == "pay_in_full":
+            if self.interest_input_basis not in (None, "no_balance") or self.interest_value_unknown:
+                raise ValueError("balance_behavior=pay_in_full conflicts with the interest inputs")
+            if self.revolving_balance is not None and self.revolving_balance > 0:
+                raise ValueError("balance_behavior=pay_in_full cannot include a revolving_balance greater than zero")
+            self.interest_input_basis = "no_balance"
+            return self
+
+        if behavior == "carry_balance":
+            if self.interest_input_basis == "no_balance":
+                raise ValueError("balance_behavior=carry_balance conflicts with interest_input_basis=no_balance")
+            if self.interest_input_basis is None and self.revolving_balance is None and self.annual_interest_rate_percent is None:
+                self.interest_input_basis = "unknown"
+            return self
+
+        if self.interest_input_basis not in (None, "unknown"):
+            raise ValueError("balance_behavior=not_sure conflicts with the interest inputs")
+        if self.revolving_balance is not None or self.annual_interest_rate_percent is not None:
+            raise ValueError("balance_behavior=not_sure cannot include balance or interest rate values")
+        self.interest_input_basis = "unknown"
+        return self
 
     @model_validator(mode="after")
     def validate_reward_fields(self) -> "MoneyValueCheckRequest":
@@ -165,5 +230,12 @@ class MoneyValueCheckResponse(BaseModel):
     reason_codes: List[str]
     next_best_action: str
     guidance_disclaimer: str
+    # Additive Step 4 fields. Bounded codes and echoed non-financial inputs only, never generated prose.
+    reward_amount_per_period: Optional[float] = None
+    reward_units_per_period: Optional[float] = None
+    spending_priorities: Optional[List[SpendingPriority]] = None
+    spending_fit_status: SpendingFitStatus = "NOT_PROVIDED"
+    main_pressure_code: MainPressureCode
+    nudge_code: NudgeCode
     audit_event_id: str
     audit_event: Dict[str, Any]
