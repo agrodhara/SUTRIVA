@@ -1,13 +1,38 @@
-import { redirect } from "next/navigation";
+"use client";
 
-type SearchParams = Record<string, string | string[] | undefined>;
+import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-function normalizeJourney(value: string | string[] | undefined): string | undefined {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  return candidate === "money_value" || candidate === "comfortable_borrowing" ? candidate : undefined;
+import { ConsentPanel, type ConsentJourney } from "../../components/ConsentPanel";
+
+function normalizeJourney(value: string | null): ConsentJourney | undefined {
+  return value === "money_value" || value === "comfortable_borrowing" ? value : undefined;
 }
 
-export default function GoDeeperPage({ searchParams }: { searchParams?: SearchParams }) {
-  const journey = normalizeJourney(searchParams?.journey);
-  redirect(journey === "comfortable_borrowing" ? "/borrow-better" : journey === "money_value" ? "/money-value" : "/");
+function GoDeeperJourney() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const journey = normalizeJourney(searchParams.get("journey")) ?? "money_value";
+
+  return (
+    <ConsentPanel
+      journey={journey}
+      onContinue={(nextJourney) => {
+        const destination = nextJourney === "comfortable_borrowing" ? "/borrow-better" : "/money-value";
+        router.push(destination);
+      }}
+      onDismiss={(nextJourney) => {
+        const destination = nextJourney === "comfortable_borrowing" ? "/borrow-better" : "/money-value";
+        router.push(destination);
+      }}
+    />
+  );
+}
+
+export default function GoDeeperPage() {
+  return (
+    <Suspense fallback={<ConsentPanel journey="money_value" />}>
+      <GoDeeperJourney />
+    </Suspense>
+  );
 }

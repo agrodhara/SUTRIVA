@@ -175,6 +175,108 @@ h1 .highlight {
   color: #555;
 }
 
+.consentPanel {
+  max-width: 720px;
+  margin: 0 auto;
+  padding-top: 24px;
+  width: min(100%, 720px);
+}
+
+.consentIntro {
+  max-width: 620px;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.consentList {
+  margin: 28px 0 24px;
+  padding-left: 1.2rem;
+  color: #40403a;
+  line-height: 1.7;
+}
+
+.consentForm {
+  display: grid;
+  gap: 22px;
+  margin-top: 16px;
+}
+
+.consentCheckbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid #d9d7cc;
+  border-radius: 16px;
+  background: #ffffff;
+  font-size: 16px;
+  line-height: 1.5;
+  max-width: 100%;
+}
+
+.consentCheckbox input {
+  width: 18px;
+  height: 18px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.consentCheckbox span {
+  overflow-wrap: anywhere;
+}
+
+.consentActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.primaryButton,
+.secondaryButton {
+  border: none;
+  border-radius: 999px;
+  padding: 14px 20px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton,
+.secondaryButton,
+.consentCheckbox input {
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.consentCheckbox input:focus-visible {
+  outline: 3px solid rgba(41, 82, 163, 0.28);
+  outline-offset: 3px;
+}
+
+.primaryButton {
+  background: #16794f;
+  color: #ffffff;
+}
+
+.primaryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  background: #eef1ef;
+  color: #171717;
+}
+
+.backLink {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: #2952a3;
+  text-decoration: none;
+  font-weight: 600;
+}
+
 @media (max-width: 720px) {
   .shell {
     padding-top: 32px;
