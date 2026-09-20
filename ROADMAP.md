@@ -38,10 +38,10 @@ stale until corrected.
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1.1A | Rewards anonymous result flow: steps 2-5 in the final PNG sequence | Not started |
-| 1.1A | Borrow Better anonymous result flow: steps 2-5 in the final PNG sequence | Not started |
-| 1.1B | Shared pilot-interest flow: Step 6A and 6B | Deferred until both 1.1A journeys pass |
-| 1.2 | Connected journey: steps 7-8 | Future-only; not in current scope |
+| 1.1A | Steps 1-5: anonymous declared-data check and synthetic illustrative example for Rewards | Substantially implemented; exact screen separation, copy and phase-boundary alignment still required |
+| 1.1A | Steps 1-5: anonymous declared-data check and synthetic illustrative example for Borrow Better | Substantially implemented; exact values, screen separation and phase-boundary alignment still required |
+| 1.1B | Step 6 only: anonymous interest click, followed by mobile/OTP, post-verification history linking, and separate unchecked optional updates | Deferred until both 1.1A journeys pass |
+| 1.2 | Steps 7-8: future purpose-specific statement/account/transaction/bureau permissions and connected-data results | Future-only; not in current scope |
 
 ## Completed
 
@@ -69,24 +69,28 @@ Feature flags `track11aEnabled` and `track11bEnabled` are `false` in
   asserted here.
 - Operational verification of the declared alpha topology. See
   `docs/execution/UAT_DEPLOYMENT.md` for what is verified and what is not.
-- Final journey authority is established by the two PNGs and the journey specification; earlier issue and handover assumptions are superseded where they conflict.
+- Final journey authority is established by the two PNGs and `docs/product/journeys/JOURNEY_FLOW_SPEC.md`; earlier issue and handover assumptions are superseded where they conflict.
+- The remaining work is exact screen separation, copy, values, illustrative labels and phase-boundary alignment within the approved anonymous 1.1A flow. This is not a full rebuild of the journeys from zero.
 
 ## Next
 
-1. Correct Rewards 1.1A steps 2-5 against the final PNG sequence and approved flow.
-2. Correct Borrow Better 1.1A steps 2-5 against the final PNG sequence and approved flow.
-3. Validate the complete anonymous journeys before moving to the shared 1.1B Step 6 flow.
-4. Implement shared 1.1B step 6 only after both 1.1A flows pass.
-5. Keep 1.2 steps 7-8 future-only.
+1. Verify the declared alpha topology and record the evidence.
+2. Re-assess seed backlog Issues 4–10 against `main` and update their status.
+3. Deployment and database provisioning planning. `docs/architecture.md`
+   requires App Runner VPC egress/NAT (or an approved alternative) and current
+   AWS cost to be validated before anything is provisioned.
+4. Complete the final 1.1A alignment work for Rewards and Borrow Better against the controlling PNG and journey spec.
 
 ## Deferred
 
 | Item | Why deferred |
 |---|---|
-| Shared 1.1B: mobile submission, OTP verification, consent, anonymous-history linking | Identity and consent are outside the closed anonymous journey scope. |
+| 1.1B step 6 only: anonymous interest click, mobile submission, OTP verification and post-verification history linking | Identity and consent are outside the closed anonymous journey scope. |
+| Purpose-specific 1.2 permissions for statement, account, transaction and bureau access | These are future-only data-access choices and belong to connected-data results, not the 1.1B pilot-interest step. |
 | Server-side token rotation after OTP verification and history linking | Deferred to Track 1.1B. Rotation must not extend the session's original absolute expiry. No browser-accessible rotation endpoint is planned. |
 | Fulfilment and any Track 2 capability | Gated until the legal/partner gate. |
 | Authentication provider choice (Cognito versus a lighter managed option) | Decision gate. Listed in `SECURITY_DO_NOT_TOUCH.md`. |
+| Encrypted append-only audit storage | Audit events currently go to a local JSONL file under the OS temp directory and are not durable. |
 | Future data-contract, event-taxonomy and Privacy Notice dependencies | Deferred until the separate governance gates are approved. |
 | Real customer data | Not permitted before the G0.5 engineer/security review is approved. |
 

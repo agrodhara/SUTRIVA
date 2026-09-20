@@ -18,106 +18,110 @@ This rule applies to both Rewards Intelligence and Borrow Better. The consent, p
 
 ## Phase model
 
-### Phase 1.1A: anonymous check and value delivery
+### Phase 1.1A: anonymous declared-data check and synthetic illustrative example
 
 Steps 1-5 are the public, anonymous quick-check journey in both product doors.
 
-- Step 1: landing / door selection
-- Step 2: collect the quick-check inputs
-- Step 3: calculate and render the declared result
-- Step 4: show the illustrative connected-insight example
-- Step 5: offer the next non-committal closure or continuation within the same journey
+- Step 1: choose the product door
+- Step 2: complete the anonymous quick-check inputs
+- Step 3: declare the result with the relevant summary and context
+- Step 4: show the synthetic illustrative example for what connected insight could reveal
+- Step 5: present the next-step narrative, still without any identity or data-permission collection
 
 The user should understand the immediate result before any pilot or permission flow is offered.
 
-### Phase 1.1B: pilot interest, mobile and OTP
+### Phase 1.1B: pilot-interest step only
 
 Step 6 is the pilot-interest flow and is divided into two sub-steps: 6A and 6B.
 
-- 6A: anonymous interest click, mobile number capture, and submit to send OTP
-- 6B: OTP send / verify / resend / expiry / failure handling, then verified pilot interest and history linking
+- 6A: anonymous interest click only. No phone number, OTP, identity or permission is collected at this stage.
+- 6B: mobile submission, OTP issuance and successful OTP verification. Anonymous-history linking occurs only after successful OTP verification.
 
-The step must only appear after the anonymous result and illustrative example are shown. It is not a generic acknowledgement gate.
+Optional product or pilot updates remain a separate choice and must be unchecked by default. Pilot interest, OTP verification, optional updates and future data permissions are distinct signals.
 
 ### Phase 1.2: future connected journey
 
 Steps 7-8 are future-only and outside the current anonymous implementation scope.
 
-- Step 7: connected-data or deeper-journey continuation
-- Step 8: full connected insight and follow-up
+- Step 7: choose which future permissioned data to connect
+- Step 8: show the connected-data result
 
 These steps are not the current implementation target and must not be treated as a release blocker for the anonymous quick-check flow.
 
-## Binding sequence per product
+## Exact eight-step sequences
 
 ### Rewards Intelligence
 
-1. Door selection / start
-2. Input collection
-3. Result summary
-4. Illustrative connected-insight example
-5. Anonymous closure or continuation
-6A. Anonymous pilot-interest click
-6B. Mobile submission, OTP send, verify, resend, expiry, failure handling, verified pilot interest, post-OTP history linking
-7. Connected journey continuation
-8. Connected insight outcome
+1. Choose Rewards
+2. Your card behaviour
+3. Your priorities and inputs
+4. Your Rewards Check
+5. What your real data could reveal
+6. Join the pilot
+7. Choose whether to share a statement
+8. Your real card and rewards picture
 
 ### Borrow Better
 
-1. Door selection / start
-2. Monthly position input and affordability snapshot
-3. Borrowing plan and comfort result
-4. Results framing and illustrative connected-insight example
-5. Anonymous closure or continuation
-6A. Anonymous pilot-interest click
-6B. Mobile submission, OTP send, verify, resend, expiry, failure handling, verified pilot interest, post-OTP history linking
-7. Connected journey continuation
-8. Connected insight outcome
+1. Choose Borrow Better
+2. Your monthly position
+3. Your borrowing plan
+4. Your Borrow Better check
+5. What your real data could reveal
+6. Join the pilot
+7. Choose what you want to connect
+8. Your real monthly borrowing picture
+
+These exact labels replace any earlier step numbering that placed the result at Step 3 or the illustrative example at Step 4.
+
+## Exact Step 6 event set
+
+The authoritative Step 6 funnel events are:
+
+1. `pilot_interest_clicked`
+2. `mobile_submitted`
+3. `otp_sent`
+4. `otp_verified`
+5. `optional_updates_opted_in`
+
+These are the five Step 6 events. General 1.1A analytics events such as `journey_started`, `result_declared` and `connected_example_seen` may be documented elsewhere, but they are not part of the Step 6 funnel and must not be substituted for these five events.
+
+## History linking and post-OTP rule
+
+After successful OTP verification:
+
+- the anonymous journey history is linked to the verified pilot interest
+- the user is marked as verified pilot-interested
+- Step 6A remains a separate anonymous interest click with no identity capture yet
+- optional product updates remain separate and unchecked by default
+- future data permissions are handled later under 1.2 and are not part of the 1.1B Step 6 funnel
 
 ## Exact permission and privacy rules
 
-- Anonymous users are shown the result and illustrative example before any pilot registration or data-permission request.
-- Separate optional updates permission is distinct from the pilot-interest signal and must remain unchecked by default.
-- Rewards statement permission is separate and is not the same as Borrow transaction/account permission.
-- Borrow transaction/account permission is separate from bureau permission. They are distinct consent categories and must not be conflated.
-- There is no fixed retention period. Retention is configured and read-only unless a future governance update defines a different policy.
+- Anonymous users are shown the declared result and illustrative example before any pilot registration or data-permission request.
+- Step 6A does not collect a phone number, OTP, identity or permission. It is an anonymous interest click only.
+- Step 6B may collect a mobile number and issue OTP; only successful OTP verification permits anonymous-history linking.
+- Optional product or pilot updates are a separate signal and remain unchecked by default.
+- Rewards statement permission is distinct from Borrow transaction/account permission and from bureau permission.
+- Borrow transaction/account permission is separate from bureau permission. They are distinct permission categories and must not be conflated.
+- No fixed customer-facing retention promise, including “12 months,” may be stated until supported by the verified Privacy Notice. Anonymous-session authentication expires after 90 days; this is distinct from the retention period applicable to persisted data.
 - Any future data-contract, event-taxonomy and Privacy Notice dependency is deferred until a separate approval gate is passed.
 
 ## Exact borrowing calculation rule
 
 Borrow Better uses the configured, read-only 14% rate.
 
-- Rate: 14% p.a. effective baseline
-- Mathematical rule: monthly capacity is calculated using the configured 14% rate and the declared borrower inputs
-- The rate must not be user-editable in the product flow
-- The value is treated as a prototype baseline and not as a loan offer or financial advice
-
-## Funnel events
-
-The journey collects five funnel events as the minimum product event set in the order below:
-
-1. `journey_started`
-2. `result_declared`
-3. `connected_example_seen`
-4. `pilot_interest_clicked`
-5. `otp_verified`
-
-After `otp_verified`, the system links the verified interest back to the anonymous journey history and records the associated product event metadata without storing raw PII or financial values.
-
-## History linking and post-OTP rule
-
-After OTP success:
-
-- the anonymous session history is linked to the verified pilot interest
-- the user is marked as a verified pilot-interested user
-- no mobile or OTP step is shown before the declared result and illustrative example
-- the optional updates permission remains separate, unchecked by default, and not required to complete pilot interest
+- Estimated post-loan buffer: `−₹1,100`.
+- Canonical rate copy: `Illustrative annual rate: 14%. Configured by policy; not a loan offer.`
+- The 14% rate is display-only and cannot be edited by the customer.
+- “Configured” or “configurable” in the artwork means policy-controlled, never customer-editable.
+- The value is treated as a prototype baseline and not as a loan offer or financial advice.
 
 ## Implementation constraints
 
 - Do not introduce a generic deeper-journey acknowledgement gate before the declared result is shown.
 - Do not ask for data permission before the anonymous result and illustrative example are delivered.
-- Keep the current implementation focused on 1.1A and completion of anonymous result delivery.
+- Keep the current implementation focused on 1.1A and completion of the anonymous result delivery.
 - Defer 1.2 until the connected journey is formally approved.
 - Maintain the two-door product structure and route-specific naming for Rewards Intelligence and Borrow Better.
 
