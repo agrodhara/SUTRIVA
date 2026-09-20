@@ -343,34 +343,127 @@ passwords, cookies or tokens into any record.
 
 **Events**
 
-9. After the run, query the UAT database:
+A completed 1.1A journey produces exactly **six event records**, using **four
+distinct event types**, all carrying one `journey_run_id`, in this order:
+
+1. `step_viewed` for Step 2
+2. `step_completed` for Step 2
+3. `step_viewed` for Step 3
+4. `step_completed` for Step 3
+5. `result_declared` for Step 4
+6. `connected_example_seen` for Step 5
+
+Each record carries the `screen_name` for its step:
+
+| Journey | Step 2 | Step 3 | Step 4 | Step 5 |
+| --- | --- | --- | --- | --- |
+| Rewards (`journey = money_value`) | `rewards_card_behaviour` | `rewards_priorities_inputs` | `rewards_check` | `rewards_connected_example` |
+| Borrow (`journey = comfortable_borrowing`) | `borrow_monthly_position` | `borrow_plan` | `borrow_check` | `borrow_connected_example` |
+
+A run belongs to one journey: every record in a Rewards run uses a `rewards_*`
+screen name and a Borrow run uses only `borrow_*` names. The API rejects a
+`screen_name` that does not match its `journey`.
+
+`door_selected` is separate from this contract:
+
+- It is a home-entry event, sent when a door card on the home page is clicked.
+  It is not one of the six per-journey records.
+- It is sent with its own fresh run identifier, so it appears in
+  `journey_runs` as its own single-event run.
+- It must **not** be required for the private-UAT journey pass. Its absence is
+  recorded, not treated as a failure.
+- It can be lost when the click triggers a full-page navigation before the
+  request completes. That loss is a known defect and a **blocker to fix before
+  the public pilot**, when home-entry analytics must be reliable.
+
+No pilot, continuation, mobile, OTP or consent event is allowed in 1.1A.
+
+9. Note the time you start the smoke run, run the Rewards and Borrow journeys
+   **straight through** (Step 2 to Step 5, without using Back or re-entering a
+   screen), then check each run. The query is scoped to runs started since
+   `smoke_start`, groups the records by journey run, and compares each run with
+   the exact six-record sequence for its journey. Runs that consist only of the
+   separate `door_selected` event are left out.
 
    ```sql
-   SELECT journey, event_type, screen_name, count(*)
-   FROM product_events
-   GROUP BY 1, 2, 3
-   ORDER BY 1, 2, 3;
+   \set smoke_start '2026-09-21T10:00:00+00'   -- replace with your UTC start time
+
+   WITH expected(journey, sequence) AS (
+     VALUES
+       ('money_value', ARRAY[
+         'step_viewed:rewards_card_behaviour',
+         'step_completed:rewards_card_behaviour',
+         'step_viewed:rewards_priorities_inputs',
+         'step_completed:rewards_priorities_inputs',
+         'result_declared:rewards_check',
+         'connected_example_seen:rewards_connected_example']),
+       ('comfortable_borrowing', ARRAY[
+         'step_viewed:borrow_monthly_position',
+         'step_completed:borrow_monthly_position',
+         'step_viewed:borrow_plan',
+         'step_completed:borrow_plan',
+         'result_declared:borrow_check',
+         'connected_example_seen:borrow_connected_example'])
+   ),
+   per_run AS (
+     SELECT r.journey_run_uuid, r.client_journey_run_id, r.journey, r.started_at,
+            count(e.product_event_uuid) AS records,
+            count(*) FILTER (WHERE e.journey <> r.journey) AS foreign_journey_records,
+            COALESCE(
+              array_agg(concat_ws(':', e.event_type, e.screen_name)
+                        ORDER BY e.effective_occurred_at, e.received_at)
+                FILTER (WHERE e.product_event_uuid IS NOT NULL),
+              ARRAY[]::text[]) AS actual_sequence
+     FROM journey_runs r
+     LEFT JOIN product_events e ON e.journey_run_uuid = r.journey_run_uuid
+     WHERE r.started_at >= :'smoke_start'::timestamptz
+     GROUP BY r.journey_run_uuid, r.client_journey_run_id, r.journey, r.started_at
+     HAVING count(*) FILTER (WHERE e.event_type IS DISTINCT FROM 'door_selected') > 0
+   )
+   SELECT p.client_journey_run_id, p.journey, p.records, p.foreign_journey_records,
+          p.actual_sequence = x.sequence AS sequence_match,
+          (SELECT array_agg(s ORDER BY s) FROM unnest(p.actual_sequence) AS s)
+            IS NOT DISTINCT FROM
+          (SELECT array_agg(s ORDER BY s) FROM unnest(x.sequence) AS s) AS records_match
+   FROM per_run p
+   JOIN expected x ON x.journey = p.journey
+   ORDER BY p.started_at;
    ```
 
-   Only these 1.1A event types may appear: `door_selected` (no `screen_name`),
-   `step_viewed`, `step_completed`, `result_declared` and
-   `connected_example_seen`. Every non-null `screen_name` must be one of
-   `rewards_card_behaviour`, `rewards_priorities_inputs`, `rewards_check`,
-   `rewards_connected_example`, `borrow_monthly_position`, `borrow_plan`,
-   `borrow_check` and `borrow_connected_example`. Event tracking is best-effort
-   in the client, so a missing `door_selected` row is recorded, not treated as a
-   Step 5 failure.
-10. **None** of these event types may appear, because they belong to the legacy
+   Pass: there is one row for the Rewards run and one for the Borrow run, and
+   each has `records = 6`, `foreign_journey_records = 0`, `sequence_match = true`
+   and `records_match = true`. If `records_match` is true but `sequence_match`
+   is false, compare `effective_occurred_at` and `received_at` by hand: two
+   records that were sent within the same millisecond can arrive out of order
+   and are not a failure. Any other difference is a failure.
+
+   A run that used Back or re-entered a screen legitimately records extra
+   `step_viewed` or `step_completed` rows. Do not use such a run for the
+   exact-count check. Validate it only against step 10.
+
+10. Confirm that nothing outside the contract was recorded since `smoke_start`.
+    This must return **no rows**:
+
+    ```sql
+    SELECT event_type, count(*)
+    FROM product_events
+    WHERE received_at >= :'smoke_start'::timestamptz
+      AND event_type NOT IN ('step_viewed', 'step_completed', 'result_declared',
+                             'connected_example_seen', 'door_selected')
+    GROUP BY event_type;
+    ```
+
+    In particular, none of these may appear, because they belong to the legacy
     continuation flow or to Phase 1.1B: `pilot_cta_selected`,
     `go_deeper_selected`, `go_deeper_declined`, `next_interest_viewed`,
     `next_interest_selected`, `next_interest_skipped`, `teaser_viewed`,
     `teaser_cta_selected`, `decline_reason_selected`, `mobile_entry_started`,
     `otp_requested`, `otp_request_failed`, `otp_verification_succeeded`,
     `otp_verification_failed`, `otp_expired`, `pilot_consent_recorded`,
-    `marketing_consent_recorded` and `consent_withdrawn`. Any row for these is
-    a failure. The Step 6 funnel events named in
+    `marketing_consent_recorded` and `consent_withdrawn`. The Step 6 funnel
+    events named in
     [JOURNEY_FLOW_SPEC.md](../product/journeys/JOURNEY_FLOW_SPEC.md) must not
-    appear either.
+    appear either. Any such row is a failure.
 11. Financial inputs must not appear in nginx, uvicorn or audit logs.
 
 If a deployment is rebuilt, repeat all steps.
