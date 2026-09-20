@@ -1,0 +1,1 @@
+Single writer; one branch/PR per vertical outcome; resume the existing PR for fixes; verify the current integration baseline before editing.

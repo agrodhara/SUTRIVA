@@ -25,12 +25,17 @@ def build_affordability_features(payload: BorrowBetterQuickCheckRequest) -> dict
         payload.indicative_interest_rate_pa,
         payload.requested_tenor_months,
     )
+    total_repayment = estimated_new_emi * payload.requested_tenor_months
+    total_interest = total_repayment - payload.requested_loan_amount
     total_commitments = payload.existing_monthly_emi + estimated_new_emi + payload.monthly_non_emi_commitments
     post_emi_surplus = payload.declared_monthly_income - total_commitments
     minimum_monthly_buffer = max(10000, payload.declared_monthly_income * 0.20)
 
     return {
         "estimated_new_emi": estimated_new_emi,
+        "total_repayment": total_repayment,
+        "total_interest": total_interest,
+        "total_monthly_commitment": total_commitments,
         "foir_after_new_emi": (payload.existing_monthly_emi + estimated_new_emi) / payload.declared_monthly_income,
         "post_emi_surplus": post_emi_surplus,
         "minimum_monthly_buffer": minimum_monthly_buffer,

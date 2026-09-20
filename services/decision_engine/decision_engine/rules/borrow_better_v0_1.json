@@ -26,6 +26,13 @@
       "explanation": "Income is self-declared or not yet verified, so the result should be treated as indicative."
     },
     {
+      "rule_id": "COMMITMENT_RATIO_CAUTION",
+      "condition": "foir_after_new_emi > 0.35 and foir_after_new_emi <= 0.45",
+      "outcome": "CAUTION",
+      "reason_code": "COMMITMENT_RATIO_CAUTION",
+      "explanation": "The commitment ratio after the new EMI is elevated and may reduce monthly flexibility."
+    },
+    {
       "rule_id": "NEGATIVE_SURPLUS",
       "condition": "post_emi_surplus < 0",
       "outcome": "DECLINE",

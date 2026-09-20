@@ -1,94 +1,99 @@
-# API Specification — Alpha-50 Draft
+# API Specification — Alpha-50
 
-Base URL local: `http://127.0.0.1:8000`
+Base URL: `http://127.0.0.1:8000`
 
-## GET /health
+## Foundation
 
-Response:
+`GET /health` returns the service status. The PWA uses
+`NEXT_PUBLIC_API_BASE_URL` for all calls.
 
-```json
-{
-  "status": "ok",
-  "service": "sutriva-api"
-}
-```
+`POST /v1/anonymous-sessions/bootstrap` creates or continues the anonymous
+browser session. Requests must come from an exact allowed `Origin` and use
+credentialed cookies. The server sets a host-only `HttpOnly` cookie with
+`Secure`, `SameSite=Lax`, `Path=/`, and `Max-Age=7776000` in production.
 
-## POST /borrow-better/quick-check
+Phase B exposes no browser-accessible anonymous-session rotation endpoint.
+Token rotation exists only as an internal server primitive for future
+compromise-handling or server-controlled triggers.
 
-Purpose: return indicative affordability insight.
+## Preferred quick-check routes
 
-Request:
+### `POST /v1/borrowing-intelligence/comfortable-borrowing-check`
 
-```json
-{
-  "declared_monthly_income": 150000,
-  "existing_monthly_emi": 35000,
-  "desired_loan_amount": 800000,
-  "tenure_months": 36,
-  "indicative_interest_rate_pa": 0.15
-}
-```
+Request fields: `monthly_income`, `existing_monthly_commitments`,
+`desired_borrowing_amount`, and `desired_tenure_months`.
 
-Response:
+The response includes `policy_version=borrow_better_v0_1`,
+`estimated_new_monthly_commitment`, `total_monthly_commitment`,
+`commitment_ratio`, `comfort_status`, `reason_codes`, `next_best_action`,
+`guidance_disclaimer`, and `audit_event_id`.
 
-```json
-{
-  "journey": "borrow_better",
-  "policy_version": "borrow_better_v0_1",
-  "status": "CAUTION",
-  "comfortable_monthly_emi": 32500,
-  "comfortable_borrowing_range": {
-    "lower": 550000,
-    "upper": 700000
-  },
-  "reason_codes": [
-    "Existing commitments reduce room for a new EMI",
-    "A lower amount may preserve monthly buffer"
-  ],
-  "disclaimer": "Indicative financial-intelligence output, not a loan offer or approval."
-}
-```
+### `POST /v1/financial-intelligence/money-value-check`
 
-## POST /money-value/quick-check
+Request fields: `monthly_card_spend`, `annual_card_fee`,
+`revolving_balance`, and `annual_interest_rate_percent`.
 
-Purpose: return indicative value-leakage estimate.
+Reward input supports both legacy and extended forms:
+- Legacy compatibility: `estimated_reward_rate_percent`.
+- Cashback amount mode: `reward_type=cashback`,
+  `reward_input_basis=cashback_amount`, `cashback_amount`, `reward_period`.
+- Known reward value mode: `reward_type=points|miles`,
+    `reward_input_basis=known_reward_value`, `reward_value_amount`,
+    `reward_period`.
+- Points/miles mode: `reward_type=points|miles`,
+  `reward_input_basis=earned_units`, `reward_units_earned`, `reward_period`,
+  and either `rupee_value_per_reward_unit` or `reward_value_unknown=true`.
+- Unknown mode: `reward_type=not_sure` sets an explicit unknown-value outcome.
 
-Request:
+Interest input supports additive completeness fields:
+- `interest_input_basis=no_balance` for confirmed no carried balance.
+- `interest_input_basis=known` with `revolving_balance` and
+    `annual_interest_rate_percent`.
+- `interest_input_basis=unknown` with `interest_value_unknown=true`.
 
-```json
-{
-  "monthly_card_spend": 100000,
-  "annual_card_fee": 5000,
-  "monthly_interest_or_late_fee": 1500,
-  "estimated_reward_rate": 0.01,
-  "subscription_leakage_monthly": 800
-}
-```
+The response includes `policy_version=alpha50-money-value-v0.1`,
+`reward_type`, `reward_input_basis`, `reward_period`, `annual_spend`,
+`estimated_annual_rewards`, `annual_card_fee`,
+`interest_input_basis`, `interest_value_known`,
+`estimated_annual_interest_cost`, `estimated_net_annual_value`,
+`reward_value_known`, optional `unknown_value_reason`, `value_status`,
+`reason_codes`, `next_best_action`, `guidance_disclaimer`, and `audit_event_id`.
 
-Response:
+## Compatibility routes
 
-```json
-{
-  "journey": "money_value",
-  "policy_version": "money_value_v0_1",
-  "estimated_annual_value_gap": 23600,
-  "reason_codes": [
-    "Annual fee and recurring charges reduce net value",
-    "Reward rate may not offset current leakage"
-  ],
-  "disclaimer": "Indicative estimate based on user-declared inputs."
-}
-```
+`POST /v1/borrow-better/quick-check` and
+`POST /v1/money-value/quick-check` remain available for compatibility and
+delegate to the shared backend services. The PWA does not call them.
 
-## Error shape
+## Product events
 
-```json
-{
-  "error": "INVALID_INPUT",
-  "message": "declared_monthly_income must be greater than zero"
-}
-```
+`POST /v1/events` is a cookie-authenticated, exact-origin, credentialed route.
+It accepts only allow-listed product-learning fields: `event_id`, `event_type`,
+`journey_run_id`, `journey`, `version`, `timestamp`, `decision_context`,
+optional `card_check_number`, optional first/latest-touch attribution, and
+optional Track 1.1 continuation `intent` and `reason` for selected event types.
 
-## API rule
+The server derives the anonymous session from the session cookie, persists
+session-scoped idempotent product events in PostgreSQL, stores normalized
+attribution and continuation-intent rows, and never accepts raw financial
+inputs, calculation outputs, PII, arbitrary event properties, or client-chosen
+anonymous session identifiers.
 
-APIs return insight and reason codes. They do not return loan offers, lender rankings or approval promises in Alpha.
+Status behavior:
+- `200` for persisted or idempotently replayed events.
+- `202` with `status=accepted_not_persisted` when session validation succeeds
+    but non-critical event persistence fails.
+- `401` for missing, invalid, expired, or revoked anonymous session cookies.
+- `403` for missing or invalid `Origin`.
+- `503` when the anonymous session cannot be validated because the database is
+    unavailable.
+
+Calculation endpoints do not require anonymous-session authentication and are
+not required to send credentialed cookies in Phase B.
+
+## Alpha boundaries
+
+All calculations and thresholds remain backend-owned. These APIs provide
+indicative guidance only and do not provide lender offers, ranking, approval,
+fulfilment, Account Aggregator, bureau, login, OTP, PAN, Aadhaar, or
+statement-upload flows.
