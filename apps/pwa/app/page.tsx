@@ -7,7 +7,13 @@ export default function Home() {
       <section className="hero">
         <p className="eyebrow">Sutriva Alpha</p>
         <h1>Make every money decision a better one</h1>
-        <p className="lede">Personalized insights. Smarter choices. Better outcomes.</p>
+        <p className="lede">
+          Choose the route that fits your next step and get a clearer view of value, costs, and borrowing comfort.
+        </p>
+        <div className="heroMeta" aria-label="Journey overview">
+          <span className="heroTag">Private, lightweight check-in</span>
+          <span className="heroTag heroTag--secondary">2–3 minutes each</span>
+        </div>
         <BackendStatus />
       </section>
 
@@ -15,10 +21,10 @@ export default function Home() {
         <DoorCard
           title="Get More From My Money"
           optionLabel="OPTION A"
-          description="See whether your current card usage is creating value or quietly costing you money."
+          description="See whether your card spending is creating value or quietly leaking money through fees and interest."
           href="/money-value"
-          cta="Explore Now"
-          benefits={["Understand whether your card creates value", "See the impact of fees and interest", "Spot potential value leakage"]}
+          cta="Open Get More From My Money"
+          benefits={["Understand whether your card creates value", "Spot costs from interest, fees and leakage", "Review the trade-offs before you act"]}
           timeEstimate="Takes 2–3 minutes"
           journey="money_value"
           accent="moneyValue"
@@ -26,10 +32,10 @@ export default function Home() {
         <DoorCard
           title="Borrow Better"
           optionLabel="OPTION B"
-          description="Check whether a desired borrowing amount looks comfortable for your monthly cash flow."
+          description="Check whether a desired borrowing amount feels comfortable for your monthly cash flow and commitments."
           href="/borrow-better"
-          cta="Explore Now"
-          benefits={["Understand your monthly borrowing comfort", "See how commitments affect cash flow", "See what you may want to adjust"]}
+          cta="Open Borrow Better"
+          benefits={["Understand your monthly borrowing comfort", "See how commitments affect cash flow", "Spot what you may want to adjust first"]}
           timeEstimate="Takes 2–3 minutes"
           journey="comfortable_borrowing"
           accent="borrowBetter"

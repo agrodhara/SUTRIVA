@@ -35,7 +35,12 @@ export function DoorCard({
           <li key={benefit}>{benefit}</li>
         ))}
       </ul>
-      <a className="doorCard__cta" href={href} onClick={() => trackEvent("door_selected", journey)}>
+      <a
+        className="doorCard__cta"
+        href={href}
+        aria-label={`Open ${title}`}
+        onClick={() => trackEvent("door_selected", journey)}
+      >
         {cta} →
       </a>
       <p className="doorCard__time">{timeEstimate}</p>

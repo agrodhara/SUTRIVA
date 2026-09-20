@@ -44,15 +44,30 @@ h1 .highlight {
   color: #40403a;
 }
 
+.heroMeta {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
 .heroTag {
-  display: inline-block;
-  margin: 20px auto 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 8px 18px;
   border-radius: 999px;
   background: #e6f4ec;
   color: #16794f;
   font-size: 14px;
   font-weight: 700;
+}
+
+.heroTag--secondary {
+  background: #eef5ff;
+  color: #2952a3;
 }
 
 .doors {
@@ -62,7 +77,7 @@ h1 .highlight {
 }
 
 .doorCard {
-  min-height: 220px;
+  min-height: 240px;
   border: 1px solid #d9d7cc;
   border-radius: 28px;
   padding: 32px;
@@ -71,6 +86,7 @@ h1 .highlight {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  box-shadow: 0 10px 24px rgba(23, 23, 23, 0.04);
 }
 
 .doorCard--moneyValue { border-color: #bfe3cd; background: #f4fbf6; }
@@ -123,7 +139,10 @@ h1 .highlight {
 }
 
 .doorCard__cta {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   text-align: center;
   font-size: 16px;
   font-weight: 700;
@@ -132,6 +151,13 @@ h1 .highlight {
   text-decoration: none;
   color: #ffffff;
   background: #16794f;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.doorCard__cta:hover,
+.doorCard__cta:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(22, 121, 79, 0.18);
 }
 
 .doorCard--borrowBetter .doorCard__cta { background: #2952a3; }
@@ -150,7 +176,35 @@ h1 .highlight {
 }
 
 @media (max-width: 720px) {
-  .doors { grid-template-columns: 1fr; }
+  .shell {
+    padding-top: 32px;
+    padding-bottom: 40px;
+  }
+
+  .hero {
+    margin-bottom: 28px;
+  }
+
+  .doors {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .doorCard {
+    padding: 22px 18px;
+  }
+
+  .doorCard__cta {
+    width: 100%;
+  }
+
+  .heroMeta {
+    gap: 10px;
+  }
+
+  .heroTag {
+    width: 100%;
+  }
 }
 
 .checkForm {
