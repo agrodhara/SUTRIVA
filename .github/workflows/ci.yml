@@ -55,3 +55,35 @@ jobs:
         run: cd services/learning_engine && python -m pytest -q
       - name: Run API tests
         run: cd services/api && python -m pytest -q
+
+  # No path filter on purpose: a required check that is skipped by a path
+  # filter stays "pending" on PRs that do not touch the frontend, which would
+  # block them once this check is added to branch protection.
+  frontend-quality:
+    name: frontend-quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    defaults:
+      run:
+        working-directory: apps/pwa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/pwa/package-lock.json
+      - name: Install PWA dependencies
+        run: npm ci
+      - name: Run frontend unit tests
+        run: npm test
+      - name: Run ESLint
+        run: npm run lint
+      - name: Run TypeScript check
+        run: npx --no-install tsc --noEmit
+      - name: Build production bundle
+        run: npm run build
