@@ -1,5 +1,7 @@
 # First 10 GitHub Issues
 
+Superseded where it conflicts: these issue entries are historical context only. The final authoritative flow is defined by the approved PNGs in [docs/product/journeys/Sutriva_Rewards_Intelligence_Journey_v1.0_FINAL.png](../product/journeys/Sutriva_Rewards_Intelligence_Journey_v1.0_FINAL.png) and [docs/product/journeys/Sutriva_Borrow_Better_Journey_v1.0_FINAL.png](../product/journeys/Sutriva_Borrow_Better_Journey_v1.0_FINAL.png), with the binding sequence written in [docs/product/journeys/JOURNEY_FLOW_SPEC.md](../product/journeys/JOURNEY_FLOW_SPEC.md). Any issue-based assumptions that conflict with these references are superseded.
+
 **Original Alpha seed backlog. Not the strategic roadmap.**
 Sequencing and status of the programme live in `ROADMAP.md`.
 
