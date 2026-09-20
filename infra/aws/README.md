@@ -1,5 +1,14 @@
 # AWS UAT Deployment Plan
 
+> **Superseded for the private 1.1A UAT. Do not follow this plan for that UAT.**
+> The App Runner + Amplify approach below is not the approved private 1.1A UAT
+> topology. The canonical runbook is
+> [docs/execution/UAT_DEPLOYMENT.md](../../docs/execution/UAT_DEPLOYMENT.md): a
+> separate, same-origin AWS Lightsail and nginx environment. This notice does
+> not claim that the UAT has been deployed, and it does not change the existing
+> production architecture. The rest of this file is kept as historical
+> reference.
+
 This plan prepares the current Alpha-50 application for internal UAT on AWS.
 It does not deploy production infrastructure and does not introduce real-data
 integrations.
