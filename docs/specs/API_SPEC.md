@@ -24,13 +24,74 @@ session's original absolute-expiry boundary.
 
 ### `POST /v1/borrowing-intelligence/comfortable-borrowing-check`
 
-Request fields: `monthly_income`, `existing_monthly_commitments`,
-`desired_borrowing_amount`, and `desired_tenure_months`.
+Two request modes share this route. `calculation_mode` is inferred when omitted
+and the request is unambiguous.
+
+- `legacy_total_commitments` (Track 1.0): `monthly_income`,
+  `existing_monthly_commitments`, `desired_borrowing_amount`,
+  `desired_tenure_months`.
+- `track_11a_breakdown` (final 1.1A journey): `monthly_income`,
+  `existing_debt_payments`, the four essentials `housing_rent`,
+  `household_utilities`, `dependants_education`,
+  `recurring_medical_insurance`, `desired_borrowing_amount`,
+  `desired_tenure_months`. The legacy `other_essential_commitments` is optional
+  (absent means 0); the final journey does not collect it.
+
+Validation: `monthly_income` and `desired_borrowing_amount` must be above zero;
+payments and essentials must be zero or more, and a confirmed zero is valid.
+A missing or `null` required field is `422`; blank is never coerced to zero.
+`desired_tenure_months` is 1–360 (the final journey offers 12, 24, 36, 48, 60).
+Unsupported request fields are rejected with `422` rather than dropped.
+
+Additive optional declared context: `month_end_position`
+(`money_left`, `break_even`, `fall_short`, `not_sure`), `loan_purpose`
+(`home_improvement`, `education`, `medical`, `debt_consolidation`, `vehicle`,
+`household_purchase`, `other`; enum only, no free text) and
+`existing_emi_ending_within_six_months` (`yes`, `no`, `not_sure`). None of these
+changes the numeric affordability calculation, and they are not written to
+product events, anonymous-continuity tables or audit snapshots.
+
+**Rate policy.** The annual rate is configured by policy
+(`borrowIllustrativeAnnualRatePercent` in `shared/track11_config.json`) and is
+display-only; customers cannot change it. `illustrative_annual_rate_percent` is
+optional in the request: omitted is accepted and the configured rate is used, a
+value exactly equal to the configured rate is accepted, and any other value is
+`422`. A mismatched client rate is never used in a calculation. This supersedes
+the earlier behaviour in which a client-supplied rate was honoured.
 
 The response includes `policy_version=borrow_better_v0_1`,
-`estimated_new_monthly_commitment`, `total_monthly_commitment`,
-`commitment_ratio`, `comfort_status`, `reason_codes`, `next_best_action`,
-`guidance_disclaimer`, and `audit_event_id`.
+`illustrative_annual_rate_percent` (the effective configured rate),
+`existing_debt_payments`, `non_debt_commitments`,
+`estimated_new_monthly_commitment` (the EMI), `total_monthly_commitment`,
+`commitment_ratio`, `debt_ratio_before`, `debt_ratio_after`,
+`committed_ratio_before`, `committed_ratio_after`, `breathing_room_before`,
+`breathing_room_after`, `total_repayment`, `total_interest`, `comfort_status`,
+`reason_codes`, `next_best_action`, `guidance_disclaimer`, and `audit_event_id`.
+Values are exact (2 decimals for money, 4 for ratios); display rounding is the
+client's concern. Negative `breathing_room_after` is returned as is, never
+clamped.
+
+Additive final-journey fields, all computed by the backend:
+
+- `main_pressure`: `{ code: "PROPOSED_EMI_REDUCES_BREATHING_ROOM", monthly_amount }`,
+  where `monthly_amount` is the EMI.
+- `loan_reduction_nudge`: `{ reduction_amount: 100000, monthly_breathing_room_preserved }`,
+  the EMI difference between the requested amount and an amount exactly ₹1 lakh
+  lower at the same rate and tenure. `null` when the requested amount is
+  ₹1 lakh or less.
+- `reconciliation_note`: `MONTH_END_FALL_SHORT` or `MONTH_END_POSITION_UNKNOWN`,
+  else `null`. Informational only; it does not feed the decision engine.
+- `emi_ending_note`: `EMI_MAY_END_WITHIN_SIX_MONTHS` when the answer was `yes`,
+  else `null`. Informational only.
+
+### `POST /v1/borrowing-intelligence/emi-preview`
+
+Lightweight EMI preview for the plan step. Request: `desired_borrowing_amount`
+(above zero) and `desired_tenure_months` (1–360). There is no rate field, and any
+other field is `422`. The response is `illustrative_annual_rate_percent` (the
+configured rate), `estimated_monthly_emi` and `guidance_disclaimer` (a fixed
+non-offer statement). It uses the same EMI function as the full check, records no
+audit event and no product event, and persists and logs nothing from the request.
 
 ### `POST /v1/financial-intelligence/money-value-check`
 

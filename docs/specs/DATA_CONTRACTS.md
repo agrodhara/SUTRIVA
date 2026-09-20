@@ -29,6 +29,40 @@ The shared decision engine loads `borrow_better_v0_1.json` and evaluates five
 rules: `FOIR_HIGH`, `BUFFER_LOW`, `INCOME_UNVERIFIED`,
 `COMMITMENT_RATIO_CAUTION`, and `NEGATIVE_SURPLUS`.
 
+### Borrow Better 1.1A calculation
+
+The illustrative annual rate is policy-configured and read-only; it is not a
+customer input (see the rate policy in `API_SPEC.md`). All values below are
+computed by the backend from that rate.
+
+- Monthly rate `r = annual_rate / 12`. EMI = `P·r·(1+r)^n / ((1+r)^n − 1)`, or
+  `P / n` when the rate is zero.
+- `debt_ratio_before = existing_debt_payments / monthly_income`;
+  `debt_ratio_after = (existing_debt_payments + EMI) / monthly_income`. Only debt
+  payments are in the numerator.
+- `committed_ratio_*` add the essentials (`non_debt_commitments`) to the
+  numerator. The essentials also feed `breathing_room_*` and the `BUFFER_LOW` and
+  `NEGATIVE_SURPLUS` rules.
+- `breathing_room_before = monthly_income − existing_debt_payments − non_debt_commitments`;
+  `breathing_room_after = breathing_room_before − EMI`. Negative values are valid
+  and are not clamped.
+- `total_repayment = EMI × n` (unrounded EMI); `total_interest = total_repayment − principal`.
+- `main_pressure.monthly_amount` is the EMI. `loan_reduction_nudge` is
+  `EMI(P) − EMI(P − 100000)` at the same rate and tenure, and is absent when
+  `P ≤ 100000`.
+
+`month_end_position`, `loan_purpose` and `existing_emi_ending_within_six_months`
+are declared context only. They never change these figures and never make a
+lending decision. They are not persisted in product events or
+anonymous-continuity tables, and audit snapshots record only which structured
+fields were declared, never their values.
+
+Reference case (income 1,20,000; debt payments 18,000; essentials 28,000, 11,000,
+12,000, 6,000; ₹5,00,000 over 36 months at 14%): EMI 17,088.81; debt ratio 0.15 →
+0.2924; breathing room 45,000.00 → 27,911.19; total repayment 6,15,197.34; total
+interest 1,15,197.34; nudge 3,417.76. The journey displays these rounded (EMI and
+breathing room to the nearest ₹100, ratios to a whole percent, totals in lakh).
+
 ## Money Value policy
 
 The dedicated backend service uses `alpha50-money-value-v0.1`. It calculates

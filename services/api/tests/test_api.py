@@ -230,7 +230,6 @@ def test_comfortable_borrowing_track_mode_rejects_incomplete_grouped_commitments
         "housing_rent": 20000,
         "household_utilities": 5000,
         "dependants_education": 3000,
-        "recurring_medical_insurance": 1000,
         "desired_borrowing_amount": 500000,
         "desired_tenure_months": 36,
     })
@@ -313,7 +312,8 @@ def test_comfortable_borrowing_check_unverified_income_is_caution():
     assert "INCOME_UNVERIFIED" in body["reason_codes"]
 
 
-def test_comfortable_borrowing_zero_rate_is_preserved_and_interest_is_zero():
+def test_comfortable_borrowing_zero_rate_is_a_mismatch_and_zero_rate_helper_is_unchanged():
+    # Superseded by the final journey authority: the rate is policy-controlled, so a client-supplied 0% is rejected.
     response = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={
         "calculation_mode": "track_11a_breakdown",
         "monthly_income": 100000,
@@ -327,12 +327,11 @@ def test_comfortable_borrowing_zero_rate_is_preserved_and_interest_is_zero():
         "desired_tenure_months": 36,
         "illustrative_annual_rate_percent": 0,
     })
-    assert response.status_code == 200
-    body = response.json()
+    assert response.status_code == 422
 
-    assert body["illustrative_annual_rate_percent"] == 0
-    assert round(body["estimated_new_monthly_commitment"], 2) == round(500000 / 36, 2)
-    assert abs(body["total_interest"]) <= 0.01
+    # The zero-rate branch of the shared EMI helper is still exercised directly.
+    from app.services.affordability import estimate_emi
+    assert round(estimate_emi(500000, 0, 36), 2) == round(500000 / 36, 2)
 
 
 def test_comfortable_borrowing_omitted_rate_uses_configured_default():
@@ -352,7 +351,8 @@ def test_comfortable_borrowing_omitted_rate_uses_configured_default():
     assert response.json()["illustrative_annual_rate_percent"] == 14
 
 
-def test_comfortable_borrowing_non_default_rate_reaches_downstream_calculation():
+def test_comfortable_borrowing_non_default_client_rate_is_rejected_and_equal_rate_accepted():
+    # Superseded by the final journey authority: a mismatched client rate is never used in the calculation.
     base_payload = {
         "calculation_mode": "track_11a_breakdown",
         "monthly_income": 100000,
@@ -365,18 +365,14 @@ def test_comfortable_borrowing_non_default_rate_reaches_downstream_calculation()
         "desired_borrowing_amount": 500000,
         "desired_tenure_months": 36,
     }
-    low = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={**base_payload, "illustrative_annual_rate_percent": 10})
-    high = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={**base_payload, "illustrative_annual_rate_percent": 18})
+    mismatched = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={**base_payload, "illustrative_annual_rate_percent": 18})
+    equal = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json={**base_payload, "illustrative_annual_rate_percent": 14})
+    omitted = client.post("/v1/borrowing-intelligence/comfortable-borrowing-check", json=base_payload)
 
-    assert low.status_code == 200
-    assert high.status_code == 200
-    low_body = low.json()
-    high_body = high.json()
-
-    assert low_body["illustrative_annual_rate_percent"] == 10
-    assert high_body["illustrative_annual_rate_percent"] == 18
-    assert high_body["estimated_new_monthly_commitment"] > low_body["estimated_new_monthly_commitment"]
-    assert high_body["total_interest"] > low_body["total_interest"]
+    assert mismatched.status_code == 422
+    assert equal.status_code == 200
+    assert omitted.status_code == 200
+    assert equal.json()["estimated_new_monthly_commitment"] == omitted.json()["estimated_new_monthly_commitment"]
 
 
 def test_comfortable_borrowing_debt_vs_committed_ratio_fixture():
@@ -391,7 +387,6 @@ def test_comfortable_borrowing_debt_vs_committed_ratio_fixture():
         "other_essential_commitments": 1000,
         "desired_borrowing_amount": 500000,
         "desired_tenure_months": 36,
-        "illustrative_annual_rate_percent": 15,
     })
     assert response.status_code == 200
     body = response.json()
@@ -1061,7 +1056,6 @@ def test_comfortable_borrowing_audit_redacts_raw_values_for_legacy_and_track11a(
         "other_essential_commitments": 5005.55,
         "desired_borrowing_amount": 543210.98,
         "desired_tenure_months": 47,
-        "illustrative_annual_rate_percent": 13.37,
         "income_verified": True,
     })
 
@@ -1118,7 +1112,6 @@ def test_comfortable_borrowing_validation_failure_does_not_persist_raw_audit(mon
         "housing_rent": 10001.11,
         "household_utilities": 2002.22,
         "dependants_education": 3003.33,
-        "recurring_medical_insurance": 4004.44,
         "desired_borrowing_amount": 543210.98,
         "desired_tenure_months": 47,
     })
