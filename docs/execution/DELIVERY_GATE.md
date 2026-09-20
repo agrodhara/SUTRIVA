@@ -30,9 +30,10 @@ Give every applicable control one status: **PASS**, **FAIL**, **N/A** or
 
 | Mechanism | State |
 |---|---|
-| CI job `python-tests` | Runs on a PostgreSQL 16 service: `alembic upgrade head`, decision-engine tests, learning-engine tests and API tests. It is the only required status check. |
-| Branch protection on `main` | Pull request required. `python-tests` required and the branch must be up to date. Conversation resolution required. Force-push and deletion blocked. Applies to administrators. Required approving reviews: 0. |
-| Frontend lint, typecheck, unit tests, production build | No CI job. |
+| CI job `python-tests` | Runs on a PostgreSQL 16 service: `alembic upgrade head`, decision-engine tests, learning-engine tests and API tests. Required status check. |
+| CI job `frontend-quality` | Added in [PR #11](https://github.com/agrodhara/SUTRIVA/pull/11) (2026-09-20). Runs from `apps/pwa` on Node 20: `npm ci`, `npm test`, `npm run lint`, `npx --no-install tsc --noEmit` and `npm run build`. Required status check. |
+| Branch protection on `main` | Pull request required. Required status checks are `python-tests` and `frontend-quality`, and the branch must be up to date. Conversation resolution required. Force-push and deletion blocked. Applies to administrators. Required approving reviews: 0. |
+| Frontend lint, typecheck, unit tests, production build | Enforced by `frontend-quality` since PR #11 (2026-09-20). |
 | Browser or end-to-end tests | None in the repository. |
 | Secret scanning | Not verified. |
 
@@ -83,7 +84,7 @@ Concurrent work is allowed. It must not overwrite anyone's work.
 | U14 | No work lands directly on `main`. | [CI] (pull request required) |
 | U15 | No unrelated files are in the task diff. | [MANUAL] |
 | U16 | No force push, destructive reset or unexplained history rewrite. | [CI] on `main`; [MANUAL] elsewhere |
-| U17 | `python-tests` passes and the branch is up to date with `main`. | [CI] |
+| U17 | Both required checks, `python-tests` and `frontend-quality`, pass and the branch is up to date with `main`. | [CI] |
 | U18 | All review conversations are resolved. | [CI] |
 
 ### U-C. Documentation and handoff
@@ -135,10 +136,10 @@ Concurrent work is allowed. It must not overwrite anyone's work.
 | F3 | Every displayed number traces to a backend response or an approved static disclosure. | [MANUAL] |
 | F4 | Currency formatting is correct, including Indian digit grouping. | [MANUAL] |
 | F5 | Valid zero displays as zero, valid negative displays correctly, and missing input never becomes confirmed zero. | [MANUAL] |
-| F6 | Lint passes. | [NOT YET ENFORCED] |
-| F7 | Typecheck passes. | [NOT YET ENFORCED] |
-| F8 | Frontend unit tests pass. | [NOT YET ENFORCED] |
-| F9 | The production build succeeds. | [NOT YET ENFORCED] |
+| F6 | Lint passes. | [CI] |
+| F7 | Typecheck passes. | [CI] |
+| F8 | Frontend unit tests pass. | [CI] |
+| F9 | The production build succeeds. | [CI] |
 
 Report F6–F9 separately, each with its exact command and result.
 
