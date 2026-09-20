@@ -15,8 +15,10 @@ integrations.
 
 ## Container and runtime plan
 
-- Build backend image from repository root using the existing runtime command
-	pattern from [railway.toml](../../railway.toml).
+- Build the backend image from the repository root so `services/api` and
+	`services/decision_engine` are both available, and use the runtime command in
+	[UAT_DEPLOYMENT.md](../../docs/execution/UAT_DEPLOYMENT.md) section A. There is
+	no tracked `railway.toml` in this repository.
 - Expose backend on App Runner HTTPS endpoint.
 - Keep frontend static/runtime API calls pointed to backend HTTPS base URL via
 	`NEXT_PUBLIC_API_BASE_URL`.

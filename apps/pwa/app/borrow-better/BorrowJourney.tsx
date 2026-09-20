@@ -182,6 +182,8 @@ export function BorrowJourney() {
     <main className="shell">
       <div className={styles.page}>
         {step === "monthly_position" ? (
+          // Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link.
+          // eslint-disable-next-line @next/next/no-html-link-for-pages
           <a className={styles.homeLink} href="/">
             ← Home
           </a>

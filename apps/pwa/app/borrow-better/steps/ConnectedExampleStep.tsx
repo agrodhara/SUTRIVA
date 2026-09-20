@@ -136,6 +136,8 @@ export function ConnectedExampleStep({ focusHeadingOnMount, onBack }: Props) {
           </div>
         </section>
 
+        {/* Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a className={styles.textLink} href="/">
           Back to home
         </a>

@@ -191,6 +191,8 @@ export function RewardsJourney() {
     <main className={styles.page}>
       <div className={styles.journey}>
         {entry.step === "card_behaviour" ? (
+          // Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link.
+          // eslint-disable-next-line @next/next/no-html-link-for-pages
           <a className={styles.homeLink} href="/">
             ← Home
           </a>
