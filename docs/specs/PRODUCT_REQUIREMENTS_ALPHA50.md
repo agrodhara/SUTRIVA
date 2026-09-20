@@ -1,5 +1,7 @@
 # Product Requirements — Alpha-50
 
+> Deprecated: this specification is superseded by the final journey PNGs and [docs/product/journeys/JOURNEY_FLOW_SPEC.md](../product/journeys/JOURNEY_FLOW_SPEC.md). The final approved flow is the binding source of truth for stages, events and permission boundaries. Legacy Alpha-50 wording should not be treated as current product intent where it conflicts with the final PNGs.
+
 ## Objective
 
 Test whether users understand and trust a financial-intelligence product enough to complete a quick journey and optionally provide deeper data.

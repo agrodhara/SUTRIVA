@@ -6,6 +6,16 @@ Last reconciled: 2026-09-20 against `main` at `d9c1eae` (PR #9).
 This document says what is done, what is current, what is next and what is
 deferred. It does not restate specifications or decisions; it points to them.
 
+## Binding product references
+
+The final approved product flow is defined by the following artifacts and replaces earlier issue lists, handovers, and legacy product documentation where they conflict:
+
+- [docs/product/journeys/Sutriva_Rewards_Intelligence_Journey_v1.0_FINAL.png](docs/product/journeys/Sutriva_Rewards_Intelligence_Journey_v1.0_FINAL.png)
+- [docs/product/journeys/Sutriva_Borrow_Better_Journey_v1.0_FINAL.png](docs/product/journeys/Sutriva_Borrow_Better_Journey_v1.0_FINAL.png)
+- [docs/product/journeys/JOURNEY_FLOW_SPEC.md](docs/product/journeys/JOURNEY_FLOW_SPEC.md)
+
+Implementation and review must align to these references before any feature work proceeds.
+
 ## Document hierarchy
 
 When documents disagree, the higher entry is authoritative for its own subject
@@ -14,11 +24,12 @@ and the lower entry must be corrected.
 | Rank | Document | Authoritative for |
 |---|---|---|
 | 1 | `docs/product_constitution.md` | Product intent and the two acquisition doors |
-| 2 | `ROADMAP.md` (this file) | What is complete, current, next and deferred |
-| 3 | `docs/decision_log.md` | Dated decisions and their rationale |
-| 4 | `docs/architecture.md`, `docs/specs/*` | Architecture boundaries and API/data contracts |
-| 5 | `docs/execution/DELIVERY_GATE.md`, `ACCEPTANCE_CRITERIA.md`, `SECURITY_DO_NOT_TOUCH.md` | Pre-merge and release controls |
-| 6 | `docs/execution/FIRST_10_ISSUES.md`, `docs/handovers/*` | Historical seed backlog and task handovers. Not strategic. |
+| 2 | `docs/product/journeys/JOURNEY_FLOW_SPEC.md` | Final approved journey sequence and phase boundaries |
+| 3 | `ROADMAP.md` (this file) | What is complete, current, next and deferred |
+| 4 | `docs/decision_log.md` | Dated decisions and their rationale |
+| 5 | `docs/architecture.md`, `docs/specs/*` | Architecture boundaries and API/data contracts |
+| 6 | `docs/execution/DELIVERY_GATE.md`, `ACCEPTANCE_CRITERIA.md`, `SECURITY_DO_NOT_TOUCH.md` | Pre-merge and release controls |
+| 7 | `docs/execution/FIRST_10_ISSUES.md`, `docs/handovers/*` | Historical seed backlog and task handovers. Not strategic. |
 
 Code on `main` is the record of what exists. A document that contradicts it is
 stale until corrected.
