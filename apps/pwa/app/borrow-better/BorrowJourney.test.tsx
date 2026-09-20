@@ -1,0 +1,825 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { trackEventMock, configuredRate } = vi.hoisted(() => ({
+  trackEventMock: vi.fn(),
+  configuredRate: { value: 14 },
+}));
+
+vi.mock("../../lib/api", () => ({
+  ensureAnonymousSession: vi.fn().mockResolvedValue(undefined),
+  requireApiBaseUrl: () => "http://127.0.0.1:8010",
+  trackEvent: trackEventMock,
+}));
+
+vi.mock("../../lib/track11Config", () => ({
+  get BORROW_ILLUSTRATIVE_ANNUAL_RATE_PERCENT() {
+    return configuredRate.value;
+  },
+}));
+
+import { BorrowJourney } from "./BorrowJourney";
+
+const CHECK_PATH = "/v1/borrowing-intelligence/comfortable-borrowing-check";
+const PREVIEW_PATH = "/v1/borrowing-intelligence/emi-preview";
+
+const referenceCheck = {
+  policy_version: "borrow_better_v0_1",
+  illustrative_annual_rate_percent: 14,
+  existing_debt_payments: 18000,
+  non_debt_commitments: 57000,
+  estimated_new_monthly_commitment: 17088.81,
+  total_monthly_commitment: 92088.81,
+  commitment_ratio: 0.7674,
+  debt_ratio_before: 0.15,
+  debt_ratio_after: 0.2924,
+  committed_ratio_before: 0.625,
+  committed_ratio_after: 0.7674,
+  breathing_room_before: 45000,
+  breathing_room_after: 27911.19,
+  total_repayment: 615197.34,
+  total_interest: 115197.34,
+  main_pressure: { code: "PROPOSED_EMI_REDUCES_BREATHING_ROOM", monthly_amount: 17088.81 },
+  loan_reduction_nudge: { reduction_amount: 100000, monthly_breathing_room_preserved: 3417.76 },
+  reconciliation_note: null,
+  emi_ending_note: null,
+  comfort_status: "CAUTION",
+  reason_codes: ["INCOME_UNVERIFIED"],
+  next_best_action: "Income is self-declared or not yet verified.",
+  guidance_disclaimer: "Indicative financial-intelligence guidance.",
+};
+
+const referencePreview = {
+  illustrative_annual_rate_percent: 14,
+  estimated_monthly_emi: 17088.81,
+  guidance_disclaimer: "Indicative financial-intelligence guidance.",
+};
+
+type FetchCall = { url: string; body: Record<string, unknown>; signal?: AbortSignal | null };
+let calls: FetchCall[] = [];
+let checkResponse: () => Promise<unknown> | unknown;
+let previewResponse: (call: FetchCall) => Promise<unknown> | unknown;
+
+function okResponse(data: unknown) {
+  return { ok: true, status: 200, json: async () => data };
+}
+
+function installFetch() {
+  calls = [];
+  checkResponse = () => okResponse(referenceCheck);
+  previewResponse = () => okResponse(referencePreview);
+  global.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    const call: FetchCall = { url, body: JSON.parse(String(init?.body ?? "{}")), signal: init?.signal };
+    calls.push(call);
+    if (url.endsWith(PREVIEW_PATH)) return previewResponse(call);
+    if (url.endsWith(CHECK_PATH)) return checkResponse();
+    throw new Error(`unexpected url ${url}`);
+  }) as unknown as typeof fetch;
+}
+
+const previewCalls = () => calls.filter((call) => call.url.endsWith(PREVIEW_PATH));
+const checkCalls = () => calls.filter((call) => call.url.endsWith(CHECK_PATH));
+
+type User = ReturnType<typeof userEvent.setup>;
+
+async function fillPosition(user: User, overrides: Partial<Record<string, string>> = {}) {
+  const values = {
+    "Monthly take-home income": "120000",
+    "Existing loan and card payments": "18000",
+    Housing: "28000",
+    "Household and utilities": "11000",
+    "Dependants and education": "12000",
+    "Recurring medical or insurance": "6000",
+    ...overrides,
+  };
+  for (const [label, value] of Object.entries(values)) {
+    if (value !== "") await user.type(screen.getByLabelText(label), value);
+  }
+}
+
+async function completeStep2(user: User, month = "Usually have money left") {
+  await fillPosition(user);
+  await user.click(screen.getByRole("radio", { name: month }));
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await screen.findByRole("heading", { name: "Your borrowing plan" });
+}
+
+async function fillPlan(user: User, amount = "500000", tenure = "36") {
+  await user.type(screen.getByLabelText("Loan amount"), amount);
+  await user.selectOptions(screen.getByLabelText("Tenure"), tenure);
+}
+
+async function completeStep3(user: User) {
+  await fillPlan(user);
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await screen.findByRole("heading", { name: "Your Borrow Better check" });
+}
+
+async function reachStep5(user: User) {
+  await completeStep2(user);
+  await completeStep3(user);
+  await user.click(screen.getByRole("button", { name: "Explore more comfortable options" }));
+  await screen.findByRole("heading", { name: /what Sutriva may reveal from connected data/ });
+}
+
+beforeEach(() => {
+  trackEventMock.mockReset();
+  configuredRate.value = 14;
+  window.sessionStorage.clear();
+  window.localStorage.clear();
+  window.history.replaceState(null, "", "/");
+  installFetch();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+const eventSummary = () => trackEventMock.mock.calls.map(([type, journey, details]) => `${type}|${journey}|${details.screenName}`);
+
+describe("Step 2 — Your monthly position", () => {
+  it("shows the final fields and no legacy fifth essential", async () => {
+    render(<BorrowJourney />);
+    expect(await screen.findByRole("heading", { name: "Your monthly position" })).toBeInTheDocument();
+    expect(screen.getByText("A few key details give us a clearer picture. This is not a full budget.")).toBeInTheDocument();
+    for (const label of ["Monthly take-home income", "Existing loan and card payments", "Housing", "Household and utilities", "Dependants and education", "Recurring medical or insurance"]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+    expect(screen.queryByLabelText(/other essential/i)).toBeNull();
+    expect(screen.getByText("Essential monthly expenses")).toBeInTheDocument();
+  });
+
+  it("offers the four month-end choices as native radios with nothing preselected", async () => {
+    render(<BorrowJourney />);
+    const group = await screen.findByRole("group", { name: "Usual month-end position" });
+    const radios = within(group).getAllByRole("radio") as HTMLInputElement[];
+    expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual([
+      "Usually have money left",
+      "Break even",
+      "Usually fall short",
+      "Not sure",
+    ]);
+    expect(radios.every((radio) => radio.type === "radio" && !radio.checked)).toBe(true);
+  });
+
+  it("blocks Continue on blank input, never sends a request and never treats blank as zero", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await user.click(await screen.findByRole("button", { name: "Continue" }));
+
+    expect(screen.getByRole("heading", { name: "Your monthly position" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Monthly take-home income")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Housing")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("Choose how your month usually ends.")).toBeInTheDocument();
+    expect(calls).toHaveLength(0);
+    expect(screen.getByLabelText("Housing")).toHaveValue("");
+    expect(screen.getByLabelText("Monthly take-home income")).toHaveFocus();
+  });
+
+  it("requires the month-end choice even when every amount is filled", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await fillPosition(user);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("heading", { name: "Your monthly position" })).toBeInTheDocument();
+    expect(screen.getByText("Choose how your month usually ends.")).toBeInTheDocument();
+  });
+
+  it("accepts an entered zero for payments and essentials", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await fillPosition(user, { "Existing loan and card payments": "0", Housing: "0", "Household and utilities": "0", "Dependants and education": "0", "Recurring medical or insurance": "0" });
+    await user.click(screen.getByRole("radio", { name: "Not sure" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("heading", { name: "Your borrowing plan" })).toBeInTheDocument();
+  });
+
+  it("rejects zero income and negative amounts", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await fillPosition(user, { "Monthly take-home income": "0", Housing: "-5" });
+    await user.click(screen.getByRole("radio", { name: "Break even" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("heading", { name: "Your monthly position" })).toBeInTheDocument();
+    expect(screen.getByText("Enter an amount above 0.")).toBeInTheDocument();
+    expect(screen.getByText("Enter an amount of 0 or more.")).toBeInTheDocument();
+  });
+});
+
+describe("Step 3 — Your borrowing plan", () => {
+  it("is a separate screen offering the five tenures, the purpose list and the EMI-ending choice", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+
+    expect(screen.queryByLabelText("Monthly take-home income")).toBeNull();
+    const tenure = screen.getByLabelText("Tenure") as HTMLSelectElement;
+    expect(Array.from(tenure.options).map((option) => option.value)).toEqual(["", "12", "24", "36", "48", "60"]);
+    expect(tenure.value).toBe("");
+
+    const purpose = screen.getByLabelText(/^Purpose/) as HTMLSelectElement;
+    expect(Array.from(purpose.options).map((option) => option.text)).toEqual([
+      "Not specified",
+      "Home improvement",
+      "Education",
+      "Medical",
+      "Debt consolidation",
+      "Vehicle",
+      "Household purchase",
+      "Other",
+    ]);
+    expect(purpose.value).toBe("");
+
+    const group = screen.getByRole("group", { name: /Will an existing EMI end within six months/ });
+    expect(within(group).getAllByRole("radio").map((radio) => radio.closest("label")?.textContent)).toEqual(["Yes", "No", "Not sure"]);
+    expect(within(group).getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
+  });
+
+  it("has no free-text purpose and no free numeric tenure input", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(screen.queryByLabelText(/months/i)).toBeNull();
+    expect(screen.getByLabelText(/^Purpose/).tagName).toBe("SELECT");
+  });
+
+  it("shows the canonical read-only rate copy with no rate input and no change control", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+
+    expect(screen.getByTestId("rate-copy")).toHaveTextContent("Illustrative annual rate: 14%. Configured by policy; not a loan offer.");
+    expect(screen.queryByLabelText(/rate/i)).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /rate/i })).toBeNull();
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(screen.queryByText(/change rate/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /rate/i })).toBeNull();
+    expect(screen.queryByText(/replace it with/i)).toBeNull();
+  });
+
+  it("takes the displayed rate from policy, never from a literal", async () => {
+    configuredRate.value = 12.5;
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    expect(screen.getByTestId("rate-copy")).toHaveTextContent("Illustrative annual rate: 12.5%. Configured by policy; not a loan offer.");
+  });
+
+  it("replaces the configured rate with the backend-echoed rate once known", async () => {
+    previewResponse = () => okResponse({ ...referencePreview, illustrative_annual_rate_percent: 15 });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await fillPlan(user);
+    await waitFor(() => expect(screen.getByTestId("rate-copy")).toHaveTextContent("Illustrative annual rate: 15%."));
+  });
+
+  it("requests the backend EMI only once amount and tenure are valid, with no rate in the body", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+
+    await user.type(screen.getByLabelText("Loan amount"), "500000");
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(previewCalls()).toHaveLength(0);
+
+    await user.selectOptions(screen.getByLabelText("Tenure"), "36");
+    expect(await screen.findByText("₹17,100")).toBeInTheDocument();
+    expect(previewCalls()).toHaveLength(1);
+    expect(previewCalls()[0].body).toEqual({ desired_borrowing_amount: 500000, desired_tenure_months: 36 });
+    expect(screen.getByText("per month")).toBeInTheDocument();
+  });
+
+  it("debounces typing into one request", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await user.selectOptions(screen.getByLabelText("Tenure"), "24");
+    await user.type(screen.getByLabelText("Loan amount"), "250000");
+    await screen.findByText("₹17,100");
+    expect(previewCalls()).toHaveLength(1);
+    expect(previewCalls()[0].body.desired_borrowing_amount).toBe(250000);
+  });
+
+  it("cancels the in-flight preview when inputs change and ignores its late response", async () => {
+    const pending: { call: FetchCall; resolve: (value: unknown) => void }[] = [];
+    previewResponse = (call) =>
+      new Promise((resolve, reject) => {
+        pending.push({ call, resolve });
+        call.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await fillPlan(user, "500000", "36");
+    await waitFor(() => expect(previewCalls()).toHaveLength(1));
+
+    await user.type(screen.getByLabelText("Loan amount"), "0");
+    await waitFor(() => expect(previewCalls()).toHaveLength(2));
+    expect(previewCalls()[0].signal?.aborted).toBe(true);
+
+    pending[1].resolve(okResponse({ ...referencePreview, estimated_monthly_emi: 20000 }));
+    expect(await screen.findByText("₹20,000")).toBeInTheDocument();
+    pending[0].resolve(okResponse(referencePreview));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText("₹17,100")).toBeNull();
+  });
+
+  it("recovers from a preview failure without losing inputs", async () => {
+    previewResponse = () => ({ ok: false, status: 500, json: async () => ({}) });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await fillPlan(user);
+
+    const alert = await screen.findByText("We couldn’t update the estimated EMI. Your details are still here.");
+    expect(alert).toBeInTheDocument();
+    expect(screen.getByLabelText("Loan amount")).toHaveValue("500000");
+    expect(screen.getByLabelText("Tenure")).toHaveValue("36");
+
+    previewResponse = () => okResponse(referencePreview);
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("₹17,100")).toBeInTheDocument();
+    expect(screen.getByLabelText("Loan amount")).toHaveValue("500000");
+  });
+
+  it("does not depend on the preview to continue: Continue runs the full backend check", async () => {
+    previewResponse = () => ({ ok: false, status: 500, json: async () => ({}) });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+    expect(checkCalls()).toHaveLength(1);
+  });
+
+  it("requires an amount and a tenure before continuing", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("heading", { name: "Your borrowing plan" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Loan amount")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("Choose a tenure.")).toBeInTheDocument();
+    expect(checkCalls()).toHaveLength(0);
+  });
+
+  it("sends the full check with no rate and only answered optional fields", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+
+    expect(checkCalls()[0].body).toEqual({
+      calculation_mode: "track_11a_breakdown",
+      monthly_income: 120000,
+      existing_debt_payments: 18000,
+      housing_rent: 28000,
+      household_utilities: 11000,
+      dependants_education: 12000,
+      recurring_medical_insurance: 6000,
+      desired_borrowing_amount: 500000,
+      desired_tenure_months: 36,
+      month_end_position: "money_left",
+    });
+  });
+
+  it("sends purpose and the EMI-ending answer when chosen", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user, "Usually fall short");
+    await fillPlan(user);
+    await user.selectOptions(screen.getByLabelText(/^Purpose/), "home_improvement");
+    await user.click(screen.getByRole("radio", { name: "Yes" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+
+    expect(checkCalls()[0].body).toMatchObject({
+      month_end_position: "fall_short",
+      loan_purpose: "home_improvement",
+      existing_emi_ending_within_six_months: "yes",
+    });
+  });
+
+  it("keeps inputs and shows a recoverable error when the check fails, then succeeds on retry", async () => {
+    checkResponse = () => ({ ok: false, status: 503, json: async () => ({}) });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await fillPlan(user);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText(/We couldn’t complete your Borrow Better check/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Your borrowing plan" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Loan amount")).toHaveValue("500000");
+    expect(eventSummary()).not.toContain("result_declared|comfortable_borrowing|borrow_check");
+
+    checkResponse = () => okResponse(referenceCheck);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("heading", { name: "Your Borrow Better check" })).toBeInTheDocument();
+  });
+
+  it("sends one check for a double click", async () => {
+    let release!: (value: unknown) => void;
+    checkResponse = () => new Promise((resolve) => { release = resolve; });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await fillPlan(user);
+    const button = screen.getByRole("button", { name: "Continue" });
+    await user.dblClick(button);
+    expect(checkCalls()).toHaveLength(1);
+    release(okResponse(referenceCheck));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+    expect(checkCalls()).toHaveLength(1);
+  });
+});
+
+describe("Step 4 — Your Borrow Better check", () => {
+  it("renders the reference result with the approved rounding", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+
+    const debt = screen.getByRole("region", { name: /Debt payments/ });
+    expect(debt).toHaveTextContent("15%");
+    expect(debt).toHaveTextContent("29%");
+    expect(debt).toHaveTextContent("Before");
+    expect(debt).toHaveTextContent("After");
+
+    const room = screen.getByRole("region", { name: "Monthly breathing room" });
+    expect(room).toHaveTextContent("₹45,000");
+    expect(room).toHaveTextContent("₹27,900");
+
+    expect(screen.getByText("Estimated EMI").parentElement).toHaveTextContent("₹17,100");
+    expect(screen.getByText("Total repayment").parentElement).toHaveTextContent("~₹6.15 lakh");
+    expect(screen.getByText("Total repayment").parentElement).toHaveTextContent("over 3 years");
+    expect(screen.getByText("Total interest").parentElement).toHaveTextContent("~₹1.15 lakh");
+  });
+
+  it("shows the backend main pressure and the ₹1 lakh nudge", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+
+    expect(screen.getByText("The proposed EMI reduces your estimated monthly breathing room by approximately ₹17,100.")).toBeInTheDocument();
+    expect(screen.getByText("Reducing the loan by ₹1 lakh could preserve about ₹3,400 of monthly breathing room.")).toBeInTheDocument();
+  });
+
+  it("takes main-pressure and nudge amounts from the response, not from a frontend calculation", async () => {
+    checkResponse = () =>
+      okResponse({
+        ...referenceCheck,
+        main_pressure: { ...referenceCheck.main_pressure, monthly_amount: 9200 },
+        loan_reduction_nudge: { reduction_amount: 100000, monthly_breathing_room_preserved: 2100 },
+      });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+    expect(screen.getByText(/approximately ₹9,200\./)).toBeInTheDocument();
+    expect(screen.getByText(/could preserve about ₹2,100 of monthly/)).toBeInTheDocument();
+  });
+
+  it("omits the nudge when the backend returns none", async () => {
+    checkResponse = () => okResponse({ ...referenceCheck, loan_reduction_nudge: null });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+    expect(screen.queryByText(/A possible nudge/)).toBeNull();
+    expect(screen.queryByText(/Reducing the loan by/)).toBeNull();
+  });
+
+  it("shows the rate from the response with the canonical copy, and the disclaimer", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+    expect(screen.getByText("Illustrative annual rate: 14%. Configured by policy; not a loan offer.")).toBeInTheDocument();
+    expect(screen.getByText("Indicative estimate — not a loan approval, eligibility decision or offer.")).toBeInTheDocument();
+  });
+
+  it("preserves and renders a negative breathing room with U+2212, never clamped", async () => {
+    checkResponse = () =>
+      okResponse({
+        ...referenceCheck,
+        breathing_room_after: -125888.15,
+        main_pressure: { ...referenceCheck.main_pressure, monthly_amount: 170888.15 },
+      });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+
+    const room = screen.getByRole("region", { name: "Monthly breathing room" });
+    expect(room).toHaveTextContent("−₹1,25,900");
+    expect(room.textContent).not.toMatch(/-/);
+    expect(room).toHaveTextContent("below zero");
+  });
+
+  it("renders bounded reconciliation and EMI-ending notes from response codes", async () => {
+    checkResponse = () => okResponse({ ...referenceCheck, reconciliation_note: "MONTH_END_FALL_SHORT", emi_ending_note: "EMI_MAY_END_WITHIN_SIX_MONTHS" });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+    expect(screen.getByText(/You said your month usually ends short/)).toBeInTheDocument();
+    expect(screen.getByText(/You said an existing EMI may end within six months/)).toBeInTheDocument();
+  });
+
+  it("has none of the legacy or out-of-scope Step 4 controls", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+
+    for (const pattern of [/Proceed carefully/, /Looks comfortable/, /Consider reducing/, /Not comfortable right now/, /what-if/i, /Want to improve this/, /Update estimate/, /Use example values/, /Committed ratio/, /Total monthly commitment/, /See what I could check next/, /See borrowing options/, /I.d use this/, /What would be most useful next/]) {
+      expect(screen.queryByText(pattern)).toBeNull();
+    }
+    expect(screen.queryByRole("slider")).toBeNull();
+    expect(screen.getByRole("button", { name: "Explore more comfortable options" })).toBeInTheDocument();
+  });
+});
+
+describe("Step 5 — What your real data could reveal", () => {
+  it("is reached only by the Step 4 CTA and shows the fixed synthetic example", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
+    expect(screen.getByRole("heading", { name: "Here’s what Sutriva may reveal from connected data." })).toBeInTheDocument();
+    expect(screen.getByText("Essential spending increased")).toBeInTheDocument();
+    expect(screen.getByText("in 2 of the last 6 months.")).toBeInTheDocument();
+    expect(screen.getByText("Income regularity")).toBeInTheDocument();
+    expect(screen.getByText("Salary received consistently")).toBeInTheDocument();
+    expect(screen.getByText("Recurring commitments")).toBeInTheDocument();
+    expect(screen.getByText("₹31,500 identified")).toBeInTheDocument();
+    expect(screen.getByText("Typical month-end buffer")).toBeInTheDocument();
+    expect(screen.getByText("₹8,200")).toBeInTheDocument();
+    expect(screen.getByText("A ₹6,000 EMI may end in 5 months")).toBeInTheDocument();
+    expect(screen.getByText("Nothing has been connected. No bank, account, transaction or bureau data is used on this screen.")).toBeInTheDocument();
+  });
+
+  it("gives the chart a complete text alternative", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    const chart = screen.getByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ });
+    expect(chart).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByRole("row")).toHaveLength(7);
+    for (const month of ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]) {
+      expect(within(table).getByRole("rowheader", { name: month })).toBeInTheDocument();
+    }
+  });
+
+  it("never interpolates user inputs or Step 4 outputs", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await fillPlan(user, "731000", "48");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+    await user.click(screen.getByRole("button", { name: "Explore more comfortable options" }));
+    await screen.findByRole("note");
+
+    const text = document.body.textContent ?? "";
+    for (const userValue of ["731000", "7,31,000", "120000", "1,20,000", "18000", "17,100", "27,900", "45,000", "6.15", "1.15", "3,400"]) {
+      expect(text).not.toContain(userValue);
+    }
+  });
+
+  it("does not show the future Step 8 buffer", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+    const text = document.body.textContent ?? "";
+    expect(text).not.toContain("1,100");
+    expect(text).not.toMatch(/post-loan buffer/i);
+  });
+
+  it("has no pilot CTA, disabled or otherwise, and no phone, OTP or permission controls", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    expect(screen.queryByText(/pilot/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /pilot|join|interested/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /pilot|join/i })).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByText(/OTP|mobile number|consent|connect account|connect bureau/i)).toBeNull();
+    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Back to your check"]);
+  });
+
+  it("lets the user go back to Step 4 with the result intact", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+    await user.click(screen.getByRole("button", { name: "Back to your check" }));
+    expect(await screen.findByRole("heading", { name: "Your Borrow Better check" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Monthly breathing room" })).toHaveTextContent("₹27,900");
+  });
+});
+
+describe("navigation and transient state", () => {
+  it("retains inputs through Back from Step 3 to Step 2 and Step 4 to Step 3", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user, "Break even");
+    await fillPlan(user, "500000", "48");
+    await user.selectOptions(screen.getByLabelText(/^Purpose/), "vehicle");
+    await user.click(screen.getByRole("radio", { name: "No" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByRole("heading", { name: "Your borrowing plan" });
+    expect(screen.getByLabelText("Loan amount")).toHaveValue("500000");
+    expect(screen.getByLabelText("Tenure")).toHaveValue("48");
+    expect(screen.getByLabelText(/^Purpose/)).toHaveValue("vehicle");
+    expect(screen.getByRole("radio", { name: "No" })).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByRole("heading", { name: "Your monthly position" });
+    expect(screen.getByLabelText("Monthly take-home income")).toHaveValue("120000");
+    expect(screen.getByLabelText("Housing")).toHaveValue("28000");
+    expect(screen.getByRole("radio", { name: "Break even" })).toBeChecked();
+  });
+
+  it("recomputes after an edit: an old result is never shown for changed inputs", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByRole("heading", { name: "Your borrowing plan" });
+    await user.selectOptions(screen.getByLabelText("Tenure"), "60");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+    expect(checkCalls()).toHaveLength(2);
+    expect(checkCalls()[1].body.desired_tenure_months).toBe(60);
+  });
+
+  it("restarts at Step 2 when history points past what has been completed (refresh or direct entry)", async () => {
+    for (const stale of ["plan", "check", "connected_example"]) {
+      window.history.replaceState({ borrowStep: stale }, "", "/");
+      const view = render(<BorrowJourney />);
+      expect(await screen.findByRole("heading", { name: "Your monthly position" })).toBeInTheDocument();
+      expect(window.history.state).toEqual({ borrowStep: "monthly_position" });
+      view.unmount();
+    }
+  });
+
+  it("follows browser Back and Forward within the allowed steps and never past the result", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+    await user.click(screen.getByRole("button", { name: "Explore more comfortable options" }));
+    await screen.findByRole("note");
+
+    window.history.back();
+    expect(await screen.findByRole("heading", { name: "Your Borrow Better check" })).toBeInTheDocument();
+    window.history.back();
+    expect(await screen.findByRole("heading", { name: "Your borrowing plan" })).toBeInTheDocument();
+
+    // Editing invalidates the result, so Forward cannot reach Step 4 with stale figures.
+    await user.selectOptions(screen.getByLabelText("Tenure"), "24");
+    window.history.forward();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Your borrowing plan" })).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: "Your Borrow Better check" })).toBeNull();
+  });
+
+  it("writes nothing sensitive to the URL, storage, cookies or history", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    expect(window.location.href).toBe("http://localhost:3000/");
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+    expect(document.cookie).toBe("");
+    expect(window.history.state).toEqual({ borrowStep: "connected_example" });
+  });
+
+  it("merges the step id into existing history state so the Next.js router marker survives", async () => {
+    window.history.replaceState({ __NA: true, __PRIVATE_NEXTJS_INTERNALS_TREE: ["tree"] }, "", "/");
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    expect(window.history.state).toEqual({ __NA: true, __PRIVATE_NEXTJS_INTERNALS_TREE: ["tree"], borrowStep: "plan" });
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByRole("heading", { name: "Your monthly position" });
+    expect(window.history.state).toMatchObject({ __NA: true, borrowStep: "monthly_position" });
+  });
+
+  it("moves focus to the new step heading after navigation", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Your borrowing plan" })).toHaveFocus());
+  });
+});
+
+describe("analytics", () => {
+  it("emits the six approved events exactly once each, in order, with only a screen name", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    expect(eventSummary()).toEqual([
+      "step_viewed|comfortable_borrowing|borrow_monthly_position",
+      "step_completed|comfortable_borrowing|borrow_monthly_position",
+      "step_viewed|comfortable_borrowing|borrow_plan",
+      "step_completed|comfortable_borrowing|borrow_plan",
+      "result_declared|comfortable_borrowing|borrow_check",
+      "connected_example_seen|comfortable_borrowing|borrow_connected_example",
+    ]);
+    for (const [, , details] of trackEventMock.mock.calls) {
+      expect(Object.keys(details).sort()).toEqual(["journeyRunId", "screenName"]);
+    }
+  });
+
+  it("does not emit on ordinary rerenders, typing or preview updates", async () => {
+    const user = userEvent.setup();
+    const view = render(<BorrowJourney />);
+    await screen.findByRole("heading", { name: "Your monthly position" });
+    await user.type(screen.getByLabelText("Monthly take-home income"), "120000");
+    view.rerender(<BorrowJourney />);
+    expect(eventSummary()).toEqual(["step_viewed|comfortable_borrowing|borrow_monthly_position"]);
+  });
+
+  it("emits a fresh screen-entry event when a step is genuinely re-entered, once per entry", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByRole("heading", { name: "Your monthly position" });
+    expect(eventSummary().filter((event) => event.endsWith("borrow_monthly_position") && event.startsWith("step_viewed"))).toHaveLength(2);
+  });
+
+  it("carries no amounts, rate, purpose, month-end answer, EMI-ending answer, PII or free text", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user, "Usually fall short");
+    await fillPlan(user);
+    await user.selectOptions(screen.getByLabelText(/^Purpose/), "debt_consolidation");
+    await user.click(screen.getByRole("radio", { name: "Yes" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+    await user.click(screen.getByRole("button", { name: "Explore more comfortable options" }));
+    await screen.findByRole("note");
+
+    const serialized = JSON.stringify(trackEventMock.mock.calls);
+    for (const forbidden of ["120000", "500000", "18000", "28000", "14", "fall_short", "debt_consolidation", "yes", "money_left", "17088", "27911"]) {
+      expect(serialized.replace(/[0-9a-f-]{36}/g, "")).not.toContain(forbidden);
+    }
+  });
+
+  it("emits none of the legacy Reveal, Intent, Closure, pilot, OTP or consent events", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+    const types = trackEventMock.mock.calls.map(([type]) => type as string);
+    for (const legacy of ["teaser_viewed", "teaser_cta_selected", "next_interest_viewed", "next_interest_selected", "next_interest_skipped", "decline_reason_selected", "go_deeper_selected", "go_deeper_declined", "pilot_cta_selected", "result_action_selected", "journey_completed", "borrow_nudge_selected", "month_end_position_selected", "illustrative_example_viewed", "what_if_started", "what_if_completed", "otp_requested", "pilot_consent_recorded", "marketing_consent_recorded", "mobile_entry_started"]) {
+      expect(types).not.toContain(legacy);
+    }
+  });
+});
+
+describe("isolation from the legacy flow", () => {
+  const dir = __dirname;
+  const newFiles = [
+    "BorrowJourney.tsx",
+    "borrowApi.ts",
+    "journeyState.ts",
+    "format.ts",
+    "syntheticExample.ts",
+    "useEmiPreview.ts",
+    ...readdirSync(join(dir, "steps")).map((name) => join("steps", name)),
+  ];
+
+  it("does not import the legacy page, the legacy continuation flow or shared 1.0 styles", () => {
+    for (const file of newFiles) {
+      const source = readFileSync(join(dir, file), "utf8");
+      expect(source, file).not.toMatch(/Track11Flow|LegacyBorrowBetterPage|formState|QuickCheckUI|styles\.css|from "\.\.\/\.\.\/lib\/journeySession".*track11b/);
+    }
+  });
+
+  it("contains no independent frontend rate literal or finance formula", () => {
+    for (const file of newFiles.filter((name) => name.endsWith(".ts") || name.endsWith(".tsx"))) {
+      const source = readFileSync(join(dir, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+      expect(source, file).not.toMatch(/Math\.pow|\*\*|\(\s*1\s*\+|monthlyRate|estimate_?emi/i);
+    }
+  });
+});

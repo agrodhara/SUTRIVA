@@ -9,6 +9,26 @@ def estimate_emi(principal: float, annual_rate: float, tenor_months: int) -> flo
     return principal * monthly_rate * factor / (factor - 1)
 
 
+# Borrow Better 1.1A nudge: a fixed ₹1 lakh lower principal at the same rate and tenure.
+LOAN_REDUCTION_NUDGE_AMOUNT = 100_000
+
+
+def estimate_loan_reduction_nudge(principal: float, annual_rate: float, tenor_months: int) -> dict | None:
+    """Monthly EMI preserved by borrowing exactly ₹1 lakh less, or None when that is not a valid principal.
+
+    Uses `estimate_emi` for both principals so it can never drift from the main calculation. A requested
+    amount at or below ₹1 lakh gets no nudge: the alternative principal would be zero or negative.
+    """
+    if principal <= LOAN_REDUCTION_NUDGE_AMOUNT:
+        return None
+    reduced_principal = principal - LOAN_REDUCTION_NUDGE_AMOUNT
+    preserved = estimate_emi(principal, annual_rate, tenor_months) - estimate_emi(reduced_principal, annual_rate, tenor_months)
+    return {
+        "reduction_amount": float(LOAN_REDUCTION_NUDGE_AMOUNT),
+        "monthly_breathing_room_preserved": round(preserved, 2),
+    }
+
+
 def estimate_principal_from_emi(emi: float, annual_rate: float, tenor_months: int) -> float:
     if emi <= 0:
         return 0
