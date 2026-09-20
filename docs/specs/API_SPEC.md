@@ -55,6 +55,19 @@ Interest input supports additive completeness fields:
     `annual_interest_rate_percent`.
 - `interest_input_basis=unknown` with `interest_value_unknown=true`.
 
+Rewards Intelligence 1.1A additive request fields (both optional; older callers
+omit them):
+- `spending_priorities`: one to three unique values from `dining`, `travel`,
+  `grocery`, `everyday_bills`. Used only to echo the selection and set the
+  spending-fit status. Never persisted or audited.
+- `balance_behavior`: `pay_in_full`, `carry_balance` or `not_sure`.
+  `pay_in_full` resolves to `interest_input_basis=no_balance`. `carry_balance`
+  and `not_sure` resolve to `interest_input_basis=unknown` unless
+  `carry_balance` is sent with a known balance and rate. No interest cost is
+  ever invented. Conflicting interest inputs return `422`.
+
+The request rejects unknown fields with `422` instead of ignoring them.
+
 The response includes `policy_version=alpha50-money-value-v0.1`,
 `reward_type`, `reward_input_basis`, `reward_period`, `annual_spend`,
 `estimated_annual_rewards`, `annual_card_fee`,
@@ -62,6 +75,21 @@ The response includes `policy_version=alpha50-money-value-v0.1`,
 `estimated_annual_interest_cost`, `estimated_net_annual_value`,
 `reward_value_known`, optional `unknown_value_reason`, `value_status`,
 `reason_codes`, `next_best_action`, `guidance_disclaimer`, and `audit_event_id`.
+
+Additive Step 4 fields. They are bounded codes and echoed non-financial inputs,
+never generated prose:
+- `reward_amount_per_period`: the rupee cashback or known reward value the
+  customer entered, or `null`.
+- `reward_units_per_period`: the points or miles quantity entered on the
+  quantity-only path, or `null`.
+- `spending_priorities`: the echoed selection, or `null`.
+- `spending_fit_status`: `CATEGORY_FIT_UNDETERMINED` when priorities were sent,
+  otherwise `NOT_PROVIDED`. The card's category earning structure is not
+  collected, so category fit is never determined and no card is recommended.
+- `main_pressure_code`, with this precedence: `REWARD_VALUE_UNKNOWN`,
+  `INTEREST_EFFECT_UNKNOWN`, `FEE_EXCEEDS_REWARDS` (fee greater than estimated
+  annual rewards), `FEE_REDUCES_VALUE` (any positive fee), `NO_FEE_PRESSURE`.
+- `nudge_code`: `COMPARE_REWARDS_FEE_INTEREST`.
 
 ## Compatibility routes
 

@@ -1,0 +1,531 @@
+/*
+ * Rewards Intelligence 1.1A (Steps 2-5) styles. Journey-local: nothing here is global, and the
+ * shared journey-foundation styles are not modified. Colours follow the existing palette
+ * (green #16794f, neutrals #171717 / #40403a / #cbc9bd).
+ */
+
+.page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 24px 20px 72px;
+}
+
+.journey {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #16794f;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.homeLink {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 44px;
+  color: #35352f;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.homeLink:focus-visible,
+.textButton:focus-visible,
+.helpLink:focus-visible,
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible,
+.dialogClose:focus-visible {
+  outline: 3px solid #16794f;
+  outline-offset: 3px;
+}
+
+/* ---- Form layout ---- */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #171717;
+}
+
+.sectionHint {
+  margin: 0;
+  color: #40403a;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldError {
+  margin: 0;
+  color: #a02718;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f1f1ea;
+  color: #35352f;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.limitNotice {
+  margin: 0;
+  color: #40403a;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.errorSummary {
+  padding: 14px 16px;
+  border: 1px solid #a02718;
+  border-radius: 12px;
+  background: #fdf1ef;
+  color: #7a1c10;
+}
+
+.errorSummary:focus {
+  outline: 3px solid #a02718;
+  outline-offset: 2px;
+}
+
+.errorTitle {
+  margin: 0 0 6px;
+  font-weight: 800;
+}
+
+.errorList {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.5;
+}
+
+/* ---- Buttons ---- */
+
+.primaryAction,
+.secondaryAction {
+  box-sizing: border-box;
+  min-height: 48px;
+  min-width: 44px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primaryAction {
+  border: 1px solid #16794f;
+  background: #16794f;
+  color: #ffffff;
+}
+
+.primaryAction:disabled {
+  border-color: #9c9b91;
+  background: #9c9b91;
+  cursor: not-allowed;
+}
+
+.secondaryAction {
+  border: 1px solid #16794f;
+  background: #ffffff;
+  color: #16794f;
+}
+
+.secondaryAction:disabled {
+  border-color: #cbc9bd;
+  color: #77776d;
+  cursor: not-allowed;
+}
+
+.textButton,
+.helpLink {
+  box-sizing: border-box;
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 10px 4px;
+  border: 0;
+  background: transparent;
+  color: #16794f;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* ---- Reward finder dialog ---- */
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(23, 23, 23, 0.5);
+}
+
+.dialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialogTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: #171717;
+}
+
+.dialogTitle:focus {
+  outline: none;
+}
+
+.dialogClose {
+  flex: none;
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid #cbc9bd;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #35352f;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sourceItem {
+  padding: 12px 14px;
+  border: 1px solid #d9d7cc;
+  border-radius: 12px;
+  color: #35352f;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.sourceItem strong {
+  color: #171717;
+}
+
+.dialogActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---- Step 4: result cards ---- */
+
+.cardStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #d9d7cc;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.cardEconomics {
+  background: #eef6f1;
+  border-color: #b9dcc9;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: #171717;
+}
+
+.cardText {
+  margin: 0;
+  color: #35352f;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.metricList {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #d9d7cc;
+}
+
+.metricLabel {
+  margin: 0;
+  color: #40403a;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.metricValue {
+  margin: 0;
+  color: #171717;
+  font-size: 24px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.metricValueMuted {
+  font-size: 17px;
+  color: #35352f;
+}
+
+.metricNegative {
+  color: #a02718;
+}
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: 6px 12px;
+  border: 1px solid #16794f;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #16794f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.disclaimer {
+  margin: 0;
+  color: #40403a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---- Step 5: synthetic example ---- */
+
+.exampleFigure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid #d9d7cc;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.exampleFigure figcaption {
+  align-self: flex-start;
+  margin: 0;
+  color: #171717;
+  font-weight: 800;
+}
+
+.donutWrap {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  flex: none;
+}
+
+.donut {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  /* Illustrative shares: Dining 32%, Travel 18%, Grocery 22%, Other 28%. */
+  background: conic-gradient(#1f5fbf 0 32%, #6ba3e8 32% 50%, #16794f 50% 72%, #9c9b91 72% 100%);
+}
+
+.donutHole {
+  position: absolute;
+  inset: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+  text-align: center;
+}
+
+.donutTotal {
+  font-size: 20px;
+  font-weight: 800;
+  color: #171717;
+}
+
+.donutTotalLabel {
+  font-size: 12px;
+  color: #40403a;
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legendRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #171717;
+  font-size: 15px;
+}
+
+.swatch {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 3px;
+}
+
+.legendName {
+  display: inline-flex;
+  align-items: center;
+}
+
+.exampleCard {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #d9d7cc;
+  background: #f7f7f2;
+}
+
+.exampleCardTitle {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #171717;
+}
+
+.actionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .metricList {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dialogBackdrop {
+    align-items: center;
+  }
+
+  .exampleFigure {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .exampleFigure figcaption {
+    flex: 0 0 100%;
+  }
+
+  .legend {
+    flex: 1 1 220px;
+    width: auto;
+  }
+}
