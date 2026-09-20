@@ -16,6 +16,10 @@ Phase B exposes no browser-accessible anonymous-session rotation endpoint.
 Token rotation exists only as an internal server primitive for future
 compromise-handling or server-controlled triggers.
 
+Rotation remains dormant in Phase B. Invocation after OTP verification and
+history linking is deferred to Track 1.1B, and rotation must not extend the
+session's original absolute-expiry boundary.
+
 ## Preferred quick-check routes
 
 ### `POST /v1/borrowing-intelligence/comfortable-borrowing-check`

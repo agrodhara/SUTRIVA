@@ -4,9 +4,65 @@ This runbook deploys the existing Track-1 application for temporary internal
 UAT. It does not add authentication, regulated-data integrations, lender
 offers, applications, or any Track-2 capability.
 
-The backend uses an ephemeral filesystem for audit and product-event JSONL
-output under `/tmp/sutriva`. Events can be lost on restart or redeploy. No
-database is required for this UAT deployment.
+## Persistence requirements
+
+PostgreSQL is required for Phase A/B persistence. Anonymous sessions, product
+events, journey runs, attribution and continuation intents are stored in
+PostgreSQL. Those endpoints return `503` when the database is unavailable.
+
+- Provide `DATABASE_URL` and set `DATABASE_REQUIRED=true` for any deployment
+  that must persist events.
+- Run `alembic upgrade head` from `services/api` before starting a new
+  revision. See `docs/execution/SETUP.md`.
+- `GET /health` is liveness only. `GET /ready` checks database connectivity and
+  the Alembic head revision.
+- `DATABASE_REQUIRED` defaults to `false`. Do not rely on that default for UAT.
+
+Audit events are separate. They are still written as local JSONL under
+`/tmp/sutriva` (or `AUDIT_LOG_PATH`) on an ephemeral filesystem and can be lost
+on restart or redeploy.
+
+This document does not assert how routes other than the anonymous-session and
+product-event endpoints behave without a database.
+
+## Deployment record and verification status
+
+Three categories are kept apart. Only the first is verified.
+
+### Verified observation
+
+| Observation | Date | Method |
+|---|---|---|
+| `sutriva.io` resolved to `3.108.189.63`. | 2026-09-20 | One `dig +short` query from a developer machine. |
+
+This shows only that the name resolved to that address. It does not show what
+runs behind it.
+
+### Declared configuration, pending operational verification
+
+The maintainers' working notes describe a deployment with these properties.
+None of them has been independently verified.
+
+- Host: an AWS Lightsail instance named `sutriva-alpha` with static IP
+  `3.108.189.63`.
+- Stack: `nginx`, the Next.js PWA and the FastAPI backend.
+- Public endpoint: `https://sutriva.io`.
+
+The provider sections below (App Runner, Render, Railway, Amplify, Vercel) are
+implementation alternatives for UAT. They must not be read as the deployed
+topology.
+
+### Verification still required
+
+| Item | Evidence needed |
+|---|---|
+| Instance identity | Provider console or CLI output showing the instance name, region and static IP attachment. |
+| nginx configuration | The effective configuration, including upstreams and headers. |
+| HTTPS termination | Certificate chain and where TLS terminates, from a client and from the host. |
+| Deployed revision | The commit SHA running for the PWA and for the API, matched to `main`. |
+| Database | Which PostgreSQL instance serves the API, and that `alembic current` is at head. |
+| CORS origin | `ALLOWED_ORIGINS` equals exactly the deployed frontend origin. |
+| Health and rollback | `/health` and `/ready` responses, and a documented rollback step. |
 
 ## A. Deploy the FastAPI backend
 
@@ -97,8 +153,8 @@ to `http://localhost:3000` and `http://localhost:3001`.
 6. Change amount or tenure in the what-if card and verify the updated result.
 7. Select **I'm interested** and **Not now** in each journey; confirm the
    inline confirmation appears and no additional data is requested.
-8. If a deployment is rebuilt, repeat the health and journey checks because
-   the temporary event filesystem is not durable.
+8. If a deployment is rebuilt, repeat the health, readiness and journey checks.
+   Audit events on the temporary filesystem are not durable.
 
 ## Environment summary
 
@@ -106,4 +162,6 @@ to `http://localhost:3000` and `http://localhost:3001`.
 | --- | --- | --- |
 | `ALLOWED_ORIGINS` | FastAPI | Exact Amplify or Vercel HTTPS origin |
 | `NEXT_PUBLIC_API_BASE_URL` | Amplify or Vercel | Backend HTTPS base URL |
+| `DATABASE_URL` | FastAPI | PostgreSQL connection URL. Never commit real values. |
+| `DATABASE_REQUIRED` | FastAPI | `true` for any deployment that persists events |
 

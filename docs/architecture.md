@@ -95,6 +95,10 @@ Phase B adds the minimum anonymous continuity foundation only:
 Phase B does not expose any browser-accessible anonymous-session rotation
 endpoint. Routine bootstrap and event ingestion do not invoke rotation.
 
+Anonymous-session token rotation remains dormant in Phase B. Invocation after
+OTP verification and history linking is deferred to Track 1.1B. Rotation must
+not extend the session's original absolute-expiry boundary.
+
 Phase B still does not add identity or enrolment features:
 
 - no OTP flows
