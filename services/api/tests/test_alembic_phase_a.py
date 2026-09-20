@@ -37,9 +37,9 @@ def test_upgrade_current_and_repeatable(
 ) -> None:
     cfg = _alembic_cfg(str(alembic_ini_path), postgres_test_url)
     with _mapped_runtime_database_url(postgres_test_url):
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "0001_phase_a_baseline")
         command.current(cfg)
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "0001_phase_a_baseline")
 
     engine = create_engine(postgres_test_url, future=True)
     with engine.connect() as conn:
@@ -55,9 +55,9 @@ def test_downgrade_and_reupgrade(
     cfg = _alembic_cfg(str(alembic_ini_path), postgres_test_url)
 
     with _mapped_runtime_database_url(postgres_test_url):
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "0001_phase_a_baseline")
         command.downgrade(cfg, "base")
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "0001_phase_a_baseline")
 
     engine = create_engine(postgres_test_url, future=True)
     with engine.connect() as conn:
@@ -72,7 +72,7 @@ def test_no_business_tables_created(
 ) -> None:
     cfg = _alembic_cfg(str(alembic_ini_path), postgres_test_url)
     with _mapped_runtime_database_url(postgres_test_url):
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "0001_phase_a_baseline")
 
     engine = create_engine(postgres_test_url, future=True)
     inspector = inspect(engine)

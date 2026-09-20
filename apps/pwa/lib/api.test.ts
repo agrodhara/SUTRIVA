@@ -23,11 +23,14 @@ describe("trackEvent attribution and identifiers", () => {
     const { trackEvent } = await import("./api");
     trackEvent("journey_started", "money_value", { journeyRunId: "run-1", cardCheckNumber: 1 });
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    const [, init] = vi.mocked(global.fetch).mock.calls[0];
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(global.fetch).mock.calls[0]?.[0]).toBe("http://127.0.0.1:8010/v1/anonymous-sessions/bootstrap");
+    const [, init] = vi.mocked(global.fetch).mock.calls[1];
     const body = JSON.parse((init as RequestInit).body as string);
 
+    expect((init as RequestInit).credentials).toBe("include");
     expect(body.card_check_number).toBe(1);
+    expect(body.anonymous_session_id).toBeUndefined();
     expect(body.first_touch_attribution).toEqual({
       utm_source: "google",
       utm_medium: "cpc",
@@ -45,10 +48,24 @@ describe("trackEvent attribution and identifiers", () => {
     const { trackEvent } = await import("./api");
     trackEvent("journey_started", "comfortable_borrowing", { journeyRunId: "run-borrow" });
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    const [, init] = vi.mocked(global.fetch).mock.calls[0];
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    const [, init] = vi.mocked(global.fetch).mock.calls[1];
     const body = JSON.parse((init as RequestInit).body as string);
 
     expect(body.card_check_number).toBeUndefined();
+  });
+
+  it("retries once after a 401 by bootstrapping again", async () => {
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce({ ok: true } as unknown as Response)
+      .mockResolvedValueOnce({ ok: false, status: 401 } as unknown as Response)
+      .mockResolvedValueOnce({ ok: true } as unknown as Response)
+      .mockResolvedValueOnce({ ok: true, status: 200 } as unknown as Response);
+
+    const { trackEvent } = await import("./api");
+    trackEvent("journey_started", "money_value", { journeyRunId: "run-1", cardCheckNumber: 1 });
+
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+    expect(vi.mocked(global.fetch).mock.calls[2]?.[0]).toBe("http://127.0.0.1:8010/v1/anonymous-sessions/bootstrap");
   });
 });

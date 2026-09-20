@@ -1,6 +1,9 @@
+from datetime import datetime
+import re
 from typing import Literal, Optional
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 ProductEventType = Literal[
     "door_selected",
@@ -64,6 +67,8 @@ ReasonType = Literal[
 
 
 class AttributionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     utm_source: Optional[str] = None
     utm_medium: Optional[str] = None
     utm_campaign: Optional[str] = None
@@ -71,6 +76,34 @@ class AttributionPayload(BaseModel):
     utm_term: Optional[str] = None
     landing_path: str = Field(min_length=1)
     referrer: Optional[str] = None
+
+    @field_validator("utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term")
+    @classmethod
+    def validate_optional_campaign_values(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if len(value) > 120 or not re.fullmatch(r"[A-Za-z0-9._ \-]+", value):
+            raise ValueError("campaign attribution fields must be <= 120 chars and use the allowlist")
+        return value
+
+    @field_validator("landing_path")
+    @classmethod
+    def validate_landing_path(cls, value: str) -> str:
+        if len(value) > 200 or not re.fullmatch(r"/[A-Za-z0-9/_-]*", value):
+            raise ValueError("landing_path is invalid")
+        return value
+
+    @field_validator("referrer")
+    @classmethod
+    def validate_referrer(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if len(value) > 200 or "?" in value:
+            raise ValueError("referrer is invalid")
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("referrer must use http or https")
+        return value
 
 JOURNEY_INTENTS = {
     "comfortable_borrowing": {"actual_obligations", "improve_readiness"},
@@ -88,14 +121,15 @@ LEGACY_GO_DEEPER_EVENT_TYPES = {"go_deeper_selected", "go_deeper_declined"}
 
 
 class ProductEventRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     event_id: str = Field(min_length=1)
     event_type: ProductEventType
-    anonymous_session_id: str = Field(min_length=1)
     journey_run_id: str = Field(min_length=1)
     journey: JourneyType
     version: str = Field(min_length=1)
-    timestamp: str = Field(min_length=1)
-    decision_context: str = "local_demo"
+    timestamp: datetime
+    decision_context: str = Field(default="local_demo", min_length=1, max_length=80)
     card_check_number: Optional[int] = Field(default=None, ge=1)
     first_touch_attribution: Optional[AttributionPayload] = None
     latest_touch_attribution: Optional[AttributionPayload] = None
@@ -147,13 +181,15 @@ class ProductEventRequest(BaseModel):
 
 
 class ProductEventResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["persisted", "accepted_not_persisted"]
     event_id: str
     event_type: ProductEventType
-    anonymous_session_id: str
     journey_run_id: str
     version: str
-    timestamp: str
-    created_at: str
+    timestamp: datetime
+    received_at: datetime
     journey: JourneyType
     decision_context: str
     card_check_number: Optional[int] = None

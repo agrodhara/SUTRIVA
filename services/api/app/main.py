@@ -5,7 +5,9 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db.readiness import get_readiness_status
+from app.session_config import get_anonymous_session_settings
 from app.routers import (
+    anonymous_sessions,
     borrow_better,
     borrowing_intelligence,
     financial_intelligence,
@@ -19,20 +21,14 @@ app = FastAPI(
     description="Alpha API for Personal Financial Intelligence quick-value journeys.",
 )
 
-allowed_origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "ALLOWED_ORIGINS",
-        "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001",
-    ).split(",")
-    if origin.strip()
-]
+allowed_origins = list(get_anonymous_session_settings().allowed_origins)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 
@@ -48,6 +44,7 @@ def ready() -> JSONResponse:
     return JSONResponse(status_code=status_code, content=status)
 
 
+app.include_router(anonymous_sessions.router)
 app.include_router(borrowing_intelligence.router)
 app.include_router(borrow_better.router)
 app.include_router(money_value.router)

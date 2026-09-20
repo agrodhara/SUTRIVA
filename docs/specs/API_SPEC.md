@@ -7,6 +7,15 @@ Base URL: `http://127.0.0.1:8000`
 `GET /health` returns the service status. The PWA uses
 `NEXT_PUBLIC_API_BASE_URL` for all calls.
 
+`POST /v1/anonymous-sessions/bootstrap` creates or continues the anonymous
+browser session. Requests must come from an exact allowed `Origin` and use
+credentialed cookies. The server sets a host-only `HttpOnly` cookie with
+`Secure`, `SameSite=Lax`, `Path=/`, and `Max-Age=7776000` in production.
+
+Phase B exposes no browser-accessible anonymous-session rotation endpoint.
+Token rotation exists only as an internal server primitive for future
+compromise-handling or server-controlled triggers.
+
 ## Preferred quick-check routes
 
 ### `POST /v1/borrowing-intelligence/comfortable-borrowing-check`
@@ -58,15 +67,29 @@ delegate to the shared backend services. The PWA does not call them.
 
 ## Product events
 
-`POST /v1/events` accepts only `event_type`, `journey`, and
-`decision_context`, plus optional Track 1.1 fields `intent` and `reason`
-for selected event types. Supported events are `door_selected`,
-`check_started`, `check_completed`, `what_if_started`, `what_if_completed`,
-`teaser_viewed`, `teaser_cta_selected`, `next_interest_viewed`,
-`next_interest_selected`, `next_interest_skipped`, `go_deeper_selected`,
-`go_deeper_declined`, and `decline_reason_selected`.
-The server adds `event_id` and `created_at`; no PII or financial values are
-accepted.
+`POST /v1/events` is a cookie-authenticated, exact-origin, credentialed route.
+It accepts only allow-listed product-learning fields: `event_id`, `event_type`,
+`journey_run_id`, `journey`, `version`, `timestamp`, `decision_context`,
+optional `card_check_number`, optional first/latest-touch attribution, and
+optional Track 1.1 continuation `intent` and `reason` for selected event types.
+
+The server derives the anonymous session from the session cookie, persists
+session-scoped idempotent product events in PostgreSQL, stores normalized
+attribution and continuation-intent rows, and never accepts raw financial
+inputs, calculation outputs, PII, arbitrary event properties, or client-chosen
+anonymous session identifiers.
+
+Status behavior:
+- `200` for persisted or idempotently replayed events.
+- `202` with `status=accepted_not_persisted` when session validation succeeds
+    but non-critical event persistence fails.
+- `401` for missing, invalid, expired, or revoked anonymous session cookies.
+- `403` for missing or invalid `Origin`.
+- `503` when the anonymous session cannot be validated because the database is
+    unavailable.
+
+Calculation endpoints do not require anonymous-session authentication and are
+not required to send credentialed cookies in Phase B.
 
 ## Alpha boundaries
 

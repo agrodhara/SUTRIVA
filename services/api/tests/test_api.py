@@ -4,8 +4,12 @@ import tempfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+
 from app.main import app
+from app.services.anonymous_sessions import get_cookie_name
 from app.services.audit import record_audit_event
+from conftest import phaseb_origin
 
 client = TestClient(app)
 
@@ -18,7 +22,6 @@ def product_event_payload(**overrides):
     payload = {
         "event_id": "evt-123",
         "event_type": "door_selected",
-        "anonymous_session_id": "anon-123",
         "journey_run_id": "run-123",
         "journey": "money_value",
         "card_check_number": 1,
@@ -30,6 +33,13 @@ def product_event_payload(**overrides):
     if payload.get("journey") != "money_value":
         payload.pop("card_check_number", None)
     return payload
+
+
+def _bootstrap_event_cookie(phaseb_client: TestClient) -> dict[str, str]:
+    response = phaseb_client.post("/v1/anonymous-sessions/bootstrap", headers={"Origin": phaseb_origin()})
+    assert response.status_code == 200
+    cookie_name = get_cookie_name()
+    return {cookie_name: response.cookies.get(cookie_name)}
 
 
 def test_health():
@@ -433,7 +443,7 @@ def test_legacy_money_value_uses_canonical_core_calculation():
     assert legacy.json()["estimated_net_value"] == preferred.json()["estimated_net_annual_value"]
 
 
-def test_default_generated_logs_use_runtime_path(monkeypatch):
+def test_default_generated_logs_use_runtime_path(monkeypatch, phaseb_client):
     monkeypatch.delenv("AUDIT_LOG_PATH", raising=False)
     monkeypatch.delenv("PRODUCT_EVENT_LOG_PATH", raising=False)
     repo_root = Path(__file__).resolve().parents[2]
@@ -450,7 +460,12 @@ def test_default_generated_logs_use_runtime_path(monkeypatch):
         "requested_loan_amount": 500000,
         "requested_tenor_months": 36,
     })
-    event_response = client.post("/v1/events", json=product_event_payload(event_type="check_started"))
+    event_response = phaseb_client.post(
+        "/v1/events",
+        headers={"Origin": phaseb_origin()},
+        cookies=_bootstrap_event_cookie(phaseb_client),
+        json=product_event_payload(event_type="check_started"),
+    )
     assert audit_response.status_code == 200
     assert event_response.status_code == 200
     assert not (repo_root / "audit_events.jsonl").exists()
@@ -1164,38 +1179,44 @@ def test_financial_intelligence_money_value_check_preferred_route():
     assert "audit_event_id" in body
 
 
-def test_record_product_event(tmp_path, monkeypatch):
-    event_file = tmp_path / "product_events.jsonl"
-    monkeypatch.setenv("PRODUCT_EVENT_LOG_PATH", str(event_file))
-    response = client.post("/v1/events", json=product_event_payload())
+def test_record_product_event(phaseb_client, phaseb_upgraded_database: str):
+    response = phaseb_client.post(
+        "/v1/events",
+        headers={"Origin": phaseb_origin()},
+        cookies=_bootstrap_event_cookie(phaseb_client),
+        json=product_event_payload(),
+    )
     assert response.status_code == 200
     body = response.json()
+    assert body["status"] == "persisted"
     assert body["event_type"] == "door_selected"
     assert body["journey"] == "money_value"
     assert body["event_id"] == "evt-123"
-    assert body["anonymous_session_id"] == "anon-123"
     assert body["journey_run_id"] == "run-123"
     assert body["version"] == "track-1.1a-prototype-2026-09-17"
     assert body["timestamp"] == "2026-09-17T00:00:00Z"
-    assert body["created_at"]
+    assert body["received_at"]
 
-    event = json.loads(event_file.read_text(encoding="utf-8").strip())
-    assert event == body
-    serialized = json.dumps(event).lower()
+    engine = create_engine(phaseb_upgraded_database, future=True)
+    with engine.connect() as conn:
+        event = conn.execute(text("SELECT event_id, event_type, journey FROM product_events")).mappings().one()
+    serialized = json.dumps(dict(event)).lower()
     for prohibited in PROHIBITED_FIELDS + ["monthly_card_spend", "annual_card_fee", "income", "loan"]:
         assert prohibited not in serialized
 
 
-def test_record_product_event_rejects_unknown_event_type():
-    response = client.post("/v1/events", json=product_event_payload(event_type="not_a_real_event"))
+def test_record_product_event_rejects_unknown_event_type(phaseb_client):
+    response = phaseb_client.post(
+        "/v1/events",
+        headers={"Origin": phaseb_origin()},
+        cookies=_bootstrap_event_cookie(phaseb_client),
+        json=product_event_payload(event_type="not_a_real_event"),
+    )
     assert response.status_code == 422
 
 
-def test_record_product_event_accepts_new_track_11_fields(tmp_path, monkeypatch):
-    event_file = tmp_path / "product_events.jsonl"
-    monkeypatch.setenv("PRODUCT_EVENT_LOG_PATH", str(event_file))
-
-    response = client.post("/v1/events", json=product_event_payload(
+def test_record_product_event_accepts_new_track_11_fields(phaseb_client, phaseb_upgraded_database: str):
+    response = phaseb_client.post("/v1/events", headers={"Origin": phaseb_origin()}, cookies=_bootstrap_event_cookie(phaseb_client), json=product_event_payload(
         event_id="evt-next",
         event_type="next_interest_selected",
         journey="comfortable_borrowing",
@@ -1207,13 +1228,17 @@ def test_record_product_event_accepts_new_track_11_fields(tmp_path, monkeypatch)
     assert body["intent"] == "actual_obligations"
     assert body["reason"] is None
 
-    record = json.loads(event_file.read_text(encoding="utf-8").strip())
+    engine = create_engine(phaseb_upgraded_database, future=True)
+    with engine.connect() as conn:
+        record = conn.execute(text("SELECT intent, reason FROM continuation_intents")).mappings().one()
     assert record["intent"] == "actual_obligations"
     assert record["reason"] is None
 
 
-def test_record_product_event_validates_track_11_payload_combinations():
-    accepted = client.post("/v1/events", json=product_event_payload(
+def test_record_product_event_validates_track_11_payload_combinations(phaseb_client):
+    cookies = _bootstrap_event_cookie(phaseb_client)
+
+    accepted = phaseb_client.post("/v1/events", headers={"Origin": phaseb_origin()}, cookies=cookies, json=product_event_payload(
         event_id="evt-decline",
         event_type="decline_reason_selected",
         intent="actual_card_value",
@@ -1221,14 +1246,14 @@ def test_record_product_event_validates_track_11_payload_combinations():
     ))
     assert accepted.status_code == 200
 
-    invalid_intent = client.post("/v1/events", json=product_event_payload(
+    invalid_intent = phaseb_client.post("/v1/events", headers={"Origin": phaseb_origin()}, cookies=cookies, json=product_event_payload(
         event_id="evt-invalid-intent",
         event_type="next_interest_selected",
         reason="not_useful",
     ))
     assert invalid_intent.status_code == 422
 
-    invalid_reason = client.post("/v1/events", json=product_event_payload(
+    invalid_reason = phaseb_client.post("/v1/events", headers={"Origin": phaseb_origin()}, cookies=cookies, json=product_event_payload(
         event_id="evt-invalid-reason",
         event_type="decline_reason_selected",
         journey="comfortable_borrowing",
@@ -1236,7 +1261,7 @@ def test_record_product_event_validates_track_11_payload_combinations():
     ))
     assert invalid_reason.status_code == 422
 
-    wrong_journey_intent = client.post("/v1/events", json=product_event_payload(
+    wrong_journey_intent = phaseb_client.post("/v1/events", headers={"Origin": phaseb_origin()}, cookies=cookies, json=product_event_payload(
         event_id="evt-wrong-journey",
         event_type="next_interest_selected",
         journey="comfortable_borrowing",
@@ -1245,8 +1270,8 @@ def test_record_product_event_validates_track_11_payload_combinations():
     assert wrong_journey_intent.status_code == 422
 
 
-def test_record_product_event_preserves_legacy_go_deeper_compatibility():
-    response = client.post("/v1/events", json=product_event_payload(
+def test_record_product_event_preserves_legacy_go_deeper_compatibility(phaseb_client):
+    response = phaseb_client.post("/v1/events", headers={"Origin": phaseb_origin()}, cookies=_bootstrap_event_cookie(phaseb_client), json=product_event_payload(
         event_id="evt-go-deeper",
         event_type="go_deeper_selected",
     ))
@@ -1257,23 +1282,23 @@ def test_record_product_event_preserves_legacy_go_deeper_compatibility():
     assert body["reason"] is None
 
 
-def test_record_product_event_rejects_card_check_number_for_borrow_journey():
+def test_record_product_event_rejects_card_check_number_for_borrow_journey(phaseb_client):
     payload = product_event_payload(journey="comfortable_borrowing")
     payload["card_check_number"] = 2
-    response = client.post("/v1/events", json=payload)
+    response = phaseb_client.post("/v1/events", headers={"Origin": phaseb_origin()}, cookies=_bootstrap_event_cookie(phaseb_client), json=payload)
     assert response.status_code == 422
 
 
-def test_record_product_event_idempotent_event_id(tmp_path, monkeypatch):
-    event_file = tmp_path / "product_events.jsonl"
-    monkeypatch.setenv("PRODUCT_EVENT_LOG_PATH", str(event_file))
-
+def test_record_product_event_idempotent_event_id(phaseb_client, phaseb_upgraded_database: str):
     payload = product_event_payload(event_id="evt-same")
-    first = client.post("/v1/events", json=payload)
-    second = client.post("/v1/events", json=payload)
+    cookies = _bootstrap_event_cookie(phaseb_client)
+    first = phaseb_client.post("/v1/events", headers={"Origin": phaseb_origin()}, cookies=cookies, json=payload)
+    second = phaseb_client.post("/v1/events", headers={"Origin": phaseb_origin()}, cookies=cookies, json=payload)
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert first.json()["event_id"] == second.json()["event_id"] == "evt-same"
-    lines = event_file.read_text(encoding="utf-8").strip().splitlines()
-    assert len(lines) == 1
+
+    engine = create_engine(phaseb_upgraded_database, future=True)
+    with engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM product_events WHERE event_id = 'evt-same'")) .scalar_one()
+    assert count == 1

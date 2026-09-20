@@ -3,7 +3,6 @@ import {
   createEventId,
   createJourneyRunId,
   eventTimestamp,
-  getAnonymousSessionId,
   getMoneyCardCheckNumber,
   track11Version,
 } from "./journeySession";
@@ -78,7 +77,6 @@ export type ProductEventType =
   | "decline_reason_selected";
 
 export type TrackEventDetails = {
-  anonymousSessionId?: string;
   cardCheckNumber?: number;
   firstTouchAttribution?: AttributionPayload | null;
   intent?: ProductEventIntent;
@@ -86,6 +84,47 @@ export type TrackEventDetails = {
   latestTouchAttribution?: AttributionPayload | null;
   reason?: ProductEventReason;
 };
+
+let bootstrapPromise: Promise<void> | null = null;
+
+async function bootstrapAnonymousSession(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/v1/anonymous-sessions/bootstrap`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("anonymous session bootstrap failed");
+  }
+}
+
+export function ensureAnonymousSession(): Promise<void> {
+  if (!API_BASE_URL) {
+    return Promise.resolve();
+  }
+
+  if (!bootstrapPromise) {
+    bootstrapPromise = bootstrapAnonymousSession().finally(() => {
+      bootstrapPromise = null;
+    });
+  }
+
+  return bootstrapPromise;
+}
+
+async function postEvent(body: Record<string, unknown>, allowRetry: boolean): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/v1/events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+
+  if (response.status === 401 && allowRetry) {
+    await ensureAnonymousSession();
+    await postEvent(body, false);
+  }
+}
 
 /**
  * Minimal local product-event tracker.
@@ -101,25 +140,26 @@ export function trackEvent(eventType: ProductEventType, journey: Journey, detail
   const firstTouchAttribution = details.firstTouchAttribution ?? touchedAttribution.firstTouch ?? storedAttribution.firstTouch;
   const latestTouchAttribution = details.latestTouchAttribution ?? touchedAttribution.latestTouch ?? storedAttribution.latestTouch;
 
-  fetch(`${API_BASE_URL}/v1/events`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      event_id: createEventId(),
-      event_type: eventType,
-      anonymous_session_id: details.anonymousSessionId ?? getAnonymousSessionId(),
-      journey_run_id: details.journeyRunId ?? createJourneyRunId(),
-      journey,
-      version: track11Version(),
-      timestamp: eventTimestamp(),
-      decision_context: "local_demo",
-      card_check_number: journey === "money_value" ? details.cardCheckNumber ?? getMoneyCardCheckNumber() : undefined,
-      first_touch_attribution: firstTouchAttribution,
-      latest_touch_attribution: latestTouchAttribution,
-      intent: details.intent,
-      reason: details.reason,
-    }),
-  }).catch(() => {
-    // Alpha note: event tracking is best-effort and must never block the user journey.
-  });
+  const body = {
+    event_id: createEventId(),
+    event_type: eventType,
+    journey_run_id: details.journeyRunId ?? createJourneyRunId(),
+    journey,
+    version: track11Version(),
+    timestamp: eventTimestamp(),
+    decision_context: "local_demo",
+    card_check_number: journey === "money_value" ? details.cardCheckNumber ?? getMoneyCardCheckNumber() : undefined,
+    first_touch_attribution: firstTouchAttribution,
+    latest_touch_attribution: latestTouchAttribution,
+    intent: details.intent,
+    reason: details.reason,
+  };
+
+  void (
+    ensureAnonymousSession()
+      .then(() => postEvent(body, true))
+      .catch(() => {
+        // Alpha note: event tracking is best-effort and must never block the user journey.
+      })
+  );
 }

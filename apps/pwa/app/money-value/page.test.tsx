@@ -2,13 +2,15 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { trackEventMock, track11aEnabledMock, track11bEnabledMock } = vi.hoisted(() => ({
+const { ensureAnonymousSessionMock, trackEventMock, track11aEnabledMock, track11bEnabledMock } = vi.hoisted(() => ({
+  ensureAnonymousSessionMock: vi.fn(),
   trackEventMock: vi.fn(),
   track11aEnabledMock: vi.fn(() => true),
   track11bEnabledMock: vi.fn(() => true),
 }));
 
 vi.mock("../../lib/api", () => ({
+  ensureAnonymousSession: ensureAnonymousSessionMock,
   requireApiBaseUrl: () => "http://127.0.0.1:8010",
   trackEvent: trackEventMock,
 }));
@@ -29,6 +31,8 @@ async function renderMoneyValuePage() {
 
 describe("MoneyValuePage reward selection", () => {
   beforeEach(() => {
+    ensureAnonymousSessionMock.mockReset();
+    ensureAnonymousSessionMock.mockResolvedValue(undefined);
     trackEventMock.mockReset();
     track11aEnabledMock.mockReset();
     track11bEnabledMock.mockReset();

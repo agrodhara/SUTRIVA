@@ -1,26 +1,27 @@
-from fastapi import APIRouter
+from __future__ import annotations
+
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from app.models.product_event import ProductEventRequest, ProductEventResponse
+from app.services.anonymous_sessions import AnonymousSessionHttpError, clear_session_cookie, get_cookie_name, validate_request_origin
 from app.services.product_events import record_product_event
 
 router = APIRouter(prefix="/v1", tags=["events"])
 
 
 @router.post("/events", response_model=ProductEventResponse)
-def record_event(payload: ProductEventRequest) -> ProductEventResponse:
-    event = record_product_event(
-        event_id=payload.event_id,
-        event_type=payload.event_type,
-        anonymous_session_id=payload.anonymous_session_id,
-        journey_run_id=payload.journey_run_id,
-        journey=payload.journey,
-        version=payload.version,
-        timestamp=payload.timestamp,
-        decision_context=payload.decision_context,
-        card_check_number=payload.card_check_number,
-        first_touch_attribution=payload.first_touch_attribution.model_dump() if payload.first_touch_attribution else None,
-        latest_touch_attribution=payload.latest_touch_attribution.model_dump() if payload.latest_touch_attribution else None,
-        intent=payload.intent,
-        reason=payload.reason,
-    )
-    return ProductEventResponse(**event)
+def record_event(request: Request, payload: ProductEventRequest):
+    validate_request_origin(request.headers.get("origin"))
+    try:
+        body, status_code = record_product_event(
+            payload=payload,
+            raw_token=request.cookies.get(get_cookie_name()),
+        )
+    except AnonymousSessionHttpError as exc:
+        response = JSONResponse(status_code=exc.status_code, content={"detail": exc.code})
+        if exc.clear_cookie:
+            clear_session_cookie(response)
+        return response
+
+    return JSONResponse(status_code=status_code, content=ProductEventResponse(**body).model_dump(mode="json"))

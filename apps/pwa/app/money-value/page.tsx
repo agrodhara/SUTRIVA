@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { requireApiBaseUrl, trackEvent } from "../../lib/api";
+import { ensureAnonymousSession, requireApiBaseUrl, trackEvent } from "../../lib/api";
 import { currency, ErrorState, ExampleValuesButton, FinancialInput, InsightBlock, LoadingState, moneyValueStatusLabels, reasonCodeLabels, ResultMetric } from "../../components/QuickCheckUI";
 import { MoneyValueContinuationFlow, Track11ContinuationStep, Track11ResultVariant } from "../../components/Track11Flow";
 import { createJourneyRunId, getMoneyCardCheckNumber, incrementMoneyCardCheckNumber, shouldEmitEventOnce, track11aEnabled, track11bEnabled } from "../../lib/journeySession";
@@ -118,6 +118,10 @@ export default function MoneyValuePage() {
     annual_interest_rate_percent: "",
   });
   const [result, setResult] = useState<Result>();
+
+  useEffect(() => {
+    void (ensureAnonymousSession().catch(() => undefined));
+  }, []);
   const [journeyRunId, setJourneyRunId] = useState(() => createJourneyRunId());
   const [cardCheckNumber, setCardCheckNumber] = useState(() => getMoneyCardCheckNumber());
   const [resultVariant, setResultVariant] = useState<Track11ResultVariant>("original");

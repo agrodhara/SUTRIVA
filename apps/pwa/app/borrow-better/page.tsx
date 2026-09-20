@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { requireApiBaseUrl, trackEvent } from "../../lib/api";
+import { ensureAnonymousSession, requireApiBaseUrl, trackEvent } from "../../lib/api";
 import { createJourneyRunId, shouldEmitEventOnce, track11aEnabled, track11bEnabled } from "../../lib/journeySession";
 import { BORROW_ILLUSTRATIVE_ANNUAL_RATE_PERCENT, BORROW_ILLUSTRATIVE_RATE_EFFECTIVE_DATE } from "../../lib/track11Config";
 import { borrowingStatusLabels, currency, ErrorState, ExampleValuesButton, FinancialInput, InsightBlock, LoadingState, percent, reasonCodeLabels, ResultMetric } from "../../components/QuickCheckUI";
@@ -76,6 +76,10 @@ export default function BorrowBetterPage() {
   const isTrack11A = track11aEnabled();
   const isTrack11B = track11bEnabled();
   const isContinuationEnabled = isTrack11A && isTrack11B;
+
+  useEffect(() => {
+    void (ensureAnonymousSession().catch(() => undefined));
+  }, []);
 
   useEffect(() => {
     if (!isTrack11A) return;

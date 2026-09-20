@@ -57,9 +57,10 @@ value to zero.
 
 ```json
 {
+  "status": "persisted",
   "event_id": "uuid",
   "event_type": "next_interest_selected",
-  "created_at": "2026-09-08T00:00:00Z",
+  "received_at": "2026-09-08T00:00:00Z",
   "journey": "money_value",
   "decision_context": "local_demo",
   "intent": "actual_card_value",
@@ -67,14 +68,37 @@ value to zero.
 }
 ```
 
-Product events intentionally contain no PII, financial values, analytics
-identifiers, or raw check inputs.
+Product events are persisted in PostgreSQL with anonymous-session-scoped
+idempotency on `(anonymous_session_uuid, event_id)`. The browser never chooses
+or persists the server session UUID.
+
+Stored allowlist:
+- `event_id`
+- `event_type`
+- `journey_run_id` mapped to a server-bound journey run
+- `journey`
+- `version`
+- `decision_context`
+- optional `card_check_number`
+- optional first/latest-touch UTM attribution fields with strict validation
+- optional continuation `intent` and `reason`
+- `client_occurred_at`, clamped `effective_occurred_at`, and server
+  `received_at`
+
+Explicitly prohibited from persistence:
+- income, spend, debt, commitments, loan amount, balances, rates,
+  rewards values, or calculated currency outputs
+- complete request or response bodies
+- phone, email, OTP, consent, contact, or identity data
+- raw cookie values, raw tokens, digests rendered into logs, arbitrary event
+  properties, or browser fingerprint data
 
 Contract rules:
 - View and start/completion events do not carry `intent` or `reason`.
 - `next_interest_selected` requires `intent`.
 - `decline_reason_selected` requires both `intent` and `reason`.
 - Intent and reason values are restricted by journey.
+- Unknown or unapproved top-level and nested fields are rejected.
 
 ## Sensitive-data rule
 
