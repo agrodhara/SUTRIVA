@@ -17,13 +17,19 @@ export type RadioCardGroupProps = {
   value: string | null;
   onChange: (value: string) => void;
   hint?: string;
+  /**
+   * ID of the inline error element for this group. Pass it only while that element is rendered;
+   * it is added to the fieldset's `aria-describedby` so assistive tech announces the error with the group.
+   */
+  errorId?: string;
 };
 
-export function RadioCardGroup({ legend, name, options, value, onChange, hint }: RadioCardGroupProps) {
+export function RadioCardGroup({ legend, name, options, value, onChange, hint, errorId }: RadioCardGroupProps) {
   const hintId = useId();
+  const describedBy = [hint ? hintId : null, errorId ?? null].filter(Boolean).join(" ") || undefined;
 
   return (
-    <fieldset className={styles.choiceGroup} aria-describedby={hint ? hintId : undefined}>
+    <fieldset className={styles.choiceGroup} aria-describedby={describedBy}>
       <legend className={styles.choiceLegend}>{legend}</legend>
       {hint ? (
         <p id={hintId} className={styles.choiceHint}>

@@ -112,25 +112,28 @@ export function ConnectedExampleStep({ focusHeadingOnMount, onBack }: Props) {
             </li>
           </ul>
           <CashFlowChart />
-          <table className={styles.dataTable}>
-            <caption>Example income and total commitments by month, rounded to the nearest {"₹1,000"}</caption>
-            <thead>
-              <tr>
-                <th scope="col">Month</th>
-                <th scope="col">Income</th>
-                <th scope="col">Total commitments</th>
-              </tr>
-            </thead>
-            <tbody>
-              {example.months.map((entry) => (
-                <tr key={entry.month}>
-                  <th scope="row">{entry.month}</th>
-                  <td>{formatRupees(entry.income)}</td>
-                  <td>{formatRupees(entry.commitments)}</td>
+          {/* Very narrow screens scroll the table inside this region, never the page. */}
+          <div className={styles.tableScroll} role="region" aria-labelledby="borrow-example-table-caption" tabIndex={0}>
+            <table className={styles.dataTable}>
+              <caption id="borrow-example-table-caption">Example income and total commitments by month, rounded to the nearest {"₹1,000"}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Month</th>
+                  <th scope="col">Income</th>
+                  <th scope="col">Total commitments</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {example.months.map((entry) => (
+                  <tr key={entry.month}>
+                    <th scope="row">{entry.month}</th>
+                    <td>{formatRupees(entry.income)}</td>
+                    <td>{formatRupees(entry.commitments)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <a className={styles.textLink} href="/">

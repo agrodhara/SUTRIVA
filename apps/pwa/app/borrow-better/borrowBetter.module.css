@@ -506,6 +506,9 @@
 .dataDetails summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 700; }
 .dataDetails summary:focus-visible { outline: 3px solid #16794f; outline-offset: 2px; border-radius: 4px; }
 
+.tableScroll { max-width: 100%; overflow-x: auto; }
+.tableScroll:focus-visible { outline: 3px solid #16794f; outline-offset: 2px; border-radius: 4px; }
+
 .dataTable { width: 100%; border-collapse: collapse; font-size: 14px; }
 .dataTable caption { text-align: left; padding-bottom: 6px; font-weight: 700; }
 .dataTable th,

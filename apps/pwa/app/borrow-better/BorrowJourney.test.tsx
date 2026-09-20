@@ -189,6 +189,21 @@ describe("Step 2 — Your monthly position", () => {
     expect(screen.getByText("Choose how your month usually ends.")).toBeInTheDocument();
   });
 
+  it("ties the month-end error to its fieldset and clears the link once answered", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await user.click(await screen.findByRole("button", { name: "Continue" }));
+
+    const group = screen.getByRole("group", { name: "Usual month-end position" });
+    expect(group).toHaveAttribute("aria-describedby", "borrow-month-end-error");
+    expect(group).toHaveAccessibleDescription("Choose how your month usually ends.");
+    expect(document.getElementById("borrow-month-end-error")).toHaveTextContent("Choose how your month usually ends.");
+
+    await user.click(within(group).getByRole("radio", { name: "Break even" }));
+    expect(document.getElementById("borrow-month-end-error")).toBeNull();
+    expect(group).not.toHaveAttribute("aria-describedby");
+  });
+
   it("accepts an entered zero for payments and essentials", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
@@ -581,6 +596,19 @@ describe("Step 5 — What your real data could reveal", () => {
     for (const month of ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]) {
       expect(within(table).getByRole("rowheader", { name: month })).toBeInTheDocument();
     }
+  });
+
+  it("keeps the data table inside a labelled, keyboard-focusable scroll region so narrow screens never scroll the page", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    const table = screen.getByRole("table");
+    const region = table.closest('[role="region"]') as HTMLElement;
+    expect(region).not.toBeNull();
+    expect(region).toHaveAttribute("tabindex", "0");
+    expect(region).toHaveAccessibleName(/Example income and total commitments by month/);
+    expect(region.contains(table)).toBe(true);
   });
 
   it("never interpolates user inputs or Step 4 outputs", async () => {

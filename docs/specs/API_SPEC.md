@@ -202,8 +202,8 @@ Sequence for a final journey: Step 2 or Step 3 opened emits `step_viewed` and
 completed emits `step_completed`, each with the step's `screen_name`; Step 4
 displayed emits `result_declared` with the check `screen_name`; Step 5 displayed
 emits `connected_example_seen` with the connected-example `screen_name`. A
-screen emits its event once per actual entry, not on rerender. Journey pages are
-not wired to this sequence yet.
+screen emits its event once per actual entry, not on rerender. The Rewards and
+Borrow Better 1.1A journeys emit this sequence when `track11aEnabled` is on.
 
 The response returns the stored `screen_name` (or `null`). A replayed event
 returns the value stored by the first request, and idempotency remains scoped to

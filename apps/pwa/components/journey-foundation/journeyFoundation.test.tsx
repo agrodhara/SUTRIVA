@@ -156,6 +156,45 @@ describe("RadioCardGroup", () => {
   });
 });
 
+describe("choice group error association", () => {
+  it("RadioCardGroup describes the fieldset by both the hint and the inline error", () => {
+    render(
+      <>
+        <RadioCardGroup legend="Pick one" name="pick" options={options} value={null} hint="Choose a single option" errorId="pick-error" onChange={() => {}} />
+        <p id="pick-error">Choose one option.</p>
+      </>,
+    );
+    const group = screen.getByRole("group", { name: "Pick one" });
+    expect(group).toHaveAccessibleDescription("Choose a single option Choose one option.");
+    expect(group.getAttribute("aria-describedby")?.split(" ")).toContain("pick-error");
+  });
+
+  it("RadioCardGroup describes the fieldset by the error alone when there is no hint", () => {
+    render(
+      <>
+        <RadioCardGroup legend="Pick one" name="pick" options={options} value={null} errorId="pick-error" onChange={() => {}} />
+        <p id="pick-error">Choose one option.</p>
+      </>,
+    );
+    expect(screen.getByRole("group", { name: "Pick one" })).toHaveAccessibleDescription("Choose one option.");
+  });
+
+  it("CheckboxCardGroup describes the fieldset by both the hint and the inline error", () => {
+    render(
+      <>
+        <CheckboxCardGroup legend="Pick some" name="some" options={options} values={[]} hint="Select up to 3." errorId="some-error" onChange={() => {}} />
+        <p id="some-error">Choose at least one.</p>
+      </>,
+    );
+    expect(screen.getByRole("group", { name: "Pick some" })).toHaveAccessibleDescription("Select up to 3. Choose at least one.");
+  });
+
+  it("adds no aria-describedby when there is neither a hint nor an error", () => {
+    render(<CheckboxCardGroup legend="Pick some" name="some" options={options} values={[]} onChange={() => {}} />);
+    expect(screen.getByRole("group", { name: "Pick some" })).not.toHaveAttribute("aria-describedby");
+  });
+});
+
 describe("CheckboxCardGroup", () => {
   it("uses native checkboxes inside a fieldset with a legend and visible labels", () => {
     render(<ControlledCheckbox />);
