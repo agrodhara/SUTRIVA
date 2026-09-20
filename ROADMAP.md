@@ -8,7 +8,7 @@ deferred. It does not restate specifications or decisions; it points to them.
 
 ## Binding product references
 
-The final approved product flow is defined by the following artifacts and replaces earlier issue lists, handovers, and legacy product documentation where they conflict:
+The final approved product flow is defined by the following artifacts and superseded where it conflicts with prior issue lists, handovers, and legacy product documentation:
 
 - [docs/product/journeys/Sutriva_Rewards_Intelligence_Journey_v1.0_FINAL.png](docs/product/journeys/Sutriva_Rewards_Intelligence_Journey_v1.0_FINAL.png)
 - [docs/product/journeys/Sutriva_Borrow_Better_Journey_v1.0_FINAL.png](docs/product/journeys/Sutriva_Borrow_Better_Journey_v1.0_FINAL.png)
@@ -24,7 +24,7 @@ and the lower entry must be corrected.
 | Rank | Document | Authoritative for |
 |---|---|---|
 | 1 | `docs/product_constitution.md` | Product intent and the two acquisition doors |
-| 2 | `docs/product/journeys/JOURNEY_FLOW_SPEC.md` | Final approved journey sequence and phase boundaries |
+| 2 | [docs/product/journeys/JOURNEY_FLOW_SPEC.md](docs/product/journeys/JOURNEY_FLOW_SPEC.md) | Final approved journey sequence and phase boundaries |
 | 3 | `ROADMAP.md` (this file) | What is complete, current, next and deferred |
 | 4 | `docs/decision_log.md` | Dated decisions and their rationale |
 | 5 | `docs/architecture.md`, `docs/specs/*` | Architecture boundaries and API/data contracts |
@@ -33,6 +33,15 @@ and the lower entry must be corrected.
 
 Code on `main` is the record of what exists. A document that contradicts it is
 stale until corrected.
+
+## Implementation sequence
+
+| Phase | Scope | Status |
+|---|---|---|
+| 1.1A | Rewards anonymous result flow: steps 2-5 in the final PNG sequence | Not started |
+| 1.1A | Borrow Better anonymous result flow: steps 2-5 in the final PNG sequence | Not started |
+| 1.1B | Shared pilot-interest flow: Step 6A and 6B | Deferred until both 1.1A journeys pass |
+| 1.2 | Connected journey: steps 7-8 | Future-only; not in current scope |
 
 ## Completed
 
@@ -60,28 +69,25 @@ Feature flags `track11aEnabled` and `track11bEnabled` are `false` in
   asserted here.
 - Operational verification of the declared alpha topology. See
   `docs/execution/UAT_DEPLOYMENT.md` for what is verified and what is not.
+- Final journey authority is established by the two PNGs and the journey specification; earlier issue and handover assumptions are superseded where they conflict.
 
 ## Next
 
-1. Frontend CI (lint, typecheck, unit tests, production build) as a separate
-   implementation PR, opened only after the governance PR is reviewed.
-   `DELIVERY_GATE.md` marks the frontend controls as not yet enforced until this
-   exists.
-2. Verify the declared alpha topology and record the evidence.
-3. Re-assess seed backlog Issues 4–10 against `main` and update their status.
-4. Deployment and database provisioning planning. `docs/architecture.md`
-   requires App Runner VPC egress/NAT (or an approved alternative) and current
-   AWS cost to be validated before anything is provisioned.
+1. Correct Rewards 1.1A steps 2-5 against the final PNG sequence and approved flow.
+2. Correct Borrow Better 1.1A steps 2-5 against the final PNG sequence and approved flow.
+3. Validate the complete anonymous journeys before moving to the shared 1.1B Step 6 flow.
+4. Implement shared 1.1B step 6 only after both 1.1A flows pass.
+5. Keep 1.2 steps 7-8 future-only.
 
 ## Deferred
 
 | Item | Why deferred |
 |---|---|
-| Track 1.1B: OTP verification, consent, anonymous-history linking | Identity and consent are outside Phase B. Flags stay `false`. |
+| Shared 1.1B: mobile submission, OTP verification, consent, anonymous-history linking | Identity and consent are outside the closed anonymous journey scope. |
 | Server-side token rotation after OTP verification and history linking | Deferred to Track 1.1B. Rotation must not extend the session's original absolute expiry. No browser-accessible rotation endpoint is planned. |
 | Fulfilment and any Track 2 capability | Gated until the legal/partner gate. |
 | Authentication provider choice (Cognito versus a lighter managed option) | Decision gate. Listed in `SECURITY_DO_NOT_TOUCH.md`. |
-| Encrypted append-only audit storage | Audit events currently go to a local JSONL file under the OS temp directory and are not durable. |
+| Future data-contract, event-taxonomy and Privacy Notice dependencies | Deferred until the separate governance gates are approved. |
 | Real customer data | Not permitted before the G0.5 engineer/security review is approved. |
 
 ## Standing constraints
