@@ -125,7 +125,7 @@ function TerminalScreen({
 }: TerminalCopy & {
   resultVariant: Track11ResultVariant;
   returnLabel?: string;
-  headingRef: RefObject<HTMLHeadingElement>;
+  headingRef: RefObject<HTMLHeadingElement | null>;
   onReturnToResult: () => void;
 }) {
   return (
@@ -142,6 +142,8 @@ function TerminalScreen({
         <button type="button" className="primaryButton" onClick={onReturnToResult}>
           {resultBackLabel(resultVariant, returnLabel)}
         </button>
+        {/* Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a className="track11HomeLink" href="/">
           Back to home
         </a>

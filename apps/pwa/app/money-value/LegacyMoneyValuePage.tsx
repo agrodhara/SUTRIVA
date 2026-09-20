@@ -594,6 +594,8 @@ export default function LegacyMoneyValuePage() {
     {error && <ErrorState message={error} />}
   </main>;
 
+  // Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link.
+  // eslint-disable-next-line @next/next/no-html-link-for-pages
   return <main className="shell journey"><a className="backLink" href="/">← Home</a><p className="eyebrow">Get More From My Money</p><h1>See what your card use is worth.</h1><p className="lede">Answer a few questions for an initial estimate.</p>
     <form onSubmit={submit}><FinancialInput label="Monthly card spend" type="number" min="0" required value={form.monthly_card_spend} onChange={set("monthly_card_spend")} disabled={interactionDisabled} /><FinancialInput label="Annual card fee" type="number" min="0" required value={form.annual_card_fee} onChange={set("annual_card_fee")} disabled={interactionDisabled} />
       <section className="rewardChooser"><h2>How does your card reward you?</h2><div className="rewardChooserGrid">

@@ -258,6 +258,8 @@ export default function LegacyBorrowBetterPage() {
     {error && <ErrorState message={error} />}
   </main>;
 
+  // Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link.
+  // eslint-disable-next-line @next/next/no-html-link-for-pages
   return <main className="shell journey"><a className="backLink" href="/">← Home</a><p className="eyebrow">Borrow Better</p><h1>Know what feels comfortable before you borrow.</h1><p className="lede">Answer a few questions for an initial estimate.</p>
     <form onSubmit={submit}><FinancialInput label="Monthly income" type="number" min="1" required value={form.monthly_income} onChange={set("monthly_income")} disabled={interactionDisabled} />
       {!isTrack11A && <FinancialInput label="Existing monthly commitments" type="number" min="0" required value={form.existing_monthly_commitments} onChange={set("existing_monthly_commitments")} disabled={interactionDisabled} />}
