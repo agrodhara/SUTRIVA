@@ -20,13 +20,7 @@ This rule applies to both Rewards Intelligence and Borrow Better. The consent, p
 
 ### Phase 1.1A: anonymous declared-data check and synthetic illustrative example
 
-Steps 1-5 are the public, anonymous quick-check journey in both product doors.
-
-- Step 1: choose the product door
-- Step 2: complete the anonymous quick-check inputs
-- Step 3: declare the result with the relevant summary and context
-- Step 4: show the synthetic illustrative example for what connected insight could reveal
-- Step 5: present the next-step narrative, still without any identity or data-permission collection
+Step 1 chooses the journey door. Steps 2–3 collect anonymous declared inputs. Step 4 presents the declared-data result (“Your Rewards Check” or “Your Borrow Better check”). Step 5 presents the synthetic illustrative example (“What your real data could reveal”). Step 6 is the pilot-interest and verification boundary. Steps 7–8 remain future connected-data journeys.
 
 The user should understand the immediate result before any pilot or permission flow is offered.
 
@@ -37,7 +31,7 @@ Step 6 is the pilot-interest flow and is divided into two sub-steps: 6A and 6B.
 - 6A: anonymous interest click only. No phone number, OTP, identity or permission is collected at this stage.
 - 6B: mobile submission, OTP issuance and successful OTP verification. Anonymous-history linking occurs only after successful OTP verification.
 
-Optional product or pilot updates remain a separate choice and must be unchecked by default. Pilot interest, OTP verification, optional updates and future data permissions are distinct signals.
+Optional product or pilot updates remain a separate choice and must be unchecked by default. Pilot interest, OTP verification, optional updates and future data permissions are distinct signals. Step 6 analytics-event payloads must never contain the mobile number, OTP value or raw authentication data.
 
 ### Phase 1.2: future connected journey
 
@@ -45,6 +39,8 @@ Steps 7-8 are future-only and outside the current anonymous implementation scope
 
 - Step 7: choose which future permissioned data to connect
 - Step 8: show the connected-data result
+
+The future connected-data steps must use the word “permission” rather than “consent” in any user-facing choice or supporting description.
 
 These steps are not the current implementation target and must not be treated as a release blocker for the anonymous quick-check flow.
 
@@ -116,6 +112,7 @@ Borrow Better uses the configured, read-only 14% rate.
 - The 14% rate is display-only and cannot be edited by the customer.
 - “Configured” or “configurable” in the artwork means policy-controlled, never customer-editable.
 - The value is treated as a prototype baseline and not as a loan offer or financial advice.
+- Where the written specification differs from the Borrow Better PNG concerning the post-loan buffer sign or rate copy, this written specification prevails. The authoritative post-loan buffer is −₹1,100, and the 14% illustrative annual rate is display-only, policy-controlled and not customer-editable.
 
 ## Implementation constraints
 
