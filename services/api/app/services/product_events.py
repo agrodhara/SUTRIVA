@@ -95,6 +95,7 @@ def record_product_event(
                 version=payload.version,
                 decision_context=payload.decision_context,
                 card_check_number=payload.card_check_number,
+                screen_name=payload.screen_name,
                 client_occurred_at=payload.timestamp,
                 effective_occurred_at=effective_occurred_at,
                 received_at=received_at,
@@ -131,6 +132,7 @@ def record_product_event(
                 "latest_touch_attribution": payload.latest_touch_attribution.model_dump() if payload.latest_touch_attribution else None,
                 "intent": payload.intent,
                 "reason": payload.reason,
+                "screen_name": event["screen_name"],
             }, 200
         except SQLAlchemyError:
             session.rollback()
@@ -157,6 +159,7 @@ def record_product_event(
                 "latest_touch_attribution": payload.latest_touch_attribution.model_dump() if payload.latest_touch_attribution else None,
                 "intent": payload.intent,
                 "reason": payload.reason,
+                "screen_name": payload.screen_name,
             }, 202
     except AnonymousSessionHttpError:
         session.rollback()

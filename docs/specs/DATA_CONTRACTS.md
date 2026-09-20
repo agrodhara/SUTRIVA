@@ -64,7 +64,8 @@ value to zero.
   "journey": "money_value",
   "decision_context": "local_demo",
   "intent": "actual_card_value",
-  "reason": null
+  "reason": null,
+  "screen_name": null
 }
 ```
 
@@ -82,6 +83,7 @@ Stored allowlist:
 - optional `card_check_number`
 - optional first/latest-touch UTM attribution fields with strict validation
 - optional continuation `intent` and `reason`
+- optional categorical `screen_name` (see below)
 - `client_occurred_at`, clamped `effective_occurred_at`, and server
   `received_at`
 
@@ -99,6 +101,30 @@ Contract rules:
 - `decline_reason_selected` requires both `intent` and `reason`.
 - Intent and reason values are restricted by journey.
 - Unknown or unapproved top-level and nested fields are rejected.
+
+### `screen_name`
+
+`screen_name` identifies which final 1.1A journey screen an event belongs to. It
+is categorical only and is validated against this allowlist, with no other value
+accepted:
+
+- Rewards (`journey=money_value`): `rewards_card_behaviour`,
+  `rewards_priorities_inputs`, `rewards_check`, `rewards_connected_example`
+- Borrow Better (`journey=comfortable_borrowing`): `borrow_monthly_position`,
+  `borrow_plan`, `borrow_check`, `borrow_connected_example`
+
+Per-event-type rules and the journey pairing are in `docs/specs/API_SPEC.md`.
+
+Persistence: a nullable `product_events.screen_name` column, `varchar(32)`,
+added by migration `0003_product_event_screen_name`. The database check
+constraint `ck_product_events_screen_name` allows `NULL` or exactly one of the
+eight values. Rows written before the migration keep `NULL`. There is no index
+on the column. Idempotency, session ownership, retention timestamps and foreign
+keys are unchanged.
+
+Privacy: `screen_name` must never carry financial values, rates, balances, PII,
+OTPs, free text or other user-entered content. It is not written to application
+logs, and it does not appear in audit snapshots.
 
 ## Sensitive-data rule
 

@@ -177,6 +177,25 @@ Report F6–F9 separately, each with its exact command and result.
 
 Apply only the modules for journeys the task touches. Mark the rest N/A.
 
+### J0. Final journey authority (Rewards Intelligence and Borrow Better)
+
+The authority for journey sequence and phase boundaries is
+`docs/product/journeys/JOURNEY_FLOW_SPEC.md` and the two final v1.0 PNGs it
+names. Where J2 or J3 below conflicts with it, the flow spec prevails.
+
+| ID | Control | Enforcement |
+|---|---|---|
+| J0.1 | Phase 1.1A ends after Step 5. Step 6 (Phase 1.1B) and Steps 7-8 (Phase 1.2) are separate future scopes and are not part of a 1.1A task. | [MANUAL] |
+| J0.2 | Step 4 is the declared result, and Step 4 proceeds directly to Step 5. | [MANUAL] |
+| J0.3 | Step 5 is a synthetic illustrative example, visibly labelled `ILLUSTRATIVE EXAMPLE — NOT YOUR DATA`. | [MANUAL] |
+| J0.4 | The final journeys do not use the legacy Reveal, Intent, Closure sequence. | [MANUAL] |
+| J0.5 | A what-if interaction is not required for the final Steps 2-5. | [MANUAL] |
+| J0.6 | Step 5's pilot call to action is omitted while Phase 1.1B is unavailable. No disabled, inert or fake pilot CTA is rendered. | [MANUAL] |
+
+Legacy Reveal, Intent, Closure and terminal code may remain on `main` for
+historical compatibility. It is not an acceptance requirement for the final
+journeys.
+
 ### J1. Landing
 
 | ID | Control | Enforcement |
@@ -184,6 +203,9 @@ Apply only the modules for journeys the task touches. Mark the rest N/A.
 | J1.1 | Landing presents the two Alpha doors with the approved hierarchy. | [MANUAL] |
 
 ### J2. Quick check, result and what-if (both journeys)
+
+J2.3 to J2.8 apply only where a what-if interaction exists. The final journeys
+do not require one (see J0.5).
 
 | ID | Control | Enforcement |
 |---|---|---|
@@ -196,7 +218,11 @@ Apply only the modules for journeys the task touches. Mark the rest N/A.
 | J2.7 | What-if uses the latest successful backend response and never a stale or failed edit. | [MANUAL] |
 | J2.8 | Continuation is blocked while financial edits are stale or failed. | [MANUAL] |
 
-### J3. Continuation (Track 1.1)
+### J3. Continuation (Track 1.1, legacy)
+
+J3 describes the legacy Reveal, Intent, Closure sequence. It applies only to
+tasks that touch that legacy code. It is not an acceptance requirement for the
+final journeys (see J0.4).
 
 | ID | Control | Enforcement |
 |---|---|---|

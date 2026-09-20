@@ -1,0 +1,228 @@
+/*
+ * Shared 1.1A journey primitives. Colours follow the existing palette in
+ * app/styles.css (green #16794f, neutrals #cbc9bd / #171717). No journey-specific styling here.
+ */
+
+/* ---- Step shell ---- */
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stepLabel {
+  margin: 0;
+  color: #16794f;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stepTitle {
+  margin: 0;
+  font-size: clamp(24px, 5vw, 32px);
+  line-height: 1.2;
+  font-weight: 800;
+  color: #171717;
+}
+
+/* The heading is programmatically focusable (tabIndex=-1) so a journey can move focus to it. */
+.stepTitle:focus {
+  outline: none;
+}
+
+.stepTitle:focus-visible {
+  outline: 3px solid #16794f;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.stepSupporting {
+  margin: 0;
+  color: #40403a;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.stepContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stepActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.backButton {
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 16px;
+  border: 1px solid #cbc9bd;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #35352f;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.backButton:hover {
+  border-color: #16794f;
+  color: #16794f;
+}
+
+.backButton:focus-visible {
+  outline: 3px solid #16794f;
+  outline-offset: 2px;
+}
+
+/* ---- Choice groups (radio + checkbox cards) ---- */
+
+.choiceGroup {
+  box-sizing: border-box;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choiceLegend {
+  padding: 0;
+  margin-bottom: 4px;
+  color: #171717;
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.choiceHint {
+  margin: 0 0 12px;
+  color: #57574f;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.choiceList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choiceCard {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 1px solid #cbc9bd;
+  border-radius: 12px;
+  background: #fcfcfa;
+  color: #171717;
+  cursor: pointer;
+}
+
+.choiceCard:hover {
+  border-color: #9c9b91;
+}
+
+/* Native control stays visible: its checked dot/tick is a shape cue, not a colour-only cue. */
+.choiceInput {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: #16794f;
+  cursor: inherit;
+}
+
+.choiceInput:focus-visible {
+  outline: 3px solid #16794f;
+  outline-offset: 2px;
+}
+
+.choiceCard:has(.choiceInput:focus-visible) {
+  border-color: #16794f;
+  box-shadow: 0 0 0 3px rgba(22, 121, 79, 0.25);
+}
+
+.choiceBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.choiceLabel {
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.choiceDescription {
+  color: #57574f;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Selected: heavier border, tinted fill and a check glyph, so state is not colour alone. */
+.choiceCardSelected {
+  padding: 11px 13px;
+  border: 2px solid #16794f;
+  background: #f0f9f3;
+}
+
+/* Check glyph is generated content so it never enters the label text or accessible name. */
+.choiceCardSelected::after {
+  content: "✓";
+  content: "✓" / "";
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: #16794f;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.choiceCardDisabled {
+  border-style: dashed;
+  background: #f1f1ed;
+  color: #6b6b62;
+  cursor: not-allowed;
+}
+
+/* ---- Illustrative-example banner ---- */
+
+.illustrativeBanner {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 2px dashed #2952a3;
+  border-radius: 10px;
+  background: #f4f7fd;
+  color: #1f3f80;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+}
+
+.illustrativeIcon {
+  flex: 0 0 auto;
+  font-size: 16px;
+  line-height: 1;
+}
