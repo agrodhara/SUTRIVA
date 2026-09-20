@@ -74,7 +74,23 @@ export type ProductEventType =
   | "next_interest_viewed"
   | "next_interest_selected"
   | "next_interest_skipped"
-  | "decline_reason_selected";
+  | "decline_reason_selected"
+  | "result_declared"
+  | "connected_example_seen";
+
+/**
+ * Bounded, categorical screen identifier for final 1.1A journey events. Mirrors the API allowlist;
+ * never put values, rates, balances, PII or free text here.
+ */
+export type ScreenName =
+  | "rewards_card_behaviour"
+  | "rewards_priorities_inputs"
+  | "rewards_check"
+  | "rewards_connected_example"
+  | "borrow_monthly_position"
+  | "borrow_plan"
+  | "borrow_check"
+  | "borrow_connected_example";
 
 export type TrackEventDetails = {
   cardCheckNumber?: number;
@@ -83,6 +99,7 @@ export type TrackEventDetails = {
   journeyRunId?: string;
   latestTouchAttribution?: AttributionPayload | null;
   reason?: ProductEventReason;
+  screenName?: ScreenName;
 };
 
 let bootstrapPromise: Promise<void> | null = null;
@@ -153,6 +170,7 @@ export function trackEvent(eventType: ProductEventType, journey: Journey, detail
     latest_touch_attribution: latestTouchAttribution,
     intent: details.intent,
     reason: details.reason,
+    screen_name: details.screenName,
   };
 
   void (

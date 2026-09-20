@@ -75,13 +75,50 @@ delegate to the shared backend services. The PWA does not call them.
 It accepts only allow-listed product-learning fields: `event_id`, `event_type`,
 `journey_run_id`, `journey`, `version`, `timestamp`, `decision_context`,
 optional `card_check_number`, optional first/latest-touch attribution, and
-optional Track 1.1 continuation `intent` and `reason` for selected event types.
+optional Track 1.1 continuation `intent` and `reason` for selected event types,
+and optional categorical `screen_name` for the final 1.1A journeys.
 
 The server derives the anonymous session from the session cookie, persists
 session-scoped idempotent product events in PostgreSQL, stores normalized
 attribution and continuation-intent rows, and never accepts raw financial
 inputs, calculation outputs, PII, arbitrary event properties, or client-chosen
 anonymous session identifiers.
+
+### `screen_name` and final-journey events
+
+`screen_name` is a categorical field restricted to eight approved values. Any
+other value, including any free text, number or formatted value, returns `422`.
+
+| Journey (`journey`) | Approved `screen_name` values |
+|---|---|
+| `money_value` (Rewards) | `rewards_card_behaviour`, `rewards_priorities_inputs`, `rewards_check`, `rewards_connected_example` |
+| `comfortable_borrowing` (Borrow Better) | `borrow_monthly_position`, `borrow_plan`, `borrow_check`, `borrow_connected_example` |
+
+Two event types are added for the final journeys: `result_declared` and
+`connected_example_seen`. All historical event types remain accepted. The final
+1.1A journeys must not emit the legacy OTP or consent event types.
+
+| `event_type` | `screen_name` rule |
+|---|---|
+| `step_viewed`, `step_completed` | Optional, for legacy compatibility. If supplied, one of `rewards_card_behaviour`, `rewards_priorities_inputs`, `borrow_monthly_position`, `borrow_plan`. |
+| `result_declared` | Required: `rewards_check` or `borrow_check`. |
+| `connected_example_seen` | Required: `rewards_connected_example` or `borrow_connected_example`. |
+| Every other event type | Must be absent. |
+
+A `rewards_*` value is valid only with `journey=money_value`, and a `borrow_*`
+value only with `journey=comfortable_borrowing`. A cross-journey combination
+returns `422`.
+
+Sequence for a final journey: Step 2 or Step 3 opened emits `step_viewed` and
+completed emits `step_completed`, each with the step's `screen_name`; Step 4
+displayed emits `result_declared` with the check `screen_name`; Step 5 displayed
+emits `connected_example_seen` with the connected-example `screen_name`. A
+screen emits its event once per actual entry, not on rerender. Journey pages are
+not wired to this sequence yet.
+
+The response returns the stored `screen_name` (or `null`). A replayed event
+returns the value stored by the first request, and idempotency remains scoped to
+the anonymous session and `event_id`.
 
 Status behavior:
 - `200` for persisted or idempotently replayed events.

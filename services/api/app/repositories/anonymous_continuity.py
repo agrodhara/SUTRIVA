@@ -440,6 +440,7 @@ def insert_product_event(
     received_at: datetime,
     client_clock_skew_seconds: int,
     client_clock_skew_status: str,
+    screen_name: str | None = None,
 ) -> dict[str, Any]:
     inserted = db.execute(
         text(
@@ -453,6 +454,7 @@ def insert_product_event(
                 version,
                 decision_context,
                 card_check_number,
+                screen_name,
                 client_occurred_at,
                 effective_occurred_at,
                 received_at,
@@ -468,6 +470,7 @@ def insert_product_event(
                 :version,
                 :decision_context,
                 :card_check_number,
+                :screen_name,
                 :client_occurred_at,
                 :effective_occurred_at,
                 :received_at,
@@ -475,7 +478,7 @@ def insert_product_event(
                 :client_clock_skew_status
             )
             ON CONFLICT (anonymous_session_uuid, event_id) DO NOTHING
-            RETURNING product_event_uuid, event_id, event_type, journey_run_uuid, version, client_occurred_at, received_at, journey, decision_context, card_check_number
+            RETURNING product_event_uuid, event_id, event_type, journey_run_uuid, version, client_occurred_at, received_at, journey, decision_context, card_check_number, screen_name
             """
         ),
         {
@@ -487,6 +490,7 @@ def insert_product_event(
             "version": version,
             "decision_context": decision_context,
             "card_check_number": card_check_number,
+            "screen_name": screen_name,
             "client_occurred_at": client_occurred_at,
             "effective_occurred_at": effective_occurred_at,
             "received_at": received_at,
@@ -502,7 +506,7 @@ def insert_product_event(
     existing = db.execute(
         text(
             """
-            SELECT product_event_uuid, event_id, event_type, journey_run_uuid, version, client_occurred_at, received_at, journey, decision_context, card_check_number
+            SELECT product_event_uuid, event_id, event_type, journey_run_uuid, version, client_occurred_at, received_at, journey, decision_context, card_check_number, screen_name
             FROM product_events
             WHERE anonymous_session_uuid = :anonymous_session_uuid
               AND event_id = :event_id

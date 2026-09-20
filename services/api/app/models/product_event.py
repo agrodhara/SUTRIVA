@@ -47,6 +47,19 @@ ProductEventType = Literal[
     "next_interest_selected",
     "next_interest_skipped",
     "decline_reason_selected",
+    "result_declared",
+    "connected_example_seen",
+]
+
+ScreenNameType = Literal[
+    "rewards_card_behaviour",
+    "rewards_priorities_inputs",
+    "rewards_check",
+    "rewards_connected_example",
+    "borrow_monthly_position",
+    "borrow_plan",
+    "borrow_check",
+    "borrow_connected_example",
 ]
 
 JourneyType = Literal["money_value", "comfortable_borrowing"]
@@ -115,6 +128,35 @@ JOURNEY_REASONS = {
     "money_value": {"current_answer_enough", "statement_sharing_declined", "not_useful", "other"},
 }
 
+# screen_name is categorical only. Each value belongs to exactly one journey and
+# one screen role; the tables below are the single source for that mapping.
+SCREEN_NAME_JOURNEY: dict[str, str] = {
+    "rewards_card_behaviour": "money_value",
+    "rewards_priorities_inputs": "money_value",
+    "rewards_check": "money_value",
+    "rewards_connected_example": "money_value",
+    "borrow_monthly_position": "comfortable_borrowing",
+    "borrow_plan": "comfortable_borrowing",
+    "borrow_check": "comfortable_borrowing",
+    "borrow_connected_example": "comfortable_borrowing",
+}
+
+STEP_SCREEN_NAMES = {
+    "rewards_card_behaviour",
+    "rewards_priorities_inputs",
+    "borrow_monthly_position",
+    "borrow_plan",
+}
+
+# Event types that may carry a Step 2/3 screen_name (optional, legacy compatible).
+STEP_EVENT_TYPES = {"step_viewed", "step_completed"}
+
+# Event types that require a specific screen_name role.
+REQUIRED_SCREEN_NAMES_BY_EVENT_TYPE: dict[str, set[str]] = {
+    "result_declared": {"rewards_check", "borrow_check"},
+    "connected_example_seen": {"rewards_connected_example", "borrow_connected_example"},
+}
+
 VIEW_EVENT_TYPES = {"teaser_viewed", "teaser_cta_selected", "next_interest_viewed", "next_interest_skipped"}
 NEW_INTENT_EVENT_TYPES = {"next_interest_selected", "decline_reason_selected"}
 LEGACY_GO_DEEPER_EVENT_TYPES = {"go_deeper_selected", "go_deeper_declined"}
@@ -135,9 +177,12 @@ class ProductEventRequest(BaseModel):
     latest_touch_attribution: Optional[AttributionPayload] = None
     intent: Optional[IntentType] = None
     reason: Optional[ReasonType] = None
+    screen_name: Optional[ScreenNameType] = None
 
     @model_validator(mode="after")
     def validate_contract(self) -> "ProductEventRequest":
+        self._validate_screen_name()
+
         allowed_intents = JOURNEY_INTENTS[self.journey]
         allowed_reasons = JOURNEY_REASONS[self.journey]
 
@@ -179,6 +224,25 @@ class ProductEventRequest(BaseModel):
 
         return self
 
+    def _validate_screen_name(self) -> None:
+        if self.screen_name is None:
+            if self.event_type in REQUIRED_SCREEN_NAMES_BY_EVENT_TYPE:
+                raise ValueError(f"{self.event_type} requires screen_name")
+            return
+
+        if self.event_type in STEP_EVENT_TYPES:
+            allowed = STEP_SCREEN_NAMES
+        elif self.event_type in REQUIRED_SCREEN_NAMES_BY_EVENT_TYPE:
+            allowed = REQUIRED_SCREEN_NAMES_BY_EVENT_TYPE[self.event_type]
+        else:
+            raise ValueError(f"{self.event_type} must not include screen_name")
+
+        if self.screen_name not in allowed:
+            raise ValueError(f"screen_name {self.screen_name!r} is not valid for {self.event_type}")
+
+        if SCREEN_NAME_JOURNEY[self.screen_name] != self.journey:
+            raise ValueError(f"screen_name {self.screen_name!r} is not valid for journey {self.journey!r}")
+
 
 class ProductEventResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -197,3 +261,4 @@ class ProductEventResponse(BaseModel):
     latest_touch_attribution: Optional[AttributionPayload] = None
     intent: Optional[IntentType] = None
     reason: Optional[ReasonType] = None
+    screen_name: Optional[ScreenNameType] = None

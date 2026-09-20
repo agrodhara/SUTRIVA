@@ -69,3 +69,36 @@ describe("trackEvent attribution and identifiers", () => {
     expect(vi.mocked(global.fetch).mock.calls[2]?.[0]).toBe("http://127.0.0.1:8010/v1/anonymous-sessions/bootstrap");
   });
 });
+
+describe("trackEvent screen_name (1.1A journey foundation)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    window.sessionStorage.clear();
+    window.history.replaceState({}, "", "/money-value");
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://127.0.0.1:8010";
+    global.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
+  });
+
+  async function sentBody() {
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    const [, init] = vi.mocked(global.fetch).mock.calls[1];
+    return JSON.parse((init as RequestInit).body as string);
+  }
+
+  it("sends screen_name for the new final-journey event types", async () => {
+    const { trackEvent } = await import("./api");
+    trackEvent("result_declared", "comfortable_borrowing", { journeyRunId: "run-b", screenName: "borrow_check" });
+
+    const body = await sentBody();
+    expect(body.event_type).toBe("result_declared");
+    expect(body.screen_name).toBe("borrow_check");
+  });
+
+  it("omits screen_name for legacy callers", async () => {
+    const { trackEvent } = await import("./api");
+    trackEvent("step_viewed", "money_value", { journeyRunId: "run-m", cardCheckNumber: 1 });
+
+    const body = await sentBody();
+    expect("screen_name" in body).toBe(false);
+  });
+});
