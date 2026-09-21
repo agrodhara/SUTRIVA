@@ -1,13 +1,20 @@
 # AWS UAT Deployment Plan
 
-> **Superseded for the private 1.1A UAT. Do not follow this plan for that UAT.**
-> The App Runner + Amplify approach below is not the approved private 1.1A UAT
-> topology. The canonical runbook is
-> [docs/execution/UAT_DEPLOYMENT.md](../../docs/execution/UAT_DEPLOYMENT.md): a
-> separate, same-origin AWS Lightsail and nginx environment. This notice does
-> not claim that the UAT has been deployed, and it does not change the existing
-> production architecture. The rest of this file is kept as historical
-> reference.
+> **Superseded for the 1.1A private UAT and for the closed production canary. Do
+> not follow this plan for either.** The App Runner + Amplify approach below is
+> not an approved 1.1A topology. The canonical runbook is
+> [docs/execution/UAT_DEPLOYMENT.md](../../docs/execution/UAT_DEPLOYMENT.md), and
+> it documents two approved paths:
+>
+> - **Preferred architecture:** a separate, same-origin AWS Lightsail and nginx
+>   private UAT environment.
+> - **Temporary exception:** an access-restricted closed production canary on the
+>   existing `sutriva-alpha` host, approved in the decision log and described in
+>   the runbook's "Temporary closed production canary" section.
+>
+> This notice does not claim that either has been deployed, and it does not
+> itself change the existing production architecture. The rest of this file is
+> kept as historical reference.
 
 This plan prepares the current Alpha-50 application for internal UAT on AWS.
 It does not deploy production infrastructure and does not introduce real-data
