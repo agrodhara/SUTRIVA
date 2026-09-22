@@ -213,7 +213,7 @@ describe("Step 2 — Your monthly position", () => {
     expect(await screen.findByRole("heading", { name: "Your borrowing plan" })).toBeInTheDocument();
   });
 
-  it("rejects zero income and negative amounts", async () => {
+  it("rejects zero income and negative amounts, without turning the negative into a positive value", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await fillPosition(user, { "Monthly take-home income": "0", Housing: "-5" });
@@ -221,8 +221,23 @@ describe("Step 2 — Your monthly position", () => {
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByRole("heading", { name: "Your monthly position" })).toBeInTheDocument();
     expect(screen.getByText("Enter an amount above 0.")).toBeInTheDocument();
-    // A minus sign cannot be typed into an amount field, so a negative can never reach validation.
-    expect(screen.getByLabelText("Housing")).toHaveValue("5");
+    // The typed minus sign is preserved, so the amount stays invalid: it must never read as a positive "5".
+    expect(screen.getByLabelText("Housing")).toHaveValue("-5");
+    expect(screen.getByText("Enter an amount of 0 or more.")).toBeInTheDocument();
+  });
+
+  it("keeps a pasted negative amount negative and invalid, not a positive value", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    const housing = screen.getByLabelText("Housing");
+    await user.click(housing);
+    await user.paste("-28000");
+    expect(housing).toHaveValue("-28,000");
+
+    await user.click(housing);
+    await user.keyboard("{Control>}a{/Control}");
+    await user.paste("−28000");
+    expect(housing).toHaveValue("-28,000");
   });
 });
 

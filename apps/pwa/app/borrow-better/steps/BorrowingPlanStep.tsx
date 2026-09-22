@@ -181,7 +181,12 @@ export function BorrowingPlanStep({
           {picture ? (
             <div className={`${ui.card} ${ui.desktopOnly}`}>
               <h3 className={ui.cardHeading}>Your monthly picture</h3>
-              <StackedBar summary={picture.summary} segments={picture.segments} total={picture.total} totalLabel="Monthly take-home income" totalDisplay={picture.totalDisplay} />
+              <StackedBar summary={picture.summary} segments={picture.segments} total={picture.total} totalLabel={picture.totalLabel} totalDisplay={picture.totalDisplay} />
+              {picture.shortfall !== null ? (
+                <p className={`${ui.notice} ${ui.noticeWarn}`} style={{ marginTop: 12 }}>
+                  This is {formatRupeesExact(picture.shortfall)} more than your monthly take-home income.
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>

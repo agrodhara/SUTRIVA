@@ -144,7 +144,14 @@ export function MonthlyPositionStep({
         <div className={ui.card}>
           <h3 className={ui.cardHeading}>Your monthly picture</h3>
           {picture ? (
-            <StackedBar summary={picture.summary} segments={picture.segments} total={picture.total} totalLabel="Monthly take-home income" totalDisplay={picture.totalDisplay} />
+            <>
+              <StackedBar summary={picture.summary} segments={picture.segments} total={picture.total} totalLabel={picture.totalLabel} totalDisplay={picture.totalDisplay} />
+              {picture.shortfall !== null ? (
+                <p className={`${ui.notice} ${ui.noticeWarn}`} style={{ marginTop: 12 }}>
+                  This is {formatRupeesExact(picture.shortfall)} more than your monthly take-home income.
+                </p>
+              ) : null}
+            </>
           ) : (
             <p className={ui.cardText}>Enter your income, payments and essentials to see how your month adds up.</p>
           )}

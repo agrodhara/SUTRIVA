@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { IllustrativeExampleBanner } from "../../../components/journey-foundation";
 import { ExampleBanner } from "../../../components/journey-ui/ExampleEntry";
+import { formatRupeesExact } from "../../../components/journey-ui/indian";
 import { StackedBar } from "../../../components/journey-ui/StackedBar";
 import { StepHeading } from "../../../components/journey-ui/StepHeading";
 import ui from "../../../components/journey-ui/journeyUi.module.css";
@@ -99,7 +100,12 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
             <h3 id="borrow-glance-heading" className={ui.cardHeading}>
               Where your monthly income goes <span>(with this EMI)</span>
             </h3>
-            <StackedBar summary={glance.summary} segments={glance.segments} total={glance.total} totalLabel="Monthly take-home income" totalDisplay={glance.totalDisplay} />
+            <StackedBar summary={glance.summary} segments={glance.segments} total={glance.total} totalLabel={glance.totalLabel} totalDisplay={glance.totalDisplay} />
+            {glance.shortfall !== null ? (
+              <p className={`${ui.notice} ${ui.noticeWarn}`} style={{ marginTop: 12 }}>
+                This is {formatRupeesExact(glance.shortfall)} more than your monthly take-home income.
+              </p>
+            ) : null}
           </section>
         ) : null}
       </div>

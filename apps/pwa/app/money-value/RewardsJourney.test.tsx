@@ -1131,12 +1131,41 @@ describe("Rewards journey: reconciled frame, example mode and honest incomplete 
     expect(screen.getByLabelText("Monthly card spend")).toHaveValue("25,000");
   });
 
-  it("groups rupee entries in the Indian style and rejects a minus sign", async () => {
+  it("groups rupee entries in the Indian style", async () => {
     const user = await renderJourney();
     await completeStep2(user);
     const spend = screen.getByLabelText("Monthly card spend");
-    await user.type(spend, "-1234567");
+    await user.type(spend, "1234567");
     expect(spend).toHaveValue("12,34,567");
+  });
+
+  it("keeps a typed negative amount negative and invalid, and blocks submission", async () => {
+    const user = await renderJourney();
+    await completeStep2(user);
+    await user.click(screen.getByRole("checkbox", { name: "Dining" }));
+    const spend = screen.getByLabelText("Monthly card spend");
+    await user.type(spend, "-25000");
+    expect(spend).toHaveValue("-25,000");
+    await user.type(screen.getByLabelText("Annual card fee"), "4000");
+    await fillCashback(user);
+
+    await user.click(screen.getByRole("button", { name: "Check my rewards" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter your monthly card spend. Enter 0 if it was zero.");
+    expect(screen.getByLabelText("Monthly card spend")).toHaveValue("-25,000");
+  });
+
+  it("keeps a pasted negative amount negative, not a positive value", async () => {
+    const user = await renderJourney();
+    await completeStep2(user);
+    const fee = screen.getByLabelText("Annual card fee");
+    await user.click(fee);
+    await user.paste("-4000");
+    expect(fee).toHaveValue("-4,000");
+
+    await user.click(fee);
+    await user.keyboard("{Control>}a{/Control}");
+    await user.paste("−4000");
+    expect(fee).toHaveValue("-4,000");
   });
 
   it("never mentions a later phase on any step, and emits only the approved events without values", async () => {

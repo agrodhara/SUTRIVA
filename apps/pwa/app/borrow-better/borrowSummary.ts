@@ -37,12 +37,23 @@ export type BorrowGlance = {
   /** Backend breathing room after the EMI. Negative means a monthly shortfall. */
   leftAfter: number;
   segments: StackSegment[];
+  totalLabel: string;
   totalDisplay: string;
   total: number;
+  /** Positive amount by which essentials, existing payments and the EMI exceed income, or null when there is no shortfall. */
+  shortfall: number | null;
   summary: string;
 };
 
-/** Monthly income split into essentials, existing payments, the proposed EMI and what is left. */
+/**
+ * Monthly income split into essentials, existing payments, the proposed EMI and what is left.
+ *
+ * When there is a monthly shortfall (the three commitments add up to more than income), the chart's
+ * denominator switches to that committed total instead of income: a negative "left" can never be forced
+ * into a zero-value segment, and the total, its label and its displayed figure always describe the same
+ * quantity as the segments and their percentages. The shortfall itself is returned separately so the
+ * caller can state it explicitly, in text, alongside the chart.
+ */
 export function buildBorrowGlance(form: BorrowJourneyForm, result: BorrowCheckResult): BorrowGlance | null {
   const income = amountOf(form.monthlyIncome);
   const existing = amountOf(form.existingPayments);
@@ -51,48 +62,110 @@ export function buildBorrowGlance(form: BorrowJourneyForm, result: BorrowCheckRe
 
   const emi = result.estimated_new_monthly_commitment;
   const leftAfter = result.breathing_room_after;
-  const total = Math.max(income, existing + essentials + emi);
+  const committed = essentials + existing + emi;
+
+  if (leftAfter >= 0) {
+    const segments: StackSegment[] = [
+      { label: "Essential expenses", value: essentials, tone: "essentials", display: formatRupeesExact(essentials) },
+      { label: "Existing loan and card payments", value: existing, tone: "existing", display: formatRupeesExact(existing) },
+      { label: "Proposed EMI", value: emi, tone: "emi", display: formatRupeesExact(emi) },
+      { label: "Left after this EMI", value: leftAfter, tone: "left", display: formatRupeesExact(leftAfter) },
+    ];
+    const summary =
+      `Monthly take-home income of ${formatRupeesExact(income)} split into essentials ${formatRupeesExact(essentials)}, ` +
+      `existing payments ${formatRupeesExact(existing)}, the proposed EMI ${formatRupeesExact(emi)} and what is left, ${formatRupeesExact(leftAfter)}.`;
+    return {
+      income,
+      essentials,
+      existing,
+      emi,
+      leftAfter,
+      segments,
+      total: income,
+      totalLabel: "Monthly take-home income",
+      totalDisplay: formatRupeesExact(income),
+      shortfall: null,
+      summary,
+    };
+  }
+
+  const shortfall = -leftAfter;
   const segments: StackSegment[] = [
     { label: "Essential expenses", value: essentials, tone: "essentials", display: formatRupeesExact(essentials) },
     { label: "Existing loan and card payments", value: existing, tone: "existing", display: formatRupeesExact(existing) },
     { label: "Proposed EMI", value: emi, tone: "emi", display: formatRupeesExact(emi) },
-    {
-      label: leftAfter < 0 ? "Monthly shortfall" : "Left after this EMI",
-      value: Math.max(leftAfter, 0),
-      tone: "left",
-      display: formatRupeesExact(leftAfter),
-    },
   ];
   const summary =
-    `Monthly take-home income of ${formatRupeesExact(income)} split into essentials ${formatRupeesExact(essentials)}, ` +
-    `existing payments ${formatRupeesExact(existing)}, the proposed EMI ${formatRupeesExact(emi)} and ` +
-    `${leftAfter < 0 ? "a shortfall of" : "what is left,"} ${formatRupeesExact(Math.abs(leftAfter))}.`;
-  return { income, essentials, existing, emi, leftAfter, segments, total, totalDisplay: formatRupeesExact(income), summary };
+    `Essential expenses ${formatRupeesExact(essentials)}, existing payments ${formatRupeesExact(existing)} and the proposed EMI ${formatRupeesExact(emi)} ` +
+    `add up to ${formatRupeesExact(committed)}, which is ${formatRupeesExact(shortfall)} more than your monthly take-home income of ${formatRupeesExact(income)}.`;
+  return {
+    income,
+    essentials,
+    existing,
+    emi,
+    leftAfter,
+    segments,
+    total: committed,
+    totalLabel: "Total monthly commitments (with this EMI)",
+    totalDisplay: formatRupeesExact(committed),
+    shortfall,
+    summary,
+  };
 }
 
 export type MonthlyPicture = {
   segments: StackSegment[];
   total: number;
+  totalLabel: string;
   totalDisplay: string;
+  /** Positive amount by which existing payments and essentials exceed income, or null when there is no shortfall. */
+  shortfall: number | null;
   summary: string;
 };
 
-/** Live Step 2 split of income before any new EMI: essentials, existing payments and what is left. */
+/**
+ * Live Step 2 split of income before any new EMI: essentials, existing payments and what is left.
+ *
+ * When existing payments and essentials already exceed income, the chart's denominator switches to that
+ * committed total instead of income: a negative "left" can never be forced into a zero-value segment, and
+ * the total, its label and its displayed figure always describe the same quantity as the segments and
+ * their percentages. The shortfall itself is returned separately so the caller can state it explicitly.
+ */
 export function buildMonthlyPicture(form: BorrowJourneyForm): MonthlyPicture | null {
   const income = amountOf(form.monthlyIncome);
   const existing = amountOf(form.existingPayments);
   const essentials = essentialsTotal(form);
   if (income === null || income <= 0 || existing === null || essentials === null) return null;
-  const left = income - existing - essentials;
+  const committed = existing + essentials;
+  const left = income - committed;
+
+  if (left >= 0) {
+    const segments: StackSegment[] = [
+      { label: "Essential expenses", value: essentials, tone: "essentials", display: formatRupeesExact(essentials) },
+      { label: "Existing loan and card payments", value: existing, tone: "existing", display: formatRupeesExact(existing) },
+      { label: "Left before a new EMI", value: left, tone: "left", display: formatRupeesExact(left) },
+    ];
+    return {
+      segments,
+      total: income,
+      totalLabel: "Monthly take-home income",
+      totalDisplay: formatRupeesExact(income),
+      shortfall: null,
+      summary: `Monthly take-home income of ${formatRupeesExact(income)} split into essentials, existing payments and what is left, ${formatRupeesExact(left)}.`,
+    };
+  }
+
+  const shortfall = -left;
   const segments: StackSegment[] = [
     { label: "Essential expenses", value: essentials, tone: "essentials", display: formatRupeesExact(essentials) },
     { label: "Existing loan and card payments", value: existing, tone: "existing", display: formatRupeesExact(existing) },
-    { label: left < 0 ? "Shortfall before a new EMI" : "Left before a new EMI", value: Math.max(left, 0), tone: "left", display: formatRupeesExact(left) },
   ];
   return {
     segments,
-    total: Math.max(income, existing + essentials),
-    totalDisplay: formatRupeesExact(income),
-    summary: `Monthly take-home income of ${formatRupeesExact(income)} split into essentials, existing payments and ${left < 0 ? "a shortfall" : "what is left"} of ${formatRupeesExact(Math.abs(left))}.`,
+    total: committed,
+    totalLabel: "Total monthly commitments",
+    totalDisplay: formatRupeesExact(committed),
+    shortfall,
+    summary: `Existing payments and essentials add up to ${formatRupeesExact(committed)}, which is ${formatRupeesExact(shortfall)} more than your monthly take-home income of ${formatRupeesExact(income)}.`,
   };
 }
