@@ -5,7 +5,8 @@ import { trackEvent } from "../../lib/api";
 import type { ProductEventType, ScreenName } from "../../lib/api";
 import { createJourneyRunId } from "../../lib/journeySession";
 import { useHydrated } from "../../lib/useHydrated";
-import styles from "./rewards.module.css";
+import { JourneyFrame } from "../../components/journey-ui/JourneyFrame";
+import { REWARDS_EXAMPLE_FORM, rewardsFormMatchesExample } from "./rewardsExample";
 import { postRewardsCheck, type RewardsCheckResult } from "./rewardsApi";
 import { INITIAL_REWARDS_FORM, buildRewardsPayload, type RewardsFormState } from "./rewardsFormState";
 import { Step2CardBehaviour } from "./steps/Step2CardBehaviour";
@@ -64,6 +65,8 @@ export function RewardsJourney() {
   const [entry, setEntry] = useState<Entry>({ step: "card_behaviour", id: 0 });
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState(false);
+  // Example mode: the sample dataset is the active dataset. "Edited" is derived, never stored.
+  const [exampleApplied, setExampleApplied] = useState(false);
 
   const resultRef = useRef<RewardsCheckResult | null>(null);
   const loadingRef = useRef(false);
@@ -136,6 +139,22 @@ export function RewardsJourney() {
     [clearResult],
   );
 
+  const applyExample = useCallback(() => {
+    setApiError(false);
+    clearResult();
+    setForm({ ...REWARDS_EXAMPLE_FORM, priorities: [...REWARDS_EXAMPLE_FORM.priorities] });
+    setExampleApplied(true);
+  }, [clearResult]);
+
+  // Clearing returns to manual entry on Step 2 with every field empty.
+  const clearExample = useCallback(() => {
+    setApiError(false);
+    clearResult();
+    setForm(INITIAL_REWARDS_FORM);
+    setExampleApplied(false);
+    if (entry.step !== "card_behaviour") advance("card_behaviour");
+  }, [advance, clearResult, entry.step]);
+
   const handleFinderOutcome = useCallback(
     (outcome: RewardFinderOutcome) => {
       setApiError(false);
@@ -186,42 +205,55 @@ export function RewardsJourney() {
 
   // Later screens move focus to their heading; the first screen leaves focus where the page put it.
   const focusHeading = entry.id > 0;
+  const exampleEdited = exampleApplied && !rewardsFormMatchesExample(form);
+  const example = { exampleApplied, exampleEdited };
+  const headerStep = { card_behaviour: 2, priorities_inputs: 3, check: 4, example: 5 }[entry.step];
 
   return (
-    <main className={styles.page}>
-      <div className={styles.journey}>
-        {entry.step === "card_behaviour" ? (
-          // Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link.
-          // eslint-disable-next-line @next/next/no-html-link-for-pages
-          <a className={styles.homeLink} href="/">
-            ← Home
-          </a>
-        ) : null}
-        <p className={styles.eyebrow}>Get More From My Money</p>
-        <h1 className={styles.srOnly}>Rewards check</h1>
-
-        {entry.step === "card_behaviour" ? (
-          <Step2CardBehaviour key={entry.id} form={form} onChange={updateForm} onContinue={completeStep2} hydrated={hydrated} focusHeadingOnMount={focusHeading} />
-        ) : null}
-        {entry.step === "priorities_inputs" ? (
-          <Step3PrioritiesInputs
-            key={entry.id}
-            form={form}
-            onChange={updateForm}
-            onFinderOutcome={handleFinderOutcome}
-            onSubmit={submit}
-            onBack={goBack}
-            loading={loading}
-            apiError={apiError}
-            hydrated={hydrated}
-            focusHeadingOnMount={focusHeading}
-          />
-        ) : null}
-        {entry.step === "check" && result ? (
-          <Step4RewardsCheck key={entry.id} result={result} onBack={goBack} onNext={() => advance("example")} focusHeadingOnMount={focusHeading} />
-        ) : null}
-        {entry.step === "example" ? <Step5IllustrativeExample key={entry.id} onBack={goBack} focusHeadingOnMount={focusHeading} /> : null}
-      </div>
-    </main>
+    <JourneyFrame journeyName="Rewards Intelligence" step={headerStep} showHome={entry.step === "card_behaviour"}>
+      {entry.step === "card_behaviour" ? (
+        <Step2CardBehaviour
+          key={entry.id}
+          form={form}
+          onChange={updateForm}
+          onContinue={completeStep2}
+          hydrated={hydrated}
+          focusHeadingOnMount={focusHeading}
+          {...example}
+          onApplyExample={applyExample}
+          onClearExample={clearExample}
+        />
+      ) : null}
+      {entry.step === "priorities_inputs" ? (
+        <Step3PrioritiesInputs
+          key={entry.id}
+          form={form}
+          onChange={updateForm}
+          onFinderOutcome={handleFinderOutcome}
+          onSubmit={submit}
+          onBack={goBack}
+          loading={loading}
+          apiError={apiError}
+          hydrated={hydrated}
+          focusHeadingOnMount={focusHeading}
+          {...example}
+          onClearExample={clearExample}
+        />
+      ) : null}
+      {entry.step === "check" && result ? (
+        <Step4RewardsCheck
+          key={entry.id}
+          result={result}
+          {...example}
+          onBack={goBack}
+          onNext={() => advance("example")}
+          onChangeFigures={goBack}
+          focusHeadingOnMount={focusHeading}
+        />
+      ) : null}
+      {entry.step === "example" && result ? (
+        <Step5IllustrativeExample key={entry.id} result={result} selectedPriorities={form.priorities} {...example} onBack={goBack} focusHeadingOnMount={focusHeading} />
+      ) : null}
+    </JourneyFrame>
   );
 }

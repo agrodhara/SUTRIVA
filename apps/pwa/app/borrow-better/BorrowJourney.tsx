@@ -6,7 +6,8 @@ import { createJourneyRunId } from "../../lib/journeySession";
 import { useHydrated } from "../../lib/useHydrated";
 import { BORROW_ILLUSTRATIVE_ANNUAL_RATE_PERCENT } from "../../lib/track11Config";
 import { fetchBorrowCheck, type BorrowCheckResult } from "./borrowApi";
-import styles from "./borrowBetter.module.css";
+import { JourneyFrame } from "../../components/journey-ui/JourneyFrame";
+import { BORROW_EXAMPLE_FORM, borrowFormMatchesExample } from "./borrowExample";
 import {
   buildBorrowCheckBody,
   emptyBorrowJourneyForm,
@@ -61,6 +62,8 @@ export function BorrowJourney() {
   const [planErrors, setPlanErrors] = useState<FieldErrors>({});
   const [checking, setChecking] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
+  // Example mode: the sample dataset is the active dataset. "Edited" is derived, never stored.
+  const [exampleApplied, setExampleApplied] = useState(false);
 
   const formRef = useRef(form);
   const resultRef = useRef(result);
@@ -128,6 +131,26 @@ export function BorrowJourney() {
     setCheckFailed(false);
   };
 
+  const applyExample = () => {
+    setForm({ ...BORROW_EXAMPLE_FORM });
+    setExampleApplied(true);
+    setResult(null);
+    setCheckFailed(false);
+    setPositionErrors({});
+    setPlanErrors({});
+  };
+
+  // Clearing returns to manual entry on Step 2 with every field empty.
+  const clearExample = () => {
+    setForm(emptyBorrowJourneyForm);
+    setExampleApplied(false);
+    setResult(null);
+    setCheckFailed(false);
+    setPositionErrors({});
+    setPlanErrors({});
+    if (stepRef.current !== "monthly_position") enterStep("monthly_position", "push");
+  };
+
   const onMoneyChange = (key: PositionFieldKey, value: string) => {
     changeForm((previous) => ({ ...previous, [key]: value }));
     setPositionErrors((previous) => ({ ...previous, [key]: undefined }));
@@ -177,18 +200,12 @@ export function BorrowJourney() {
   // Inputs lock while a check is in flight so the result always matches what is on screen.
   const planInputsDisabled = disabled || checking;
   const focusHeadingOnMount = entry > 0;
+  const exampleEdited = exampleApplied && !borrowFormMatchesExample(form);
+  const example = { exampleApplied, exampleEdited };
+  const headerStep = { monthly_position: 2, plan: 3, check: 4, connected_example: 5 }[step];
 
   return (
-    <main className="shell">
-      <div className={styles.page}>
-        {step === "monthly_position" ? (
-          // Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link.
-          // eslint-disable-next-line @next/next/no-html-link-for-pages
-          <a className={styles.homeLink} href="/">
-            ← Home
-          </a>
-        ) : null}
-        <h1 className={styles.pageTitle}>Borrow Better</h1>
+    <JourneyFrame journeyName="Borrow Better" step={headerStep} showHome={step === "monthly_position"}>
 
         {step === "monthly_position" ? (
           <MonthlyPositionStep
@@ -197,6 +214,9 @@ export function BorrowJourney() {
             attempt={positionAttempt}
             disabled={disabled}
             focusHeadingOnMount={focusHeadingOnMount}
+            {...example}
+            onApplyExample={applyExample}
+            onClearExample={clearExample}
             onMoneyChange={onMoneyChange}
             onMonthEndChange={(value) => {
               changeForm((previous) => ({ ...previous, monthEndPosition: value }));
@@ -216,6 +236,8 @@ export function BorrowJourney() {
             checkFailed={checkFailed}
             disabled={planInputsDisabled}
             focusHeadingOnMount={focusHeadingOnMount}
+            {...example}
+            onClearExample={clearExample}
             onLoanAmountChange={(value) => {
               changeForm((previous) => ({ ...previous, loanAmount: value }));
               setPlanErrors((previous) => ({ ...previous, loanAmount: undefined }));
@@ -234,17 +256,19 @@ export function BorrowJourney() {
         {step === "check" && result ? (
           <BorrowCheckStep
             result={result}
-            tenureMonths={Number(form.tenureMonths)}
+            form={form}
             focusHeadingOnMount={focusHeadingOnMount}
+            {...example}
             onBack={() => goBack("plan")}
             onExplore={() => enterStep("connected_example", "push")}
+            onAdjustLoan={() => goBack("plan")}
+            onChangeFigures={() => enterStep("monthly_position", "push")}
           />
         ) : null}
 
         {step === "connected_example" && result ? (
-          <ConnectedExampleStep focusHeadingOnMount={focusHeadingOnMount} onBack={() => goBack("check")} />
+          <ConnectedExampleStep form={form} result={result} focusHeadingOnMount={focusHeadingOnMount} {...example} onBack={() => goBack("check")} />
         ) : null}
-      </div>
-    </main>
+    </JourneyFrame>
   );
 }

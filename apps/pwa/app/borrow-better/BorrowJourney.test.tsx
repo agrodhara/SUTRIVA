@@ -121,8 +121,8 @@ async function completeStep3(user: User) {
 async function reachStep5(user: User) {
   await completeStep2(user);
   await completeStep3(user);
-  await user.click(screen.getByRole("button", { name: "Explore more comfortable options" }));
-  await screen.findByRole("heading", { name: /what Sutriva may reveal from connected data/ });
+  await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
+  await screen.findByRole("heading", { name: "Your figures at a glance" });
 }
 
 beforeEach(() => {
@@ -213,7 +213,7 @@ describe("Step 2 — Your monthly position", () => {
     expect(await screen.findByRole("heading", { name: "Your borrowing plan" })).toBeInTheDocument();
   });
 
-  it("rejects zero income and negative amounts", async () => {
+  it("rejects zero income and negative amounts, without turning the negative into a positive value", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await fillPosition(user, { "Monthly take-home income": "0", Housing: "-5" });
@@ -221,7 +221,23 @@ describe("Step 2 — Your monthly position", () => {
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByRole("heading", { name: "Your monthly position" })).toBeInTheDocument();
     expect(screen.getByText("Enter an amount above 0.")).toBeInTheDocument();
+    // The typed minus sign is preserved, so the amount stays invalid: it must never read as a positive "5".
+    expect(screen.getByLabelText("Housing")).toHaveValue("-5");
     expect(screen.getByText("Enter an amount of 0 or more.")).toBeInTheDocument();
+  });
+
+  it("keeps a pasted negative amount negative and invalid, not a positive value", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    const housing = screen.getByLabelText("Housing");
+    await user.click(housing);
+    await user.paste("-28000");
+    expect(housing).toHaveValue("-28,000");
+
+    await user.click(housing);
+    await user.keyboard("{Control>}a{/Control}");
+    await user.paste("−28000");
+    expect(housing).toHaveValue("-28,000");
   });
 });
 
@@ -304,7 +320,7 @@ describe("Step 3 — Your borrowing plan", () => {
     expect(previewCalls()).toHaveLength(0);
 
     await user.selectOptions(screen.getByLabelText("Tenure"), "36");
-    expect(await screen.findByText("₹17,100")).toBeInTheDocument();
+    expect(await screen.findByText("₹17,089")).toBeInTheDocument();
     expect(previewCalls()).toHaveLength(1);
     expect(previewCalls()[0].body).toEqual({ desired_borrowing_amount: 500000, desired_tenure_months: 36 });
     expect(screen.getByText("per month")).toBeInTheDocument();
@@ -316,7 +332,7 @@ describe("Step 3 — Your borrowing plan", () => {
     await completeStep2(user);
     await user.selectOptions(screen.getByLabelText("Tenure"), "24");
     await user.type(screen.getByLabelText("Loan amount"), "250000");
-    await screen.findByText("₹17,100");
+    await screen.findByText("₹17,089");
     expect(previewCalls()).toHaveLength(1);
     expect(previewCalls()[0].body.desired_borrowing_amount).toBe(250000);
   });
@@ -343,7 +359,7 @@ describe("Step 3 — Your borrowing plan", () => {
     expect(await screen.findByText("₹20,000")).toBeInTheDocument();
     pending[0].resolve(okResponse(referencePreview));
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(screen.queryByText("₹17,100")).toBeNull();
+    expect(screen.queryByText("₹17,089")).toBeNull();
   });
 
   it("recovers from a preview failure without losing inputs", async () => {
@@ -355,13 +371,13 @@ describe("Step 3 — Your borrowing plan", () => {
 
     const alert = await screen.findByText("We couldn’t update the estimated EMI. Your details are still here.");
     expect(alert).toBeInTheDocument();
-    expect(screen.getByLabelText("Loan amount")).toHaveValue("500000");
+    expect(screen.getByLabelText("Loan amount")).toHaveValue("5,00,000");
     expect(screen.getByLabelText("Tenure")).toHaveValue("36");
 
     previewResponse = () => okResponse(referencePreview);
     await user.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("₹17,100")).toBeInTheDocument();
-    expect(screen.getByLabelText("Loan amount")).toHaveValue("500000");
+    expect(await screen.findByText("₹17,089")).toBeInTheDocument();
+    expect(screen.getByLabelText("Loan amount")).toHaveValue("5,00,000");
   });
 
   it("does not depend on the preview to continue: Continue runs the full backend check", async () => {
@@ -431,7 +447,7 @@ describe("Step 3 — Your borrowing plan", () => {
 
     expect(await screen.findByText(/We couldn’t complete your Borrow Better check/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Your borrowing plan" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Loan amount")).toHaveValue("500000");
+    expect(screen.getByLabelText("Loan amount")).toHaveValue("5,00,000");
     expect(eventSummary()).not.toContain("result_declared|comfortable_borrowing|borrow_check");
 
     checkResponse = () => okResponse(referenceCheck);
@@ -456,7 +472,7 @@ describe("Step 3 — Your borrowing plan", () => {
 });
 
 describe("Step 4 — Your Borrow Better check", () => {
-  it("renders the reference result with the approved rounding", async () => {
+  it("renders the reference result with exact whole-rupee figures", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await completeStep2(user);
@@ -470,12 +486,12 @@ describe("Step 4 — Your Borrow Better check", () => {
 
     const room = screen.getByRole("region", { name: "Monthly breathing room" });
     expect(room).toHaveTextContent("₹45,000");
-    expect(room).toHaveTextContent("₹27,900");
+    expect(room).toHaveTextContent("₹27,911");
 
-    expect(screen.getByText("Estimated EMI").parentElement).toHaveTextContent("₹17,100");
-    expect(screen.getByText("Total repayment").parentElement).toHaveTextContent("~₹6.15 lakh");
+    expect(screen.getByText("Estimated EMI").parentElement).toHaveTextContent("₹17,089");
+    expect(screen.getByText("Total repayment").parentElement).toHaveTextContent("₹6,15,197");
     expect(screen.getByText("Total repayment").parentElement).toHaveTextContent("over 3 years");
-    expect(screen.getByText("Total interest").parentElement).toHaveTextContent("~₹1.15 lakh");
+    expect(screen.getByText("Total interest").parentElement).toHaveTextContent("₹1,15,197");
   });
 
   it("shows the backend main pressure and the ₹1 lakh nudge", async () => {
@@ -484,8 +500,8 @@ describe("Step 4 — Your Borrow Better check", () => {
     await completeStep2(user);
     await completeStep3(user);
 
-    expect(screen.getByText("The proposed EMI reduces your estimated monthly breathing room by approximately ₹17,100.")).toBeInTheDocument();
-    expect(screen.getByText("Reducing the loan by ₹1 lakh could preserve about ₹3,400 of monthly breathing room.")).toBeInTheDocument();
+    expect(screen.getByText("The proposed EMI reduces your estimated monthly breathing room by ₹17,089.")).toBeInTheDocument();
+    expect(screen.getByText("Reducing the loan by ₹1 lakh could preserve about ₹3,418 of monthly breathing room.")).toBeInTheDocument();
   });
 
   it("takes main-pressure and nudge amounts from the response, not from a frontend calculation", async () => {
@@ -499,7 +515,7 @@ describe("Step 4 — Your Borrow Better check", () => {
     render(<BorrowJourney />);
     await completeStep2(user);
     await completeStep3(user);
-    expect(screen.getByText(/approximately ₹9,200\./)).toBeInTheDocument();
+    expect(screen.getByText(/by ₹9,200\./)).toBeInTheDocument();
     expect(screen.getByText(/could preserve about ₹2,100 of monthly/)).toBeInTheDocument();
   });
 
@@ -535,7 +551,7 @@ describe("Step 4 — Your Borrow Better check", () => {
     await completeStep3(user);
 
     const room = screen.getByRole("region", { name: "Monthly breathing room" });
-    expect(room).toHaveTextContent("−₹1,25,900");
+    expect(room).toHaveTextContent("−₹1,25,888");
     expect(room.textContent).not.toMatch(/-/);
     expect(room).toHaveTextContent("below zero");
   });
@@ -560,7 +576,7 @@ describe("Step 4 — Your Borrow Better check", () => {
       expect(screen.queryByText(pattern)).toBeNull();
     }
     expect(screen.queryByRole("slider")).toBeNull();
-    expect(screen.getByRole("button", { name: "Explore more comfortable options" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "See a connected-data example" })).toBeInTheDocument();
   });
 });
 
@@ -571,7 +587,7 @@ describe("Step 5 — What your real data could reveal", () => {
     await reachStep5(user);
 
     expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
-    expect(screen.getByRole("heading", { name: "Here’s what Sutriva may reveal from connected data." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What connected data could add" })).toBeInTheDocument();
     expect(screen.getByText("Essential spending increased")).toBeInTheDocument();
     expect(screen.getByText("in 2 of the last 6 months.")).toBeInTheDocument();
     expect(screen.getByText("Income regularity")).toBeInTheDocument();
@@ -611,20 +627,28 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(region.contains(table)).toBe(true);
   });
 
-  it("never interpolates user inputs or Step 4 outputs", async () => {
+  it("keeps the illustrative panel free of user values while the primary graphic uses them", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await completeStep2(user);
     await fillPlan(user, "731000", "48");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Your Borrow Better check" });
-    await user.click(screen.getByRole("button", { name: "Explore more comfortable options" }));
+    await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
     await screen.findByRole("note");
 
-    const text = document.body.textContent ?? "";
-    for (const userValue of ["731000", "7,31,000", "120000", "1,20,000", "18000", "17,100", "27,900", "45,000", "6.15", "1.15", "3,400"]) {
-      expect(text).not.toContain(userValue);
+    const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+    const panelText = illustrative.textContent ?? "";
+    for (const userValue of ["731000", "7,31,000", "1,20,000", "18,000", "57,000", "1,100"]) {
+      expect(panelText).not.toContain(userValue);
     }
+
+    const glance = screen.getByRole("region", { name: /Where your monthly income goes/ });
+    expect(glance).toHaveTextContent("₹1,20,000");
+    expect(glance).toHaveTextContent("₹57,000");
+    expect(glance).toHaveTextContent("₹18,000");
+    expect(glance).toHaveTextContent("Essential expenses");
+    expect(glance).toHaveTextContent("Proposed EMI");
   });
 
   it("does not show the future Step 8 buffer", async () => {
@@ -655,7 +679,7 @@ describe("Step 5 — What your real data could reveal", () => {
     await reachStep5(user);
     await user.click(screen.getByRole("button", { name: "Back to your check" }));
     expect(await screen.findByRole("heading", { name: "Your Borrow Better check" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Monthly breathing room" })).toHaveTextContent("₹27,900");
+    expect(screen.getByRole("region", { name: "Monthly breathing room" })).toHaveTextContent("₹27,911");
   });
 });
 
@@ -672,15 +696,15 @@ describe("navigation and transient state", () => {
 
     await user.click(screen.getByRole("button", { name: "Back" }));
     await screen.findByRole("heading", { name: "Your borrowing plan" });
-    expect(screen.getByLabelText("Loan amount")).toHaveValue("500000");
+    expect(screen.getByLabelText("Loan amount")).toHaveValue("5,00,000");
     expect(screen.getByLabelText("Tenure")).toHaveValue("48");
     expect(screen.getByLabelText(/^Purpose/)).toHaveValue("vehicle");
     expect(screen.getByRole("radio", { name: "No" })).toBeChecked();
 
     await user.click(screen.getByRole("button", { name: "Back" }));
     await screen.findByRole("heading", { name: "Your monthly position" });
-    expect(screen.getByLabelText("Monthly take-home income")).toHaveValue("120000");
-    expect(screen.getByLabelText("Housing")).toHaveValue("28000");
+    expect(screen.getByLabelText("Monthly take-home income")).toHaveValue("1,20,000");
+    expect(screen.getByLabelText("Housing")).toHaveValue("28,000");
     expect(screen.getByRole("radio", { name: "Break even" })).toBeChecked();
   });
 
@@ -713,7 +737,7 @@ describe("navigation and transient state", () => {
     render(<BorrowJourney />);
     await completeStep2(user);
     await completeStep3(user);
-    await user.click(screen.getByRole("button", { name: "Explore more comfortable options" }));
+    await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
     await screen.findByRole("note");
 
     window.history.back();
@@ -805,7 +829,7 @@ describe("analytics", () => {
     await user.click(screen.getByRole("radio", { name: "Yes" }));
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Your Borrow Better check" });
-    await user.click(screen.getByRole("button", { name: "Explore more comfortable options" }));
+    await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
     await screen.findByRole("note");
 
     const serialized = JSON.stringify(trackEventMock.mock.calls);
@@ -834,6 +858,9 @@ describe("isolation from the legacy flow", () => {
     "format.ts",
     "syntheticExample.ts",
     "useEmiPreview.ts",
+    "borrowExample.ts",
+    "borrowSummary.ts",
+    "breathingBand.ts",
     ...readdirSync(join(dir, "steps")).map((name) => join("steps", name)),
   ];
 
@@ -849,5 +876,245 @@ describe("isolation from the legacy flow", () => {
       const source = readFileSync(join(dir, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
       expect(source, file).not.toMatch(/Math\.pow|\*\*|\(\s*1\s*\+|monthlyRate|estimate_?emi/i);
     }
+  });
+});
+
+const EXAMPLE_BANNER = "Example mode — these are sample figures, not your data.";
+
+async function useExample(user: User) {
+  await user.click(screen.getByRole("tab", { name: "Try an example" }));
+  await user.click(screen.getByRole("button", { name: "Use these example values" }));
+}
+
+describe("Branded frame and progress", () => {
+  it("shows the Sutriva logo and step progress on every step", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<BorrowJourney />);
+    const header = () => container.querySelector("header") as HTMLElement;
+    expect(within(header()).getByText("Sutriva")).toBeInTheDocument();
+    expect(header().querySelector("svg")).not.toBeNull();
+    expect(header()).toHaveTextContent("Step 2 of 5");
+    await completeStep2(user);
+    expect(header()).toHaveTextContent("Step 3 of 5");
+    await completeStep3(user);
+    expect(header()).toHaveTextContent("Step 4 of 5");
+    await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
+    await screen.findByRole("heading", { name: "Your figures at a glance" });
+    expect(header()).toHaveTextContent("Step 5 of 5");
+    expect(within(header()).getByText("Sutriva")).toBeInTheDocument();
+  });
+});
+
+describe("Indian digit grouping", () => {
+  it("groups rupee inputs as the customer types, keeps the raw digits, and never lets a blank become zero", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    const income = screen.getByLabelText("Monthly take-home income");
+    await user.type(income, "1234567");
+    expect(income).toHaveValue("12,34,567");
+    await user.clear(income);
+    expect(income).toHaveValue("");
+    await user.type(income, "abc12.5x");
+    expect(income).toHaveValue("12.5");
+  });
+});
+
+describe("Example mode", () => {
+  it("offers Enter my values by default and previews the sample without touching the form", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    expect(screen.getByRole("tab", { name: "Enter my values" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText(EXAMPLE_BANNER)).toBeNull();
+
+    await user.click(screen.getByRole("tab", { name: "Try an example" }));
+    const preview = screen.getByRole("tabpanel");
+    expect(preview).toHaveTextContent("₹1,20,000");
+    expect(preview).toHaveTextContent("₹5,00,000");
+    expect(within(preview).getByRole("button", { name: "Use these example values" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Monthly take-home income")).toHaveValue("");
+    expect(screen.getByLabelText("Housing")).toHaveValue("");
+    expect(screen.queryByText(EXAMPLE_BANNER)).toBeNull();
+    expect(screen.queryByText("Example values edited")).toBeNull();
+  });
+
+  it("fills Steps 2 and 3 from one dataset, shows the banner, and marks any edit", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await useExample(user);
+
+    expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
+    expect(screen.queryByText("Example values edited")).toBeNull();
+    expect(screen.getByLabelText("Monthly take-home income")).toHaveValue("1,20,000");
+    expect(screen.getByLabelText("Existing loan and card payments")).toHaveValue("18,000");
+    expect(screen.getByLabelText("Housing")).toHaveValue("28,000");
+    expect(screen.getByLabelText("Household and utilities")).toHaveValue("11,000");
+    expect(screen.getByLabelText("Dependants and education")).toHaveValue("12,000");
+    expect(screen.getByLabelText("Recurring medical or insurance")).toHaveValue("6,000");
+    expect(screen.getByRole("radio", { name: "Usually have money left" })).toBeChecked();
+    expect(screen.getByText("Left after commitments & essentials").parentElement).toHaveTextContent("₹45,000");
+
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your borrowing plan" });
+    expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
+    expect(screen.getByLabelText("Loan amount")).toHaveValue("5,00,000");
+    expect(screen.getByLabelText("Tenure")).toHaveValue("36");
+    expect(screen.getByLabelText(/^Purpose/)).toHaveValue("home_improvement");
+    expect(screen.getByRole("radio", { name: "No" })).toBeChecked();
+    expect(await screen.findByText("₹17,089")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Loan amount"), "0");
+    expect(screen.getByText("Example values edited")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
+  });
+
+  it("marks an edit made on Step 2 and drops the mark when the value returns to the sample", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await useExample(user);
+    const housing = screen.getByLabelText("Housing");
+    await user.type(housing, "1");
+    expect(screen.getByText("Example values edited")).toBeInTheDocument();
+    await user.type(housing, "{Backspace}");
+    expect(screen.queryByText("Example values edited")).toBeNull();
+  });
+
+  it("clears the example, returns to Step 2 and leaves every field empty", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await useExample(user);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your borrowing plan" });
+
+    await user.click(screen.getByRole("button", { name: "Clear example and enter my values" }));
+    await screen.findByRole("heading", { name: "Your monthly position" });
+    expect(screen.queryByText(EXAMPLE_BANNER)).toBeNull();
+    expect(screen.getByRole("tab", { name: "Enter my values" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Monthly take-home income")).toHaveValue("");
+    expect(screen.getByLabelText("Housing")).toHaveValue("");
+    for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked();
+
+    await user.type(screen.getByLabelText("Monthly take-home income"), "50000");
+    expect(screen.queryByText("Example values edited")).toBeNull();
+  });
+
+  it("sends the sample as the request and carries the same dataset through Steps 4 and 5", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await useExample(user);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your borrowing plan" });
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+
+    expect(checkCalls()[0].body).toEqual({
+      calculation_mode: "track_11a_breakdown",
+      monthly_income: 120000,
+      existing_debt_payments: 18000,
+      housing_rent: 28000,
+      household_utilities: 11000,
+      dependants_education: 12000,
+      recurring_medical_insurance: 6000,
+      desired_borrowing_amount: 500000,
+      desired_tenure_months: 36,
+      month_end_position: "money_left",
+      loan_purpose: "home_improvement",
+      existing_emi_ending_within_six_months: "no",
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
+    expect(screen.getByText(/₹5,00,000 over 36 months/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
+    await screen.findByRole("heading", { name: "Your figures at a glance" });
+    expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
+    const glance = screen.getByRole("region", { name: /Where your monthly income goes/ });
+    expect(glance).toHaveTextContent("₹57,000");
+    expect(glance).toHaveTextContent("₹18,000");
+    expect(glance).toHaveTextContent("₹17,089");
+    expect(glance).toHaveTextContent("₹27,911");
+    expect(glance).toHaveTextContent("₹1,20,000");
+  });
+});
+
+describe("Step 4 adds and corrections", () => {
+  it("shows the exact EMI, repayment and interest as whole rupees, plus the headline and secondary actions", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+    expect(screen.getByText("₹17,089")).toBeInTheDocument();
+    expect(screen.getByText("₹6,15,197")).toBeInTheDocument();
+    expect(screen.getByText("₹1,15,197")).toBeInTheDocument();
+    expect(screen.getByText(/₹5,00,000 over 36 months/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Adjust loan amount or tenure" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Adjust loan amount or tenure" }));
+    expect(await screen.findByRole("heading", { name: "Your borrowing plan" })).toBeInTheDocument();
+  });
+
+  it("offers Change my figures, which returns to Step 2 with the entries kept", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+    await user.click(screen.getByRole("button", { name: "Change my figures" }));
+    expect(await screen.findByRole("heading", { name: "Your monthly position" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Housing")).toHaveValue("28,000");
+  });
+
+  it("words the headline from the breathing-room rule: shortfall, tight and comfortable", async () => {
+    const cases: [number, RegExp][] = [
+      [-1000, /below zero/],
+      [8000, /very tight/],
+      [18000, /looks tight/],
+      [27911.19, /still leaves room/],
+    ];
+    for (const [after, wording] of cases) {
+      cleanup();
+      installFetch();
+      checkResponse = () => okResponse({ ...referenceCheck, breathing_room_after: after });
+      const user = userEvent.setup();
+      render(<BorrowJourney />);
+      await completeStep2(user);
+      await completeStep3(user);
+      expect(screen.getByText(/over 36 months/)).toHaveTextContent(wording);
+    }
+  });
+
+  it("never mentions a later phase: no pilot, mobile number, OTP, consent or connection on any step", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    const forbidden = /pilot|mobile number|OTP|Twilio|consent|connect (my|your)? ?(bank|account|bureau)|upload (a )?statement|Step 6/i;
+    for (const check of [async () => {}, async () => completeStep2(user), async () => completeStep3(user), async () => {
+      await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
+      await screen.findByRole("heading", { name: "Your figures at a glance" });
+    }]) {
+      await check();
+      expect(document.body.textContent ?? "").not.toMatch(forbidden);
+    }
+  });
+});
+
+describe("Example mode analytics", () => {
+  it("emits the same six events with only a screen name, and no sample values", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await useExample(user);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your borrowing plan" });
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+    await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
+    await screen.findByRole("heading", { name: "Your figures at a glance" });
+
+    expect(trackEventMock.mock.calls.map(([type, , details]) => [type, details?.screenName])).toEqual([
+      ["step_viewed", "borrow_monthly_position"],
+      ["step_completed", "borrow_monthly_position"],
+      ["step_viewed", "borrow_plan"],
+      ["step_completed", "borrow_plan"],
+      ["result_declared", "borrow_check"],
+      ["connected_example_seen", "borrow_connected_example"],
+    ]);
+    const serialised = JSON.stringify(trackEventMock.mock.calls);
+    expect(serialised).not.toMatch(/120000|500000|home_improvement|money_left|Example mode/i);
   });
 });

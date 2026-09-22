@@ -1,6 +1,7 @@
 /*
- * Shared 1.1A journey primitives. Colours follow the existing palette in
- * app/styles.css (green #16794f, neutrals #cbc9bd / #171717). No journey-specific styling here.
+ * Shared 1.1A journey primitives (step shell, choice cards, illustrative banner). Colours come from the
+ * journey design tokens defined on the journey root in components/journey-ui/journeyUi.module.css, with
+ * the same values as fallbacks so the primitives still render if used outside that root.
  */
 
 /* ---- Step shell ---- */
@@ -11,21 +12,36 @@
   gap: 16px;
 }
 
+/* The step label stays in the DOM for assistive tech; the branded header shows the visible progress. */
 .stepLabel {
-  margin: 0;
-  color: #16794f;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .stepTitle {
   margin: 0;
-  font-size: clamp(24px, 5vw, 32px);
-  line-height: 1.2;
+  color: var(--navy, #14213d);
+  font-size: clamp(26px, 6vw, 40px);
+  line-height: 1.15;
   font-weight: 800;
-  color: #171717;
+  letter-spacing: -0.02em;
+}
+
+/* Semantic heading styled as a small green label; a larger dynamic headline follows it. */
+.stepTitleEyebrow {
+  color: var(--green, #1b8455);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.3;
 }
 
 /* The heading is programmatically focusable (tabIndex=-1) so a journey can move focus to it. */
@@ -34,14 +50,14 @@
 }
 
 .stepTitle:focus-visible {
-  outline: 3px solid #16794f;
+  outline: 3px solid var(--green, #1b8455);
   outline-offset: 4px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 .stepSupporting {
   margin: 0;
-  color: #40403a;
+  color: var(--muted, #566074);
   font-size: 16px;
   line-height: 1.5;
 }
@@ -54,20 +70,27 @@
 
 .stepActions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .stepActions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
 }
 
 .backButton {
   box-sizing: border-box;
   min-height: 44px;
   min-width: 44px;
-  padding: 10px 16px;
-  border: 1px solid #cbc9bd;
+  padding: 8px 14px;
+  border: 1px solid var(--line, #e3e1d3);
   border-radius: 999px;
   background: #ffffff;
-  color: #35352f;
+  color: var(--ink, #1f2a44);
   font: inherit;
   font-size: 14px;
   font-weight: 700;
@@ -76,12 +99,12 @@
 }
 
 .backButton:hover {
-  border-color: #16794f;
-  color: #16794f;
+  border-color: var(--green, #1b8455);
+  color: var(--green, #1b8455);
 }
 
 .backButton:focus-visible {
-  outline: 3px solid #16794f;
+  outline: 3px solid var(--green, #1b8455);
   outline-offset: 2px;
 }
 
@@ -98,15 +121,15 @@
 .choiceLegend {
   padding: 0;
   margin-bottom: 4px;
-  color: #171717;
-  font-size: 18px;
-  font-weight: 750;
+  color: var(--navy, #14213d);
+  font-size: 17px;
+  font-weight: 800;
   line-height: 1.3;
 }
 
 .choiceHint {
-  margin: 0 0 12px;
-  color: #57574f;
+  margin: 0 0 10px;
+  color: var(--muted, #566074);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -114,7 +137,7 @@
 .choiceList {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .choiceCard {
@@ -123,17 +146,17 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 44px;
-  padding: 12px 14px;
-  border: 1px solid #cbc9bd;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--line, #e3e1d3);
   border-radius: 12px;
-  background: #fcfcfa;
-  color: #171717;
+  background: #ffffff;
+  color: var(--navy, #14213d);
   cursor: pointer;
 }
 
 .choiceCard:hover {
-  border-color: #9c9b91;
+  border-color: #b7b5a3;
 }
 
 /* Native control stays visible: its checked dot/tick is a shape cue, not a colour-only cue. */
@@ -142,18 +165,18 @@
   width: 22px;
   height: 22px;
   margin: 0;
-  accent-color: #16794f;
+  accent-color: var(--green, #1b8455);
   cursor: inherit;
 }
 
 .choiceInput:focus-visible {
-  outline: 3px solid #16794f;
+  outline: 3px solid var(--green, #1b8455);
   outline-offset: 2px;
 }
 
 .choiceCard:has(.choiceInput:focus-visible) {
-  border-color: #16794f;
-  box-shadow: 0 0 0 3px rgba(22, 121, 79, 0.25);
+  border-color: var(--green, #1b8455);
+  box-shadow: 0 0 0 3px rgba(27, 132, 85, 0.25);
 }
 
 .choiceBody {
@@ -166,21 +189,26 @@
 
 .choiceLabel {
   font-size: 16px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.3;
 }
 
 .choiceDescription {
-  color: #57574f;
+  color: var(--muted, #566074);
   font-size: 13px;
   line-height: 1.4;
 }
 
-/* Selected: heavier border, tinted fill and a check glyph, so state is not colour alone. */
+/* Selected: heavier border, mint fill and a check glyph, so state is not colour alone. */
 .choiceCardSelected {
-  padding: 11px 13px;
-  border: 2px solid #16794f;
-  background: #f0f9f3;
+  padding: 9px 13px;
+  border: 2px solid var(--green, #1b8455);
+  background: var(--mint, #e4f4ea);
+  color: #0f5a37;
+}
+
+.choiceCardSelected .choiceLabel {
+  font-weight: 800;
 }
 
 /* Check glyph is generated content so it never enters the label text or accessible name. */
@@ -189,7 +217,7 @@
   content: "✓" / "";
   flex: 0 0 auto;
   margin-left: auto;
-  color: #16794f;
+  color: var(--green, #1b8455);
   font-size: 18px;
   font-weight: 800;
   line-height: 1;
@@ -202,6 +230,14 @@
   cursor: not-allowed;
 }
 
+/* Two columns from tablet width, so wide screens don't stretch single full-width cards. */
+@media (min-width: 640px) {
+  .choiceList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ---- Illustrative-example banner ---- */
 
 .illustrativeBanner {
@@ -211,10 +247,10 @@
   gap: 10px;
   margin: 0;
   padding: 10px 14px;
-  border: 2px dashed #2952a3;
-  border-radius: 10px;
-  background: #f4f7fd;
-  color: #1f3f80;
+  border: 2px dashed var(--blue-line, #9cc5f5);
+  border-radius: 12px;
+  background: var(--blue-soft, #eaf2ff);
+  color: var(--blue, #1e4fc4);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.06em;

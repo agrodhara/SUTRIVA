@@ -1,10 +1,23 @@
-import { IllustrativeExampleBanner, JourneyStepShell } from "../../../components/journey-foundation";
-import styles from "../borrowBetter.module.css";
+import { useId } from "react";
+import { IllustrativeExampleBanner } from "../../../components/journey-foundation";
+import { ExampleBanner } from "../../../components/journey-ui/ExampleEntry";
+import { formatRupeesExact } from "../../../components/journey-ui/indian";
+import { StackedBar } from "../../../components/journey-ui/StackedBar";
+import { StepHeading } from "../../../components/journey-ui/StepHeading";
+import ui from "../../../components/journey-ui/journeyUi.module.css";
+import type { BorrowCheckResult } from "../borrowApi";
+import { buildBorrowGlance } from "../borrowSummary";
+import styles from "../borrowChart.module.css";
+import type { BorrowJourneyForm } from "../journeyState";
 import { formatRupees } from "../format";
 import { SYNTHETIC_EXAMPLE } from "../syntheticExample";
 
 type Props = {
+  form: BorrowJourneyForm;
+  result: BorrowCheckResult;
   focusHeadingOnMount: boolean;
+  exampleApplied: boolean;
+  exampleEdited: boolean;
   onBack: () => void;
 };
 
@@ -60,88 +73,105 @@ function CashFlowChart() {
   );
 }
 
-export function ConnectedExampleStep({ focusHeadingOnMount, onBack }: Props) {
+export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampleApplied, exampleEdited, onBack }: Props) {
+  const headingId = useId();
   const example = SYNTHETIC_EXAMPLE;
+  const glance = buildBorrowGlance(form, result);
 
   return (
-    <>
-      <IllustrativeExampleBanner />
-      <JourneyStepShell
-        stepLabel="Step 5 of 5"
-        title={example.title}
-        supportingText={example.intro}
-        onBack={onBack}
-        backLabel="Back to your check"
-        focusHeadingOnMount={focusHeadingOnMount}
-      >
-        <p className={styles.notice}>{example.notConnectedNote}</p>
+    <section aria-labelledby={headingId} className={ui.grid}>
+      <div className={ui.colMain}>
+        <div className={`${ui.section} ${ui.o1}`}>
+          <button type="button" className={ui.backButton} onClick={onBack}>
+            Back to your check
+          </button>
+          <StepHeading
+            id={headingId}
+            stepLabel="Step 5 of 5"
+            title="Your figures at a glance"
+            supportingText={exampleApplied ? "Drawn from the sample figures you are using." : "Drawn from the figures you entered. Nothing has been connected."}
+            focusOnMount={focusHeadingOnMount}
+          />
+          {exampleApplied ? <ExampleBanner edited={exampleEdited} /> : null}
+        </div>
 
-        <ul className={styles.exampleList}>
-          <li className={styles.exampleItem}>
-            <p className={styles.exampleItemTitle}>{example.incomeRegularity.title}</p>
-            <p className={styles.exampleItemDetail}>{example.incomeRegularity.detail}</p>
-          </li>
-          <li className={styles.exampleItem}>
-            <p className={styles.exampleItemTitle}>{example.recurringCommitments.title}</p>
-            <p className={styles.exampleItemDetail}>{example.recurringCommitments.detail}</p>
-          </li>
-          <li className={styles.exampleItem}>
-            <p className={styles.exampleItemTitle}>{example.typicalMonthEndBuffer.title}</p>
-            <p className={styles.exampleItemDetail}>{example.typicalMonthEndBuffer.detail}</p>
-          </li>
-          <li className={`${styles.exampleItem} ${styles.exampleItemAttention}`}>
-            <p className={styles.exampleItemTitle}>{example.essentialSpending.title}</p>
-            <p className={styles.exampleItemDetail}>{example.essentialSpending.detail}</p>
-          </li>
-          <li className={styles.exampleItem}>
-            <p className={styles.exampleItemTitle}>{example.commitmentRelease.title}</p>
-            <p className={styles.exampleItemDetail}>{example.commitmentRelease.detail}</p>
-          </li>
-        </ul>
+        {glance ? (
+          <section className={`${ui.card} ${ui.o2}`} aria-labelledby="borrow-glance-heading">
+            <h3 id="borrow-glance-heading" className={ui.cardHeading}>
+              Where your monthly income goes <span>(with this EMI)</span>
+            </h3>
+            <StackedBar summary={glance.summary} segments={glance.segments} total={glance.total} totalLabel={glance.totalLabel} totalDisplay={glance.totalDisplay} />
+            {glance.shortfall !== null ? (
+              <p className={`${ui.notice} ${ui.noticeWarn}`} style={{ marginTop: 12 }}>
+                This is {formatRupeesExact(glance.shortfall)} more than your monthly take-home income.
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
 
-        <section className={styles.chartBlock} aria-labelledby="borrow-example-chart">
-          <h3 id="borrow-example-chart" className={styles.chartHeading}>
-            {example.chartTitle}
+      <div className={ui.colSide}>
+        <section className={`${ui.illustrative} ${ui.o3}`} aria-labelledby="borrow-connected-heading">
+          <IllustrativeExampleBanner />
+          <h3 id="borrow-connected-heading" className={ui.illustrativeTitle}>
+            {example.title}
           </h3>
-          <ul className={styles.legend}>
-            <li className={styles.legendItem}>
-              <span className={styles.swatchIncome} aria-hidden="true" /> Income
-            </li>
-            <li className={styles.legendItem}>
-              <span className={styles.swatchCommitments} aria-hidden="true" /> Total commitments
-            </li>
+          <p className={ui.cardText}>{example.intro}</p>
+          <p className={ui.notice}>{example.notConnectedNote}</p>
+
+          <ul className={ui.factList}>
+            {[example.incomeRegularity, example.recurringCommitments, example.typicalMonthEndBuffer, example.essentialSpending, example.commitmentRelease].map((fact) => (
+              <li key={fact.title} className={ui.fact}>
+                <span className={ui.factTitle}>{fact.title}</span>
+                <span className={ui.factDetail}>{fact.detail}</span>
+              </li>
+            ))}
           </ul>
-          <CashFlowChart />
-          {/* Very narrow screens scroll the table inside this region, never the page. */}
-          <div className={styles.tableScroll} role="region" aria-labelledby="borrow-example-table-caption" tabIndex={0}>
-            <table className={styles.dataTable}>
-              <caption id="borrow-example-table-caption">Example income and total commitments by month, rounded to the nearest {"₹1,000"}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Month</th>
-                  <th scope="col">Income</th>
-                  <th scope="col">Total commitments</th>
-                </tr>
-              </thead>
-              <tbody>
-                {example.months.map((entry) => (
-                  <tr key={entry.month}>
-                    <th scope="row">{entry.month}</th>
-                    <td>{formatRupees(entry.income)}</td>
-                    <td>{formatRupees(entry.commitments)}</td>
+
+          <section className={ui.chartBlock} aria-labelledby="borrow-example-chart">
+            <h4 id="borrow-example-chart" className={styles.chartHeading}>
+              {example.chartTitle}
+            </h4>
+            <ul className={styles.legend}>
+              <li className={styles.legendItem}>
+                <span className={styles.swatchIncome} aria-hidden="true" /> Income
+              </li>
+              <li className={styles.legendItem}>
+                <span className={styles.swatchCommitments} aria-hidden="true" /> Total commitments
+              </li>
+            </ul>
+            <CashFlowChart />
+            {/* Very narrow screens scroll the table inside this region, never the page. */}
+            <div className={styles.tableScroll} role="region" aria-labelledby="borrow-example-table-caption" tabIndex={0}>
+              <table className={styles.dataTable}>
+                <caption id="borrow-example-table-caption">Example income and total commitments by month, rounded to the nearest {"₹1,000"}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Month</th>
+                    <th scope="col">Income</th>
+                    <th scope="col">Total commitments</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {example.months.map((entry) => (
+                    <tr key={entry.month}>
+                      <th scope="row">{entry.month}</th>
+                      <td>{formatRupees(entry.income)}</td>
+                      <td>{formatRupees(entry.commitments)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </section>
 
         {/* Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link. */}
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a className={styles.textLink} href="/">
+        <a className={`${ui.linkButton} ${ui.o4}`} href="/">
           Back to home
         </a>
-      </JourneyStepShell>
-    </>
+      </div>
+    </section>
   );
 }

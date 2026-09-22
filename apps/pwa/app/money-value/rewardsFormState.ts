@@ -106,7 +106,7 @@ export type Step2Errors = { balanceBehavior?: string; rewardType?: string };
 export function validateStep2(form: RewardsFormState): Step2Errors {
   const errors: Step2Errors = {};
   if (form.balanceBehavior === null) errors.balanceBehavior = "Choose how you pay your statement balance.";
-  if (form.rewardType === null) errors.rewardType = "Choose the type of rewards your card offers.";
+  if (form.rewardType === null) errors.rewardType = "Choose the reward type you want to assess.";
   return errors;
 }
 

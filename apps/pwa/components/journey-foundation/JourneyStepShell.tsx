@@ -15,6 +15,8 @@ export type JourneyStepShellProps = {
   headingRef?: Ref<HTMLHeadingElement>;
   /** Moves focus to the heading once when the shell mounts. Off by default. */
   focusHeadingOnMount?: boolean;
+  /** "eyebrow" keeps the heading semantic but styles it as a small label above a larger dynamic headline. */
+  titleStyle?: "large" | "eyebrow";
 };
 
 function setRef<T>(ref: Ref<T> | undefined, value: T | null) {
@@ -33,6 +35,7 @@ export function JourneyStepShell({
   backLabel = "Back",
   headingRef,
   focusHeadingOnMount = false,
+  titleStyle = "large",
 }: JourneyStepShellProps) {
   const headingId = useId();
   const localHeading = useRef<HTMLHeadingElement | null>(null);
@@ -51,7 +54,7 @@ export function JourneyStepShell({
       <p className={styles.stepLabel}>{stepLabel}</p>
       <h2
         id={headingId}
-        className={styles.stepTitle}
+        className={titleStyle === "eyebrow" ? `${styles.stepTitle} ${styles.stepTitleEyebrow}` : styles.stepTitle}
         tabIndex={-1}
         ref={(node) => {
           localHeading.current = node;
