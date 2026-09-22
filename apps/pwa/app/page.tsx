@@ -1,9 +1,13 @@
 import { BackendStatus } from "../components/BackendStatus";
 import { DoorCard } from "../components/DoorCard";
+import { JourneyHeader } from "../components/journey-ui/JourneyHeader";
+import ui from "../components/journey-ui/journeyUi.module.css";
 
 export default function Home() {
   return (
-    <main className="shell">
+    <main className={ui.root}>
+      <JourneyHeader journeyName="Choose a journey" step={1} />
+      <div className="shell">
       <section className="hero">
         <p className="eyebrow">Sutriva Alpha</p>
         <h1>Make every money decision a better one</h1>
@@ -45,6 +49,7 @@ export default function Home() {
       <p className="guardrail">
         Alpha note: no lender offers or applications are shown before the legal and partner gate is cleared.
       </p>
+      </div>
     </main>
   );
 }

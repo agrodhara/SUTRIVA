@@ -5,7 +5,7 @@
  */
 
 export const SYNTHETIC_EXAMPLE = {
-  title: "Here’s what Sutriva may reveal from connected data.",
+  title: "What connected data could add",
   intro: "This synthetic example shows what Sutriva may reveal after you separately choose to connect relevant data.",
   notConnectedNote: "Nothing has been connected. No bank, account, transaction or bureau data is used on this screen.",
   incomeRegularity: { title: "Income regularity", detail: "Salary received consistently" },

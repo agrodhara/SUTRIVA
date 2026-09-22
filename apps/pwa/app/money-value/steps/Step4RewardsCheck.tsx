@@ -1,16 +1,14 @@
 "use client";
 
-import { JourneyStepShell } from "../../../components/journey-foundation";
-import styles from "../rewards.module.css";
+import { useId } from "react";
+import { ExampleBanner } from "../../../components/journey-ui/ExampleEntry";
+import { StepHeading } from "../../../components/journey-ui/StepHeading";
+import { ValueBars } from "../../../components/journey-ui/ValueBars";
+import ui from "../../../components/journey-ui/journeyUi.module.css";
 import type { MainPressureCode, RewardsCheckResult } from "../rewardsApi";
 import { PERIOD_PHRASE, PRIORITY_OPTIONS } from "../rewardsFormState";
+import { CANNOT_CALCULATE, buildRewardBars, netUnavailableReason, rupees } from "../rewardsSummary";
 
-const RUPEES = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-});
 const QUANTITY = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
 
 const MAIN_PRESSURE_COPY: Record<MainPressureCode, string> = {
@@ -30,7 +28,7 @@ function rewardBasisLine(result: RewardsCheckResult): string | null {
   const period = PERIOD_PHRASE[result.reward_period];
   if (result.reward_amount_per_period !== null && result.reward_amount_per_period !== undefined) {
     const noun = result.reward_type === "cashback" ? "cashback" : "reward value";
-    return `Based on ${RUPEES.format(result.reward_amount_per_period)} ${noun} ${period}.`;
+    return `Based on ${rupees(result.reward_amount_per_period)} ${noun} ${period}.`;
   }
   if (result.reward_units_per_period !== null && result.reward_units_per_period !== undefined) {
     const unit = result.reward_type === "miles" ? "miles" : "points";
@@ -42,130 +40,138 @@ function rewardBasisLine(result: RewardsCheckResult): string | null {
 function interestLine(result: RewardsCheckResult): string {
   if (result.interest_input_basis === "no_balance") return "No interest cost is included because you pay the statement balance in full.";
   if (result.interest_input_basis === "known" && result.estimated_annual_interest_cost !== null) {
-    return `Estimated annual interest cost included: ${RUPEES.format(result.estimated_annual_interest_cost)}.`;
+    return `Estimated annual interest cost included: ${rupees(result.estimated_annual_interest_cost)}.`;
   }
   return "Interest impact is unknown. No interest cost has been assumed.";
 }
 
 export function Step4RewardsCheck({
   result,
+  exampleApplied,
+  exampleEdited,
   onBack,
   onNext,
+  onChangeFigures,
   focusHeadingOnMount,
 }: {
   result: RewardsCheckResult;
+  exampleApplied: boolean;
+  exampleEdited: boolean;
   onBack: () => void;
   onNext: () => void;
+  onChangeFigures: () => void;
   focusHeadingOnMount: boolean;
 }) {
+  const headingId = useId();
   const rewardsKnown = result.estimated_annual_rewards !== null;
-  const netKnown = result.estimated_net_annual_value !== null;
+  const net = result.estimated_net_annual_value;
+  const netKnown = net !== null;
   const unitWord = result.reward_type === "miles" ? "miles" : "points";
   const basisLine = rewardBasisLine(result);
   const priorities = result.spending_priorities ?? [];
+  const reason = netUnavailableReason(result);
+  const bars = buildRewardBars(result, false);
+  const headline = netKnown ? `Your estimated net annual value is ${rupees(net)}.` : "We can’t calculate your net annual value yet.";
 
   return (
-    <JourneyStepShell
-      stepLabel="Step 4 of 5"
-      title="Your Rewards Check"
-      supportingText="Based on the information you provided. This is an indicative estimate."
-      onBack={onBack}
-      backLabel="Back"
-      focusHeadingOnMount={focusHeadingOnMount}
-      actions={
-        <button type="button" className={styles.primaryAction} onClick={onNext}>
-          See what connected intelligence could reveal <span aria-hidden="true">→</span>
-        </button>
-      }
-    >
-      <div className={styles.cardStack}>
-        <section className={`${styles.card} ${styles.cardEconomics}`} aria-labelledby="rewards-economics-title">
-          <h3 id="rewards-economics-title" className={styles.cardTitle}>
-            Card economics
-          </h3>
-          <p className={styles.cardText}>Based on your inputs.</p>
-          <dl className={styles.metricList}>
-            <div className={styles.metric}>
-              <dt className={styles.metricLabel}>Estimated annual rewards</dt>
-              <dd className={rewardsKnown ? styles.metricValue : `${styles.metricValue} ${styles.metricValueMuted}`}>
-                {rewardsKnown ? RUPEES.format(result.estimated_annual_rewards as number) : "Unknown"}
-              </dd>
-            </div>
-            <div className={styles.metric}>
-              <dt className={styles.metricLabel}>Annual fee</dt>
-              <dd className={styles.metricValue}>{RUPEES.format(result.annual_card_fee)}</dd>
-            </div>
-            <div className={styles.metric}>
-              <dt className={styles.metricLabel}>Estimated net annual value</dt>
-              <dd
-                className={
-                  netKnown
-                    ? `${styles.metricValue} ${(result.estimated_net_annual_value as number) < 0 ? styles.metricNegative : ""}`
-                    : `${styles.metricValue} ${styles.metricValueMuted}`
-                }
-              >
-                {netKnown ? RUPEES.format(result.estimated_net_annual_value as number) : "Not available yet"}
-              </dd>
-            </div>
-          </dl>
+    <section aria-labelledby={headingId} className={ui.grid}>
+      <div className={ui.colMain}>
+        <div className={`${ui.section} ${ui.o1}`}>
+          <button type="button" className={ui.backButton} onClick={onBack}>
+            Back
+          </button>
+          <StepHeading id={headingId} stepLabel="Step 4 of 5" title="Your Rewards Check" eyebrow focusOnMount={focusHeadingOnMount} />
+          <p className={ui.headline}>{headline}</p>
+          <p className={ui.supporting}>Based on the information you provided. This is an indicative estimate.</p>
+          {exampleApplied ? <ExampleBanner edited={exampleEdited} /> : null}
+        </div>
 
-          {basisLine ? <p className={styles.cardText}>{basisLine}</p> : null}
-          {!rewardsKnown && result.annualized_reward_units !== null && result.annualized_reward_units !== undefined ? (
-            <p className={styles.cardText}>
-              Annualised quantity: {QUANTITY.format(result.annualized_reward_units)} {unitWord}. We haven’t converted this to rupees.
-            </p>
-          ) : null}
-          {!rewardsKnown && (result.annualized_reward_units === null || result.annualized_reward_units === undefined) ? (
-            <p className={styles.cardText}>Reward value is unknown, so we can’t estimate annual rewards.</p>
-          ) : null}
-          <p className={styles.cardText}>{interestLine(result)}</p>
-          {!netKnown ? (
-            <p className={styles.cardText}>
-              {rewardsKnown
-                ? "A net value after interest can’t be shown while the interest impact is unknown."
-                : "A net value needs a reward value."}
-            </p>
-          ) : null}
+        <div className={`${ui.darkPanel} ${netKnown ? "" : ui.darkPanelMuted} ${ui.o2}`}>
+          <p className={ui.darkLabel}>Net annual value</p>
+          <p className={ui.darkValue}>{netKnown ? rupees(net) : CANNOT_CALCULATE}</p>
+          <p className={ui.darkNote}>{reason ?? (result.interest_input_basis === "known" ? "Estimated annual rewards minus your annual fee and estimated interest." : "Estimated annual rewards minus your annual fee.")}</p>
+        </div>
+
+        {result.main_pressure_code || result.nudge_code === "COMPARE_REWARDS_FEE_INTEREST" ? (
+          <section className={`${ui.insightCard} ${ui.o6}`} aria-label="Pressure and a nudge">
+            {result.main_pressure_code ? (
+              <div className={ui.insightRow}>
+                <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
+                  !
+                </span>
+                <div>
+                  <h3 className={ui.insightTitle}>Main pressure</h3>
+                  <p className={ui.insightBody}>{MAIN_PRESSURE_COPY[result.main_pressure_code]}</p>
+                </div>
+              </div>
+            ) : null}
+            {result.nudge_code === "COMPARE_REWARDS_FEE_INTEREST" ? (
+              <div className={ui.insightRow}>
+                <span className={`${ui.insightIcon} ${ui.iconGood}`} aria-hidden="true">
+                  ✓
+                </span>
+                <div>
+                  <h3 className={ui.insightTitle}>Our nudge</h3>
+                  <p className={ui.insightBody}>{NUDGE_COPY}</p>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
+
+      <div className={ui.colSide}>
+        <section className={`${ui.card} ${ui.o3}`} aria-labelledby="rewards-economics-title">
+          <h3 id="rewards-economics-title" className={ui.cardHeading}>
+            Rewards vs fee <span>(a year)</span>
+          </h3>
+          <ValueBars summary={bars.summary} rows={bars.rows} />
         </section>
 
         {result.spending_fit_status === "CATEGORY_FIT_UNDETERMINED" && priorities.length > 0 ? (
-          <section className={styles.card} aria-labelledby="rewards-priorities-title">
-            <h3 id="rewards-priorities-title" className={styles.cardTitle}>
+          <section className={`${ui.card} ${ui.o5}`} aria-labelledby="rewards-priorities-title">
+            <h3 id="rewards-priorities-title" className={ui.cardHeading}>
               Your spending priorities
             </h3>
-            <ul className={styles.chipList}>
+            <ul className={ui.chipList}>
               {priorities.map((priority) => (
-                <li key={priority} className={styles.chip}>
+                <li key={priority} className={ui.chip}>
                   {PRIORITY_LABELS[priority] ?? priority}
                 </li>
               ))}
             </ul>
-            <p className={styles.cardText}>
-              We can’t tell from the details you entered how well your card rewards these categories.
-            </p>
+            <p className={ui.cardText}>We can’t tell from the details you entered how well your card rewards these categories.</p>
           </section>
         ) : null}
 
-        {result.main_pressure_code ? (
-          <section className={styles.card} aria-labelledby="rewards-pressure-title">
-            <h3 id="rewards-pressure-title" className={styles.cardTitle}>
-              Main pressure
-            </h3>
-            <p className={styles.cardText}>{MAIN_PRESSURE_COPY[result.main_pressure_code]}</p>
-          </section>
-        ) : null}
+        <section className={`${ui.card} ${ui.o7}`} aria-labelledby="rewards-basis-title">
+          <h3 id="rewards-basis-title" className={ui.cardHeading}>
+            Based on
+          </h3>
+          <div className={ui.section} style={{ gap: 8 }}>
+            {basisLine ? <p className={ui.cardText}>{basisLine}</p> : null}
+            {!rewardsKnown && result.annualized_reward_units !== null && result.annualized_reward_units !== undefined ? (
+              <p className={ui.cardText}>
+                Annualised quantity: {QUANTITY.format(result.annualized_reward_units)} {unitWord}. We haven’t converted this to rupees.
+              </p>
+            ) : null}
+            {!rewardsKnown && (result.annualized_reward_units === null || result.annualized_reward_units === undefined) ? (
+              <p className={ui.cardText}>Reward value is unknown, so we can’t estimate annual rewards.</p>
+            ) : null}
+            <p className={ui.cardText}>{interestLine(result)}</p>
+          </div>
+        </section>
 
-        {result.nudge_code === "COMPARE_REWARDS_FEE_INTEREST" ? (
-          <section className={styles.card} aria-labelledby="rewards-nudge-title">
-            <h3 id="rewards-nudge-title" className={styles.cardTitle}>
-              Our nudge
-            </h3>
-            <p className={styles.cardText}>{NUDGE_COPY}</p>
-          </section>
-        ) : null}
-
-        {result.guidance_disclaimer ? <p className={styles.disclaimer}>{result.guidance_disclaimer}</p> : null}
+        <div className={`${ui.section} ${ui.o8}`}>
+          {result.guidance_disclaimer ? <p className={ui.disclaimer}>{result.guidance_disclaimer}</p> : null}
+          <button type="button" className={ui.primaryButton} onClick={onNext}>
+            See a connected-data example
+          </button>
+          <button type="button" className={ui.linkButton} onClick={onChangeFigures}>
+            Change my figures
+          </button>
+        </div>
       </div>
-    </JourneyStepShell>
+    </section>
   );
 }

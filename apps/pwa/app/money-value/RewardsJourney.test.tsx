@@ -57,8 +57,9 @@ function requestBody(fetchMock: ReturnType<typeof vi.fn>, call = 0): Record<stri
   return JSON.parse((fetchMock.mock.calls[call][1] as { body: string }).body);
 }
 
+const REWARD_TYPE_HELPER = "If your card offers several types, choose the one you use most. You can run another check for a different reward.";
 const balanceGroup = () => screen.getByRole("group", { name: "Do you pay the full statement balance?" });
-const rewardTypeGroup = () => screen.getByRole("group", { name: "What type of rewards does your card offer?" });
+const rewardTypeGroup = () => screen.getByRole("group", { name: "Which reward type do you want to assess?" });
 
 async function renderJourney(): Promise<User> {
   const { RewardsJourney } = await import("./RewardsJourney");
@@ -79,12 +80,12 @@ async function completeStep2(user: User, balance = "Pay in full each month", rew
 
 async function fillBasics(user: User, priorities: string[] = ["Dining", "Travel"], spend = "25000", fee = "4000") {
   for (const name of priorities) await user.click(screen.getByRole("checkbox", { name }));
-  await user.type(screen.getByLabelText("Monthly card spend (₹)"), spend);
-  await user.type(screen.getByLabelText("Annual card fee (₹)"), fee);
+  await user.type(screen.getByLabelText("Monthly card spend"), spend);
+  await user.type(screen.getByLabelText("Annual card fee"), fee);
 }
 
 async function fillCashback(user: User, amount = "900", period = "monthly") {
-  await user.type(screen.getByLabelText("Cashback received (₹)"), amount);
+  await user.type(screen.getByLabelText("Cashback received"), amount);
   await user.selectOptions(screen.getByLabelText("Period"), period);
 }
 
@@ -101,8 +102,8 @@ async function runToStep4(user: User, balance = "Pay in full each month") {
 }
 
 async function goToStep5(user: User) {
-  await user.click(screen.getByRole("button", { name: /See what connected intelligence could reveal/ }));
-  await screen.findByRole("heading", { name: "Here is what Sutriva could reveal from a statement." });
+  await user.click(screen.getByRole("button", { name: /See a connected-data example/ }));
+  await screen.findByRole("heading", { name: "Your figures at a glance" });
 }
 
 const emitted = () => trackEventMock.mock.calls.map(([type, , details]) => [type, details?.screenName]);
@@ -157,12 +158,12 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       await user.click(screen.getByRole("button", { name: "Continue" }));
       const alert = await screen.findByRole("alert");
       expect(alert).toHaveTextContent("Choose how you pay your statement balance.");
-      expect(alert).toHaveTextContent("Choose the type of rewards your card offers.");
+      expect(alert).toHaveTextContent("Choose the reward type you want to assess.");
       expect(screen.getByRole("heading", { name: "Your card behaviour" })).toBeInTheDocument();
 
       await user.click(within(balanceGroup()).getByRole("radio", { name: "Not sure" }));
       await user.click(screen.getByRole("button", { name: "Continue" }));
-      expect(screen.getByRole("alert")).toHaveTextContent("Choose the type of rewards your card offers.");
+      expect(screen.getByRole("alert")).toHaveTextContent("Choose the reward type you want to assess.");
       expect(screen.getByRole("heading", { name: "Your card behaviour" })).toBeInTheDocument();
       expect(emitted()).not.toContainEqual(["step_completed", "rewards_card_behaviour"]);
     });
@@ -174,21 +175,22 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(balanceGroup()).toHaveAccessibleDescription(/Choose how you pay your statement balance\./);
       expect(balanceGroup()).toHaveAttribute("aria-describedby", expect.stringContaining("rewards-balance-error"));
       expect(document.getElementById("rewards-balance-error")).toHaveTextContent("Choose how you pay your statement balance.");
-      expect(rewardTypeGroup()).toHaveAccessibleDescription("Choose the type of rewards your card offers.");
-      expect(rewardTypeGroup()).toHaveAttribute("aria-describedby", "rewards-reward-type-error");
+      expect(rewardTypeGroup()).toHaveAccessibleDescription(/Choose the reward type you want to assess\./);
+      expect(rewardTypeGroup()).toHaveAttribute("aria-describedby", expect.stringContaining("rewards-reward-type-error"));
 
       await user.click(within(balanceGroup()).getByRole("radio", { name: "Not sure" }));
       expect(document.getElementById("rewards-balance-error")).toBeNull();
       expect(balanceGroup()).toHaveAccessibleDescription("This helps us understand your situation.");
       expect(balanceGroup().getAttribute("aria-describedby")).not.toContain("rewards-balance-error");
-      expect(rewardTypeGroup()).toHaveAttribute("aria-describedby", "rewards-reward-type-error");
+      expect(rewardTypeGroup()).toHaveAttribute("aria-describedby", expect.stringContaining("rewards-reward-type-error"));
     });
 
     it("shows no inline choice errors before the first failed attempt", async () => {
       await renderJourney();
       expect(document.getElementById("rewards-balance-error")).toBeNull();
       expect(document.getElementById("rewards-reward-type-error")).toBeNull();
-      expect(rewardTypeGroup()).not.toHaveAttribute("aria-describedby");
+      expect(rewardTypeGroup()).toHaveAccessibleDescription(REWARD_TYPE_HELPER);
+      expect(rewardTypeGroup().getAttribute("aria-describedby")).not.toContain("rewards-reward-type-error");
     });
 
     it("treats 'Not sure' as an explicit answer, distinct from unanswered", async () => {
@@ -208,9 +210,9 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       const priorities = screen.getAllByRole("checkbox");
       expect(priorities.map((box) => box.getAttribute("value"))).toEqual(["dining", "travel", "grocery", "everyday_bills"]);
       priorities.forEach((box) => expect(box).not.toBeChecked());
-      expect(screen.getByLabelText("Monthly card spend (₹)")).toHaveValue(null);
-      expect(screen.getByLabelText("Annual card fee (₹)")).toHaveValue(null);
-      expect(screen.getByLabelText("Cashback received (₹)")).toHaveValue(null);
+      expect(screen.getByLabelText("Monthly card spend")).toHaveValue("");
+      expect(screen.getByLabelText("Annual card fee")).toHaveValue("");
+      expect(screen.getByLabelText("Cashback received")).toHaveValue("");
       expect(screen.getByLabelText("Period")).toHaveValue("");
       expect(screen.getByText("Select up to 3 categories.")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Use example values" })).not.toBeInTheDocument();
@@ -237,8 +239,8 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
     it("requires at least one priority", async () => {
       const user = await renderJourney();
       await completeStep2(user);
-      await user.type(screen.getByLabelText("Monthly card spend (₹)"), "25000");
-      await user.type(screen.getByLabelText("Annual card fee (₹)"), "4000");
+      await user.type(screen.getByLabelText("Monthly card spend"), "25000");
+      await user.type(screen.getByLabelText("Annual card fee"), "4000");
       await fillCashback(user);
 
       await user.click(screen.getByRole("button", { name: "Check my rewards" }));
@@ -261,7 +263,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       const user = await renderJourney();
       await completeStep2(user);
       await user.click(screen.getByRole("checkbox", { name: "Grocery" }));
-      await user.type(screen.getByLabelText("Annual card fee (₹)"), "0");
+      await user.type(screen.getByLabelText("Annual card fee"), "0");
       await fillCashback(user, "0");
 
       await user.click(screen.getByRole("button", { name: "Check my rewards" }));
@@ -271,7 +273,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(alert).not.toHaveTextContent("Enter the reward amount.");
       expect(fetchMock).not.toHaveBeenCalled();
 
-      await user.type(screen.getByLabelText("Monthly card spend (₹)"), "0");
+      await user.type(screen.getByLabelText("Monthly card spend"), "0");
       await submitStep3(user);
 
       const body = requestBody(fetchMock);
@@ -284,7 +286,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       const user = await renderJourney();
       await completeStep2(user);
       await fillBasics(user);
-      await user.type(screen.getByLabelText("Cashback received (₹)"), "900");
+      await user.type(screen.getByLabelText("Cashback received"), "900");
 
       await user.click(screen.getByRole("button", { name: "Check my rewards" }));
 
@@ -328,7 +330,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       const user = await renderJourney();
       await completeStep2(user, "Pay in full each month", "Not sure");
 
-      expect(screen.queryByLabelText("Cashback received (₹)")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Cashback received")).not.toBeInTheDocument();
       expect(screen.getByText(/we can’t estimate reward value yet/)).toBeInTheDocument();
       await fillBasics(user);
       await submitStep3(user);
@@ -348,7 +350,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(screen.getByRole("group", { name: "What do you know about the points you earned?" })).toBeInTheDocument();
       expect(screen.getByRole("radio", { name: "The approximate ₹ value" })).not.toBeChecked();
       await user.click(screen.getByRole("radio", { name: "The approximate ₹ value" }));
-      await user.type(screen.getByLabelText("Approximate reward value (₹)"), "500");
+      await user.type(screen.getByLabelText("Approximate reward value"), "500");
       await user.selectOptions(screen.getByLabelText("Period"), "quarterly");
       await submitStep3(user);
 
@@ -466,7 +468,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
 
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
       expect(screen.getByText(/continuing without a reward value/)).toBeInTheDocument();
-      expect(screen.queryByLabelText("Cashback received (₹)")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Cashback received")).not.toBeInTheDocument();
       await submitStep3(user);
 
       const body = requestBody(fetchMock);
@@ -483,8 +485,8 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       await user.click(within(dialog).getByRole("button", { name: "I know points/miles, not ₹ value" }));
 
       expect(await screen.findByLabelText("Points earned in this period")).toBeInTheDocument();
-      expect(screen.queryByLabelText("Cashback received (₹)")).not.toBeInTheDocument();
-      expect(screen.queryByLabelText("Approximate reward value (₹)")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Cashback received")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Approximate reward value")).not.toBeInTheDocument();
     });
 
     it("'I found it' reveals the amount entry, even if the reward type was 'Not sure'", async () => {
@@ -494,7 +496,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
 
       await user.click(within(dialog).getByRole("button", { name: "I found it — enter amount" }));
 
-      expect(await screen.findByLabelText("Cashback received (₹)")).toBeInTheDocument();
+      expect(await screen.findByLabelText("Cashback received")).toBeInTheDocument();
     });
 
     it("lets the customer undo 'continue without a value'", async () => {
@@ -505,7 +507,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
 
       await user.click(await screen.findByRole("button", { name: "I’ll enter it instead" }));
 
-      expect(await screen.findByLabelText("Cashback received (₹)")).toBeInTheDocument();
+      expect(await screen.findByLabelText("Cashback received")).toBeInTheDocument();
     });
   });
 
@@ -527,9 +529,9 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
 
       expect(await screen.findByText("We couldn’t complete your rewards check.")).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Your priorities and inputs" })).toBeInTheDocument();
-      expect(screen.getByLabelText("Monthly card spend (₹)")).toHaveValue(25000);
-      expect(screen.getByLabelText("Annual card fee (₹)")).toHaveValue(4000);
-      expect(screen.getByLabelText("Cashback received (₹)")).toHaveValue(900);
+      expect(screen.getByLabelText("Monthly card spend")).toHaveValue("25,000");
+      expect(screen.getByLabelText("Annual card fee")).toHaveValue("4,000");
+      expect(screen.getByLabelText("Cashback received")).toHaveValue("900");
       expect(screen.getByRole("checkbox", { name: "Dining" })).toBeChecked();
       expect(screen.getByRole("checkbox", { name: "Travel" })).toBeChecked();
       expect(screen.getByLabelText("Period")).toHaveValue("monthly");
@@ -563,10 +565,10 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       await runToStep4(user);
 
       expect(screen.getByText("Based on the information you provided. This is an indicative estimate.")).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "Card economics" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Rewards vs fee/ })).toBeInTheDocument();
       expect(screen.getByText("Estimated annual rewards").nextSibling).toHaveTextContent("₹10,800");
       expect(screen.getByText("Annual fee").nextSibling).toHaveTextContent("₹4,000");
-      expect(screen.getByText("Estimated net annual value").nextSibling).toHaveTextContent("₹6,800");
+      expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("₹6,800");
       expect(screen.getByText("Based on ₹900 cashback per month.")).toBeInTheDocument();
       expect(screen.getByText("No interest cost is included because you pay the statement balance in full.")).toBeInTheDocument();
 
@@ -606,7 +608,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       const user = await renderJourney();
       await runToStep4(user);
 
-      expect(screen.getByText("Estimated net annual value").nextSibling).toHaveTextContent("-₹1,200");
+      expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("−₹1,200");
       expect(screen.getByText("Your annual fee is higher than the estimated annual rewards.")).toBeInTheDocument();
     });
 
@@ -616,9 +618,9 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       await runToStep4(user, "Carry a balance");
 
       expect(screen.getByText("Estimated annual rewards").nextSibling).toHaveTextContent("₹10,800");
-      expect(screen.getByText("Estimated net annual value").nextSibling).toHaveTextContent("Not available yet");
+      expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("Can't calculate yet");
       expect(screen.getByText("Interest impact is unknown. No interest cost has been assumed.")).toBeInTheDocument();
-      expect(screen.getByText("A net value after interest can’t be shown while the interest impact is unknown.")).toBeInTheDocument();
+      expect(screen.getByText("Interest impact is unknown, so we can’t show your value after interest. We haven’t assumed an interest cost.")).toBeInTheDocument();
       expect(screen.getByText("Interest impact is unknown, so we can’t show your net value after interest.")).toBeInTheDocument();
     });
 
@@ -630,8 +632,8 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       await submitStep3(user);
 
       expect(screen.getByText("Estimated annual rewards").nextSibling).toHaveTextContent("Unknown");
-      expect(screen.getByText("Estimated net annual value").nextSibling).toHaveTextContent("Not available yet");
-      expect(screen.getByText("A net value needs a reward value.")).toBeInTheDocument();
+      expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("Can't calculate yet");
+      expect(screen.getByText("We need a reward value to work out what your rewards are worth. We haven’t guessed one.")).toBeInTheDocument();
     });
 
     it("degrades safely if an older backend omits the new result codes", async () => {
@@ -639,7 +641,7 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       const user = await renderJourney();
       await runToStep4(user);
 
-      expect(screen.getByRole("heading", { name: "Card economics" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /Rewards vs fee/ })).toBeInTheDocument();
       expect(screen.queryByRole("heading", { name: "Main pressure" })).not.toBeInTheDocument();
       expect(screen.queryByRole("heading", { name: "Our nudge" })).not.toBeInTheDocument();
       expect(screen.queryByRole("heading", { name: "Your spending priorities" })).not.toBeInTheDocument();
@@ -649,9 +651,9 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       const user = await renderJourney();
       await runToStep4(user);
 
-      await user.click(screen.getByRole("button", { name: /See what connected intelligence could reveal/ }));
+      await user.click(screen.getByRole("button", { name: /See a connected-data example/ }));
 
-      expect(await screen.findByRole("heading", { name: "Here is what Sutriva could reveal from a statement." })).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: "Your figures at a glance" })).toBeInTheDocument();
       expect(screen.queryByRole("heading", { name: "Your Rewards Check" })).not.toBeInTheDocument();
     });
   });
@@ -684,20 +686,22 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(screen.getByRole("img", { name: "Example monthly spend mix, total ₹25,000: Dining 32%, Travel 18%, Grocery 22%, Other 28%." })).toBeInTheDocument();
     });
 
-    it("never interpolates or reflects the customer's inputs", async () => {
+    it("never interpolates the customer's inputs into the illustrative panel", async () => {
       const user = await renderJourney();
       await completeStep2(user, "Carry a balance", "Points");
       await user.click(screen.getByRole("radio", { name: "The approximate ₹ value" }));
       await fillBasics(user, ["Everyday bills"], "77777", "3333");
-      await user.type(screen.getByLabelText("Approximate reward value (₹)"), "4242");
+      await user.type(screen.getByLabelText("Approximate reward value"), "4242");
       await user.selectOptions(screen.getByLabelText("Period"), "yearly");
       await submitStep3(user);
       await goToStep5(user);
 
-      const text = document.body.textContent ?? "";
+      const text = screen.getByRole("region", { name: "What connected data could add" }).textContent ?? "";
       for (const leaked of ["77,777", "77777", "3,333", "3333", "4,242", "4242", "Everyday bills"]) {
         expect(text).not.toContain(leaked);
       }
+      // The separate primary graphic is where the active dataset appears.
+      expect(screen.getByRole("region", { name: /Rewards, fee and net value/ })).toHaveTextContent("Everyday bills");
     });
 
     it("shows no pilot call to action, disabled or otherwise, and no data-connection controls", async () => {
@@ -744,13 +748,13 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
 
       await user.click(screen.getByRole("button", { name: "Back" }));
       expect(await screen.findByRole("heading", { name: "Your Rewards Check" })).toBeInTheDocument();
-      expect(screen.getByText("Estimated net annual value").nextSibling).toHaveTextContent("₹6,800");
+      expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("₹6,800");
 
       await user.click(screen.getByRole("button", { name: "Back" }));
       expect(await screen.findByRole("heading", { name: "Your priorities and inputs" })).toBeInTheDocument();
-      expect(screen.getByLabelText("Monthly card spend (₹)")).toHaveValue(25000);
-      expect(screen.getByLabelText("Annual card fee (₹)")).toHaveValue(4000);
-      expect(screen.getByLabelText("Cashback received (₹)")).toHaveValue(900);
+      expect(screen.getByLabelText("Monthly card spend")).toHaveValue("25,000");
+      expect(screen.getByLabelText("Annual card fee")).toHaveValue("4,000");
+      expect(screen.getByLabelText("Cashback received")).toHaveValue("900");
       expect(screen.getByRole("checkbox", { name: "Dining" })).toBeChecked();
       expect(screen.getByLabelText("Period")).toHaveValue("monthly");
     });
@@ -772,8 +776,8 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       await user.click(screen.getByRole("button", { name: "Back" }));
       await screen.findByRole("heading", { name: "Your priorities and inputs" });
 
-      await user.clear(screen.getByLabelText("Annual card fee (₹)"));
-      await user.type(screen.getByLabelText("Annual card fee (₹)"), "5000");
+      await user.clear(screen.getByLabelText("Annual card fee"));
+      await user.type(screen.getByLabelText("Annual card fee"), "5000");
       await submitStep3(user);
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -937,5 +941,226 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
 
       expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
     });
+  });
+});
+
+// --- Visual reconciliation: brand frame, example mode, wording and the incomplete state ------------
+
+const EXAMPLE_BANNER = "Example mode — these are sample figures, not your data.";
+
+async function useExample(user: User) {
+  await user.click(screen.getByRole("tab", { name: "Try an example" }));
+  await user.click(screen.getByRole("button", { name: "Use these example values" }));
+}
+
+describe("Rewards journey: reconciled frame, example mode and honest incomplete state", () => {
+  beforeEach(() => {
+    ensureAnonymousSessionMock.mockReset();
+    ensureAnonymousSessionMock.mockResolvedValue(undefined);
+    trackEventMock.mockReset();
+    window.sessionStorage.clear();
+    window.localStorage.clear();
+    window.history.replaceState(null, "");
+    mockFetchOk();
+  });
+
+  afterEach(() => cleanup());
+
+  it("shows the Sutriva logo and step progress on every step", async () => {
+    const user = await renderJourney();
+    const header = () => document.querySelector("header") as HTMLElement;
+    expect(within(header()).getByText("Sutriva")).toBeInTheDocument();
+    expect(header().querySelector("svg")).not.toBeNull();
+    expect(header()).toHaveTextContent("Step 2 of 5");
+    await completeStep2(user);
+    expect(header()).toHaveTextContent("Step 3 of 5");
+    await fillBasics(user);
+    await fillCashback(user);
+    await submitStep3(user);
+    expect(header()).toHaveTextContent("Step 4 of 5");
+    await goToStep5(user);
+    expect(header()).toHaveTextContent("Step 5 of 5");
+  });
+
+  it("asks which reward type to assess, with helper text, as a single choice", async () => {
+    await renderJourney();
+    expect(screen.queryByRole("group", { name: "What type of rewards does your card offer?" })).toBeNull();
+    const group = rewardTypeGroup();
+    expect(group).toHaveAccessibleDescription(REWARD_TYPE_HELPER);
+    const radios = within(group).getAllByRole("radio");
+    expect(radios.map((radio) => (radio as HTMLInputElement).type)).toEqual(["radio", "radio", "radio", "radio"]);
+    expect(within(group).queryAllByRole("checkbox")).toHaveLength(0);
+  });
+
+  it("keeps the reward type single-select: choosing another replaces the first", async () => {
+    const user = await renderJourney();
+    await user.click(within(rewardTypeGroup()).getByRole("radio", { name: "Points" }));
+    await user.click(within(rewardTypeGroup()).getByRole("radio", { name: "Miles" }));
+    expect(within(rewardTypeGroup()).getByRole("radio", { name: "Points" })).not.toBeChecked();
+    expect(within(rewardTypeGroup()).getByRole("radio", { name: "Miles" })).toBeChecked();
+  });
+
+  it("previews the sample without touching the form, then fills Steps 2 and 3 from it", async () => {
+    const user = await renderJourney();
+    expect(screen.getByRole("tab", { name: "Enter my values" })).toHaveAttribute("aria-selected", "true");
+    await user.click(screen.getByRole("tab", { name: "Try an example" }));
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("₹25,000");
+    screen.getAllByRole("radio").forEach((radio) => expect(radio).not.toBeChecked());
+    expect(screen.queryByText(EXAMPLE_BANNER)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Use these example values" }));
+    expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
+    expect(within(balanceGroup()).getByRole("radio", { name: "Pay in full each month" })).toBeChecked();
+    expect(within(rewardTypeGroup()).getByRole("radio", { name: "Cashback" })).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your priorities and inputs" });
+    expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
+    for (const name of ["Dining", "Travel", "Grocery"]) expect(screen.getByRole("checkbox", { name })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Everyday bills" })).not.toBeChecked();
+    expect(screen.getByLabelText("Monthly card spend")).toHaveValue("25,000");
+    expect(screen.getByLabelText("Annual card fee")).toHaveValue("4,000");
+    expect(screen.getByLabelText("Cashback received")).toHaveValue("900");
+    expect(screen.getByLabelText("Period")).toHaveValue("monthly");
+    expect(screen.queryByText("Example values edited")).toBeNull();
+
+    await user.type(screen.getByLabelText("Annual card fee"), "5");
+    expect(screen.getByText("Example values edited")).toBeInTheDocument();
+  });
+
+  it("clears the example, returns to Step 2 and leaves every field empty", async () => {
+    const user = await renderJourney();
+    await useExample(user);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your priorities and inputs" });
+
+    await user.click(screen.getByRole("button", { name: "Clear example and enter my values" }));
+    await screen.findByRole("heading", { name: "Your card behaviour" });
+    expect(screen.queryByText(EXAMPLE_BANNER)).toBeNull();
+    expect(screen.getByRole("tab", { name: "Enter my values" })).toHaveAttribute("aria-selected", "true");
+    screen.getAllByRole("radio").forEach((radio) => expect(radio).not.toBeChecked());
+
+    await user.click(within(balanceGroup()).getByRole("radio", { name: "Not sure" }));
+    await user.click(within(rewardTypeGroup()).getByRole("radio", { name: "Cashback" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your priorities and inputs" });
+    expect(screen.getByLabelText("Monthly card spend")).toHaveValue("");
+    screen.getAllByRole("checkbox").forEach((box) => expect(box).not.toBeChecked());
+  });
+
+  it("sends the sample as the request and carries the same dataset through Steps 4 and 5", async () => {
+    const fetchMock = mockFetchOk();
+    const user = await renderJourney();
+    await useExample(user);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your priorities and inputs" });
+    await user.click(screen.getByRole("button", { name: "Check my rewards" }));
+    await screen.findByRole("heading", { name: "Your Rewards Check" });
+
+    expect(requestBody(fetchMock)).toEqual({
+      monthly_card_spend: 25000,
+      annual_card_fee: 4000,
+      reward_type: "cashback",
+      spending_priorities: ["dining", "travel", "grocery"],
+      balance_behavior: "pay_in_full",
+      reward_period: "monthly",
+      reward_input_basis: "cashback_amount",
+      cashback_amount: 900,
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
+    expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("₹6,800");
+
+    await user.click(screen.getByRole("button", { name: /See a connected-data example/ }));
+    await screen.findByRole("heading", { name: "Your figures at a glance" });
+    expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
+    const glance = screen.getByRole("region", { name: /Rewards, fee and net value/ });
+    expect(glance).toHaveTextContent("₹10,800");
+    expect(glance).toHaveTextContent("₹4,000");
+    expect(glance).toHaveTextContent("₹6,800");
+    expect(glance).toHaveTextContent("Dining, Travel, Grocery");
+  });
+
+  it("keeps the illustrative panel free of the customer's figures", async () => {
+    const user = await renderJourney();
+    await runToStep4(user);
+    await goToStep5(user);
+    const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+    expect(illustrative).toContainElement(screen.getByRole("note"));
+    for (const value of ["10,800", "6,800", "4,000", "900"]) expect(illustrative.textContent ?? "").not.toContain(value);
+    const glance = screen.getByRole("region", { name: /Rewards, fee and net value/ });
+    expect(glance).toHaveTextContent("₹6,800");
+    expect(illustrative).not.toContainElement(glance);
+  });
+
+  it("says Can't calculate yet, and gives the reason, when the reward value is unknown", async () => {
+    mockFetchOk({ reward_value_known: false, estimated_annual_rewards: null, estimated_net_annual_value: null, reward_amount_per_period: null, reward_period: null, main_pressure_code: "REWARD_VALUE_UNKNOWN" });
+    const user = await renderJourney();
+    await completeStep2(user, "Pay in full each month", "Not sure");
+    await fillBasics(user);
+    await submitStep3(user);
+
+    expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("Can't calculate yet");
+    expect(screen.getByText("We can’t calculate your net annual value yet.")).toBeInTheDocument();
+    expect(screen.getByText("We need a reward value to work out what your rewards are worth. We haven’t guessed one.")).toBeInTheDocument();
+    const bars = screen.getByRole("region", { name: /Rewards vs fee/ });
+    expect(bars).toHaveTextContent("Unknown");
+    expect(bars).not.toHaveTextContent("₹0");
+
+    await user.click(screen.getByRole("button", { name: /See a connected-data example/ }));
+    await screen.findByRole("heading", { name: "Your figures at a glance" });
+    const glance = screen.getByRole("region", { name: /Rewards, fee and net value/ });
+    expect(glance).toHaveTextContent("Unknown");
+    expect(glance).toHaveTextContent("Can't calculate yet");
+    expect(glance).not.toHaveTextContent("₹0");
+  });
+
+  it("does not guess interest for a carried balance: net stays Can't calculate yet", async () => {
+    mockFetchOk({ interest_input_basis: "unknown", interest_value_known: false, estimated_annual_interest_cost: null, estimated_net_annual_value: null, main_pressure_code: "INTEREST_EFFECT_UNKNOWN" });
+    const user = await renderJourney();
+    await runToStep4(user, "Carry a balance");
+    expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("Can't calculate yet");
+    expect(screen.getByText("Interest impact is unknown, so we can’t show your value after interest. We haven’t assumed an interest cost.")).toBeInTheDocument();
+    expect(screen.queryByText(/Estimated annual interest/)).toBeNull();
+  });
+
+  it("offers Change my figures on the result, returning to Step 3 with the entries kept", async () => {
+    const user = await renderJourney();
+    await runToStep4(user);
+    await user.click(screen.getByRole("button", { name: "Change my figures" }));
+    expect(await screen.findByRole("heading", { name: "Your priorities and inputs" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Monthly card spend")).toHaveValue("25,000");
+  });
+
+  it("groups rupee entries in the Indian style and rejects a minus sign", async () => {
+    const user = await renderJourney();
+    await completeStep2(user);
+    const spend = screen.getByLabelText("Monthly card spend");
+    await user.type(spend, "-1234567");
+    expect(spend).toHaveValue("12,34,567");
+  });
+
+  it("never mentions a later phase on any step, and emits only the approved events without values", async () => {
+    const user = await renderJourney();
+    const forbidden = /pilot|mobile number|OTP|Twilio|consent|connect (my|your)? ?(bank|account|bureau)|upload (a )?statement|Step 6/i;
+    expect(document.body.textContent ?? "").not.toMatch(forbidden);
+    await useExample(user);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your priorities and inputs" });
+    expect(document.body.textContent ?? "").not.toMatch(forbidden);
+    await user.click(screen.getByRole("button", { name: "Check my rewards" }));
+    await screen.findByRole("heading", { name: "Your Rewards Check" });
+    expect(document.body.textContent ?? "").not.toMatch(forbidden);
+    await goToStep5(user);
+    expect(document.body.textContent ?? "").not.toMatch(forbidden);
+
+    expect(emitted()).toEqual([
+      ["step_viewed", "rewards_card_behaviour"],
+      ["step_completed", "rewards_card_behaviour"],
+      ["step_viewed", "rewards_priorities_inputs"],
+      ["step_completed", "rewards_priorities_inputs"],
+      ["result_declared", "rewards_check"],
+      ["connected_example_seen", "rewards_connected_example"],
+    ]);
+    expect(JSON.stringify(trackEventMock.mock.calls)).not.toMatch(/25000|4000|900|cashback|Example mode/i);
   });
 });

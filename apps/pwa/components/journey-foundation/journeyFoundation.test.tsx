@@ -307,7 +307,7 @@ describe("shared stylesheet accessibility guarantees", () => {
   };
 
   it("keeps ordinary choice cards and the Back button at least 44px tall", () => {
-    expect(rule(".choiceCard")).toMatch(/min-height:\s*44px/);
+    expect(rule(".choiceCard")).toMatch(/min-height:\s*(4[4-9]|[5-9]\d)px/);
     expect(rule(".backButton")).toMatch(/min-height:\s*44px/);
   });
 
