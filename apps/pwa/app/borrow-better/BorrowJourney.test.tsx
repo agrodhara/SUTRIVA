@@ -638,8 +638,10 @@ describe("Step 5 — What your real data could reveal", () => {
     // Stated once, in the first declared-data panel, tied to its own chart.
     expect(screen.getByText("This is ₹12,089 more than your monthly take-home income.")).toBeInTheDocument();
     // The second panel points back to the one action already offered on the check, instead of restating
-    // the same rupee figure again with no new information.
-    expect(screen.getByText("As on your check, reducing the loan amount or extending the tenure could help — this shortfall isn't resolved here.")).toBeInTheDocument();
+    // the same rupee figure again with no new information. It names the action (return to the check) and
+    // does not imply that changing the amount or tenure would necessarily make the loan affordable.
+    expect(screen.getByText("This shortfall isn't resolved here. Return to your check to try a different loan amount or tenure.")).toBeInTheDocument();
+    expect(screen.queryByText(/reducing the loan amount or extending the tenure could help/)).toBeNull();
     expect(screen.queryByText(/monthly increase, leaving about/)).toBeNull();
   });
 
@@ -658,6 +660,7 @@ describe("Step 5 — What your real data could reveal", () => {
 
     expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
     expect(screen.getByRole("heading", { name: "What connected data could add" })).toBeInTheDocument();
+    expect(screen.getByText("This fictional example shows what permissioned data could help analyse.")).toBeInTheDocument();
     expect(screen.getByText("Essential spending increased")).toBeInTheDocument();
     expect(screen.getByText("in 2 of the last 6 months.")).toBeInTheDocument();
     expect(screen.getByText("Income regularity")).toBeInTheDocument();
@@ -667,7 +670,8 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(screen.getByText("Typical month-end buffer")).toBeInTheDocument();
     expect(screen.getByText("₹8,200")).toBeInTheDocument();
     expect(screen.getByText("A ₹6,000 EMI may end in 5 months")).toBeInTheDocument();
-    expect(screen.getByText("Nothing has been connected. No bank, account, transaction or bureau data is used on this screen.")).toBeInTheDocument();
+    // Plain language, not an invitation to connect now: this version doesn't.
+    expect(screen.getByText("This version does not connect to your bank or bureau data.")).toBeInTheDocument();
   });
 
   it("gives the chart a complete text alternative", async () => {

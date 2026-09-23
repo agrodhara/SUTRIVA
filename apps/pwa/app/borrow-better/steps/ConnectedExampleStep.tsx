@@ -168,9 +168,10 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
           <p className={ui.cardText} style={{ marginTop: 12 }}>
             {result.breathing_room_after < 0
               ? // The exact shortfall figure is already stated once, in the panel above — repeating it a
-                // third time here added no new information. This instead points back to the one action
-                // already offered on the check, and says plainly that it hasn't been applied here.
-                "As on your check, reducing the loan amount or extending the tenure could help — this shortfall isn't resolved here."
+                // third time here added no new information. This names the next action in concrete terms
+                // (return to the check) without suggesting that changing the amount or tenure would
+                // necessarily make the loan affordable — only that it's where those changes can be tried.
+                "This shortfall isn't resolved here. Return to your check to try a different loan amount or tenure."
               : `That's a ${formatRupeesExact(Math.abs(result.main_pressure.monthly_amount))} monthly increase, leaving about ${formatRupeesExact(result.breathing_room_after)}.`}
           </p>
           <p className={ui.disclaimer} style={{ marginTop: 8 }}>

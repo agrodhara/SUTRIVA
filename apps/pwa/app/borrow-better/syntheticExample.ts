@@ -6,8 +6,8 @@
 
 export const SYNTHETIC_EXAMPLE = {
   title: "What connected data could add",
-  intro: "This synthetic example shows what Sutriva may reveal after you separately choose to connect relevant data.",
-  notConnectedNote: "Nothing has been connected. No bank, account, transaction or bureau data is used on this screen.",
+  intro: "This fictional example shows what permissioned data could help analyse.",
+  notConnectedNote: "This version does not connect to your bank or bureau data.",
   incomeRegularity: { title: "Income regularity", detail: "Salary received consistently" },
   recurringCommitments: { title: "Recurring commitments", detail: "₹31,500 identified" },
   typicalMonthEndBuffer: { title: "Typical month-end buffer", detail: "₹8,200" },

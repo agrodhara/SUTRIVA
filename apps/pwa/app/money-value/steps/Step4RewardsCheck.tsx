@@ -69,7 +69,10 @@ export function Step4RewardsCheck({
   const unitWord = result.reward_type === "miles" ? "miles" : "points";
   const basisLine = rewardBasisLine(result);
   const priorities = result.spending_priorities ?? [];
-  const netLabel = finding.netBeforeInterest === null ? "Net annual value" : finding.isFinal ? "Net annual value" : "Net annual value (before interest)";
+  // A single label here ("Net annual value"), not repeated with "(before interest)": that fact is stated
+  // once, in the caption below the number itself. This bars call never includes a net row (includeNet is
+  // false), so the label passed through is otherwise unused.
+  const netLabel = "Net annual value";
   const bars = buildRewardBars(result, false, { value: finding.netBeforeInterest, label: netLabel });
 
   return (
@@ -87,11 +90,16 @@ export function Step4RewardsCheck({
 
         <div className={`${ui.darkPanel} ${finding.netBeforeInterest === null ? ui.darkPanelMuted : ""} ${ui.o2}`}>
           <p className={ui.darkLabel}>{netLabel}</p>
-          <p className={ui.darkValue}>
-            {finding.netBeforeInterest === null ? "Can't calculate yet" : rupees(finding.netBeforeInterest)}
-            {/* Beside the number itself, not only in the label above it: this is a before-interest estimate. */}
-            {finding.netBeforeInterest !== null && !finding.isFinal ? <span className={ui.darkUnit}> before interest, estimated</span> : null}
-          </p>
+          <p className={ui.darkValue}>{finding.netBeforeInterest === null ? "Can't calculate yet" : rupees(finding.netBeforeInterest)}</p>
+          {/*
+           * A short caption below the number, not an inline unit beside it: at narrow widths, appending
+           * "before interest, estimated" straight after the amount wrapped so "estimated" sat alone on its
+           * own line. Stating it once, here, also avoids saying "before interest" a second time next to a
+           * label that no longer repeats it.
+           */}
+          {finding.netBeforeInterest !== null && !finding.isFinal ? (
+            <p className={ui.darkNote}>Estimate from your entries; excludes interest.</p>
+          ) : null}
           <p className={ui.darkNote}>{finding.explanation}</p>
         </div>
 
