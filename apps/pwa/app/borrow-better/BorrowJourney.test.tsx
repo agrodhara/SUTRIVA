@@ -532,6 +532,51 @@ describe("Step 4 — Your Borrow Better check", () => {
     expect(screen.queryByText(/Reducing the loan by/)).toBeNull();
   });
 
+  it("marks a nudge that would still leave a shortfall as insufficient, not a reassuring green check", async () => {
+    // Short by ₹12,089/month; the ₹1 lakh nudge only preserves ₹3,418 — nowhere near enough.
+    checkResponse = () =>
+      okResponse({
+        ...referenceCheck,
+        breathing_room_before: 5000,
+        breathing_room_after: 5000 - 17088.81,
+        loan_reduction_nudge: { reduction_amount: 100000, monthly_breathing_room_preserved: 3418 },
+      });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+
+    const nudgeHeading = screen.getByRole("heading", { name: "A possible nudge" });
+    expect(screen.getByText("Reducing the loan by ₹1 lakh could preserve about ₹3,418 of monthly breathing room.")).toBeInTheDocument();
+    expect(screen.getByText("This reduces the shortfall but does not close it — you would still be about ₹8,671 short each month.")).toBeInTheDocument();
+    // Same insight row as the shortfall finding above it: a warning icon, not the green check used when a
+    // nudge is genuinely sufficient (see the reference-example test above, which keeps the plain sentence).
+    const nudgeIcon = nudgeHeading.closest("div")?.previousElementSibling;
+    expect(nudgeIcon).toHaveTextContent("!");
+    expect(nudgeIcon).not.toHaveTextContent("✓");
+  });
+
+  it("keeps the plain, unqualified nudge sentence and the green check when the nudge would actually close the shortfall", async () => {
+    // Short by ₹500/month; the ₹1 lakh nudge preserves ₹3,418 — comfortably enough to close it.
+    checkResponse = () =>
+      okResponse({
+        ...referenceCheck,
+        breathing_room_before: 16588.81,
+        breathing_room_after: -500,
+        loan_reduction_nudge: { reduction_amount: 100000, monthly_breathing_room_preserved: 3418 },
+      });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await completeStep3(user);
+
+    const nudgeHeading = screen.getByRole("heading", { name: "A possible nudge" });
+    expect(screen.getByText("Reducing the loan by ₹1 lakh could preserve about ₹3,418 of monthly breathing room.")).toBeInTheDocument();
+    expect(screen.queryByText(/does not close it/)).toBeNull();
+    const nudgeIcon = nudgeHeading.closest("div")?.previousElementSibling;
+    expect(nudgeIcon).toHaveTextContent("✓");
+  });
+
   it("shows the rate from the response with the canonical copy, and the disclaimer", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
@@ -584,6 +629,28 @@ describe("Step 4 — Your Borrow Better check", () => {
 });
 
 describe("Step 5 — What your real data could reveal", () => {
+  it("references the Step 4 action instead of repeating the exact shortfall figure a third time", async () => {
+    checkResponse = () => okResponse({ ...referenceCheck, breathing_room_after: -12089 });
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    // Stated once, in the first declared-data panel, tied to its own chart.
+    expect(screen.getByText("This is ₹12,089 more than your monthly take-home income.")).toBeInTheDocument();
+    // The second panel points back to the one action already offered on the check, instead of restating
+    // the same rupee figure again with no new information.
+    expect(screen.getByText("As on your check, reducing the loan amount or extending the tenure could help — this shortfall isn't resolved here.")).toBeInTheDocument();
+    expect(screen.queryByText(/monthly increase, leaving about/)).toBeNull();
+  });
+
+  it("keeps the plain 'monthly increase, leaving about' sentence when there is no shortfall", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+    expect(screen.getByText("That's a ₹17,089 monthly increase, leaving about ₹27,911.")).toBeInTheDocument();
+    expect(screen.queryByText(/this shortfall isn't resolved here/)).toBeNull();
+  });
+
   it("is reached only by the Step 4 CTA and shows the fixed synthetic example", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);

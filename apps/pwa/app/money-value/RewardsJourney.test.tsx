@@ -628,10 +628,16 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       // rewards — we don't know their balance or APR, so that would compare a real figure with an unknown one.
       expect(screen.queryByText(/likely.*larger|usually.*larger than.*rewards/i)).toBeNull();
       // The separate, explicitly fictional illustration — never merged into or compared with the customer's own ₹6,800.
-      expect(screen.getByText(/Illustrative only, not your figures/)).toBeInTheDocument();
+      expect(screen.getByText("Illustrative example — not your figures")).toBeInTheDocument();
       expect(screen.getByText(/₹10,000 balance/)).toBeInTheDocument();
       expect(screen.getByText(/₹3,000–₹4,200/)).toBeInTheDocument();
       expect(screen.getByText(/not a calculation of your own interest cost/)).toBeInTheDocument();
+      // The redundant, now-contradictory "Main pressure" card is suppressed for this pressure code: the
+      // situation copy above already explains that interest is unknown, without implying nothing is shown.
+      expect(screen.queryByText("Interest impact is unknown, so we can’t show your net value after interest.")).toBeNull();
+      expect(screen.queryByRole("heading", { name: "Main pressure" })).toBeNull();
+      // "before interest, estimated" sits beside the number itself, not only in the parenthetical label.
+      expect(document.body.textContent ?? "").toContain("₹6,800 before interest, estimated");
     });
 
     it("shows an unknown reward value as unknown, not zero, with no chart until a value is entered", async () => {

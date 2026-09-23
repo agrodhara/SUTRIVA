@@ -166,7 +166,12 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
             <span className={ui.shareAdded} style={{ width: `${addedShare}%` }} />
           </div>
           <p className={ui.cardText} style={{ marginTop: 12 }}>
-            {`That's a ${formatRupeesExact(Math.abs(result.main_pressure.monthly_amount))} monthly increase, leaving about ${formatRupeesExact(result.breathing_room_after)}.`}
+            {result.breathing_room_after < 0
+              ? // The exact shortfall figure is already stated once, in the panel above — repeating it a
+                // third time here added no new information. This instead points back to the one action
+                // already offered on the check, and says plainly that it hasn't been applied here.
+                "As on your check, reducing the loan amount or extending the tenure could help — this shortfall isn't resolved here."
+              : `That's a ${formatRupeesExact(Math.abs(result.main_pressure.monthly_amount))} monthly increase, leaving about ${formatRupeesExact(result.breathing_room_after)}.`}
           </p>
           <p className={ui.disclaimer} style={{ marginTop: 8 }}>
             Calculated from what you told us and a fixed illustrative rate; not a measure of any specific card&apos;s utilization.

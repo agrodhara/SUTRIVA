@@ -90,6 +90,11 @@ export function BorrowCheckStep({ result, form, focusHeadingOnMount, exampleAppl
 
   const nudge = result.loan_reduction_nudge;
   const belowZero = breathingRoomAfter < 0;
+  // The nudge amount is fixed by the backend at ₹1 lakh, regardless of the size of a shortfall: it can
+  // reduce one without closing it. This is a real derived figure (not a new formula) from the same two
+  // fields already shown above — never presented as resolving the shortfall when it plainly doesn't.
+  const nudgeResultingRoom = nudge ? breathingRoomAfter + nudge.monthly_breathing_room_preserved : null;
+  const nudgeInsufficient = nudge !== null && nudgeResultingRoom !== null && nudgeResultingRoom < 0;
   const beforeShare = Math.min(Math.max(result.debt_ratio_before, 0), 1) * 100;
   const addedShare = Math.min(Math.max(debtRatioAfter - result.debt_ratio_before, 0), 1 - beforeShare / 100) * 100;
 
@@ -144,14 +149,21 @@ export function BorrowCheckStep({ result, form, focusHeadingOnMount, exampleAppl
           </div>
           {nudge && !exploring ? (
             <div className={ui.insightRow}>
-              <span className={`${ui.insightIcon} ${ui.iconGood}`} aria-hidden="true">
-                ✓
+              {/* An insufficient nudge (reduces but doesn't close a shortfall) is not a reassuring green
+                  check: it gets the same warning treatment as the shortfall finding above. */}
+              <span className={`${ui.insightIcon} ${nudgeInsufficient ? ui.iconWarn : ui.iconGood}`} aria-hidden="true">
+                {nudgeInsufficient ? "!" : "✓"}
               </span>
               <div>
                 <h3 className={ui.insightTitle}>A possible nudge</h3>
                 <p className={ui.insightBody}>
                   Reducing the loan by {formatLakh(nudge.reduction_amount)} could preserve about {formatRupeesExact(nudge.monthly_breathing_room_preserved)} of monthly breathing room.
                 </p>
+                {nudgeInsufficient ? (
+                  <p className={ui.insightBody}>
+                    This reduces the shortfall but does not close it — you would still be about {formatRupeesExact(Math.abs(nudgeResultingRoom as number))} short each month.
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : null}

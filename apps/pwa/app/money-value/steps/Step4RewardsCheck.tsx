@@ -87,7 +87,11 @@ export function Step4RewardsCheck({
 
         <div className={`${ui.darkPanel} ${finding.netBeforeInterest === null ? ui.darkPanelMuted : ""} ${ui.o2}`}>
           <p className={ui.darkLabel}>{netLabel}</p>
-          <p className={ui.darkValue}>{finding.netBeforeInterest === null ? "Can't calculate yet" : rupees(finding.netBeforeInterest)}</p>
+          <p className={ui.darkValue}>
+            {finding.netBeforeInterest === null ? "Can't calculate yet" : rupees(finding.netBeforeInterest)}
+            {/* Beside the number itself, not only in the label above it: this is a before-interest estimate. */}
+            {finding.netBeforeInterest !== null && !finding.isFinal ? <span className={ui.darkUnit}> before interest, estimated</span> : null}
+          </p>
           <p className={ui.darkNote}>{finding.explanation}</p>
         </div>
 
@@ -111,13 +115,25 @@ export function Step4RewardsCheck({
         </section>
 
         {finding.code === "carries_balance" ? (
-          <p className={`${ui.notice} ${ui.o6}`}>
-            <strong>Illustrative only, not your figures: </strong>
-            {illustrativeInterestLine()}
-          </p>
+          // Reuses the app's existing "illustrative example" box style (dashed blue border) so this
+          // fictional figure is visibly distinct from the customer's own dark-panel estimate above, not
+          // just a differently-worded paragraph in the same plain notice style as everything else here.
+          <section className={`${ui.illustrative} ${ui.o6}`} aria-label="Illustrative interest example, not your figures">
+            <p className={ui.illustrativeTitle}>Illustrative example — not your figures</p>
+            <p className={ui.cardText}>{illustrativeInterestLine()}</p>
+          </section>
         ) : null}
 
-        {result.main_pressure_code ? (
+        {/*
+         * The backend's own INTEREST_EFFECT_UNKNOWN pressure code is technically accurate (the
+         * after-interest value genuinely is unknown) but is worded for the old design where this
+         * situation showed nothing at all. Shown next to the new before-interest estimate above, it reads
+         * as a contradiction ("we can't show your net value" directly under a value that is shown). The
+         * situation's own `why`/`limitation` copy already states the same fact without that contradiction,
+         * so this one pressure code is suppressed here rather than shown redundantly. Every other pressure
+         * code still appears: they add information the situation copy doesn't already give.
+         */}
+        {result.main_pressure_code && result.main_pressure_code !== "INTEREST_EFFECT_UNKNOWN" ? (
           <section className={`${ui.insightCard} ${ui.o6}`} aria-label="Additional pressure code">
             <div className={ui.insightRow}>
               <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
