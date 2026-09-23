@@ -494,28 +494,31 @@ describe("Step 4 — Your Borrow Better check", () => {
     expect(screen.getByText("Total interest").parentElement).toHaveTextContent("₹1,15,197");
   });
 
-  it("shows the backend main pressure and the ₹1 lakh nudge", async () => {
+  it("shows the finding beside the chart it explains, and the ₹1 lakh nudge", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await completeStep2(user);
     await completeStep3(user);
 
-    expect(screen.getByText("The proposed EMI reduces your estimated monthly breathing room by ₹17,089.")).toBeInTheDocument();
+    expect(screen.getByText("This loan would add about ₹17,089 to your monthly payments.")).toBeInTheDocument();
+    expect(screen.getByText(/leaving ₹45,000\. This loan's EMI would leave about ₹27,911\./)).toBeInTheDocument();
     expect(screen.getByText("Reducing the loan by ₹1 lakh could preserve about ₹3,418 of monthly breathing room.")).toBeInTheDocument();
   });
 
-  it("takes main-pressure and nudge amounts from the response, not from a frontend calculation", async () => {
+  it("takes the finding's figures from the response's own breathing-room and EMI fields, not a stale calculation", async () => {
     checkResponse = () =>
       okResponse({
         ...referenceCheck,
-        main_pressure: { ...referenceCheck.main_pressure, monthly_amount: 9200 },
+        estimated_new_monthly_commitment: 9200,
+        breathing_room_after: 45000 - 9200,
         loan_reduction_nudge: { reduction_amount: 100000, monthly_breathing_room_preserved: 2100 },
       });
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await completeStep2(user);
     await completeStep3(user);
-    expect(screen.getByText(/by ₹9,200\./)).toBeInTheDocument();
+    expect(screen.getByText("This loan would add about ₹9,200 to your monthly payments.")).toBeInTheDocument();
+    expect(screen.getByText(/leave about ₹35,800\./)).toBeInTheDocument();
     expect(screen.getByText(/could preserve about ₹2,100 of monthly/)).toBeInTheDocument();
   });
 
@@ -643,7 +646,7 @@ describe("Step 5 — What your real data could reveal", () => {
       expect(panelText).not.toContain(userValue);
     }
 
-    const glance = screen.getByRole("region", { name: /Where your monthly income goes/ });
+    const glance = screen.getByRole("region", { name: /Your monthly payment mix/ });
     expect(glance).toHaveTextContent("₹1,20,000");
     expect(glance).toHaveTextContent("₹57,000");
     expect(glance).toHaveTextContent("₹18,000");
@@ -860,7 +863,9 @@ describe("isolation from the legacy flow", () => {
     "useEmiPreview.ts",
     "borrowExample.ts",
     "borrowSummary.ts",
-    "breathingBand.ts",
+    "borrowInsight.ts",
+    "borrowTenureExplorer.ts",
+    "borrowBetterStructureExample.ts",
     ...readdirSync(join(dir, "steps")).map((name) => join("steps", name)),
   ];
 
@@ -1021,12 +1026,12 @@ describe("Example mode", () => {
       existing_emi_ending_within_six_months: "no",
     });
     expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
-    expect(screen.getByText(/₹5,00,000 over 36 months/)).toBeInTheDocument();
+    expect(screen.getByText("This loan would add about ₹17,089 to your monthly payments.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
     await screen.findByRole("heading", { name: "Your figures at a glance" });
     expect(screen.getByRole("status")).toHaveTextContent(EXAMPLE_BANNER);
-    const glance = screen.getByRole("region", { name: /Where your monthly income goes/ });
+    const glance = screen.getByRole("region", { name: /Your monthly payment mix/ });
     expect(glance).toHaveTextContent("₹57,000");
     expect(glance).toHaveTextContent("₹18,000");
     expect(glance).toHaveTextContent("₹17,089");
@@ -1044,7 +1049,7 @@ describe("Step 4 adds and corrections", () => {
     expect(screen.getByText("₹17,089")).toBeInTheDocument();
     expect(screen.getByText("₹6,15,197")).toBeInTheDocument();
     expect(screen.getByText("₹1,15,197")).toBeInTheDocument();
-    expect(screen.getByText(/₹5,00,000 over 36 months/)).toBeInTheDocument();
+    expect(screen.getByText("This loan would add about ₹17,089 to your monthly payments.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Adjust loan amount or tenure" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Adjust loan amount or tenure" }));
@@ -1061,23 +1066,37 @@ describe("Step 4 adds and corrections", () => {
     expect(screen.getByLabelText("Housing")).toHaveValue("28,000");
   });
 
-  it("words the headline from the breathing-room rule: shortfall, tight and comfortable", async () => {
-    const cases: [number, RegExp][] = [
-      [-1000, /below zero/],
-      [8000, /very tight/],
-      [18000, /looks tight/],
-      [27911.19, /still leaves room/],
-    ];
-    for (const [after, wording] of cases) {
-      cleanup();
-      installFetch();
-      checkResponse = () => okResponse({ ...referenceCheck, breathing_room_after: after });
-      const user = userEvent.setup();
-      render(<BorrowJourney />);
-      await completeStep2(user);
-      await completeStep3(user);
-      expect(screen.getByText(/over 36 months/)).toHaveTextContent(wording);
-    }
+  it("selects the situation the declared figures support, stating the room or shortfall plainly with no judgement word", async () => {
+    // additional_borrowing: room stays positive after the EMI (referenceCheck's own breathing_room_after).
+    cleanup();
+    installFetch();
+    const user1 = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user1);
+    await completeStep3(user1);
+    expect(screen.getByText("This loan would add about ₹17,089 to your monthly payments.")).toBeInTheDocument();
+
+    // shortfall_from_emi: room was positive before this loan, but this EMI takes it negative.
+    cleanup();
+    installFetch();
+    checkResponse = () => okResponse({ ...referenceCheck, breathing_room_after: -1000 });
+    const user2 = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user2);
+    await completeStep3(user2);
+    expect(
+      screen.getByText("The proposed EMI of ₹17,089/month is ₹1,000/month more than your available room of ₹45,000/month, based on the figures entered."),
+    ).toBeInTheDocument();
+
+    // shortfall_before_loan: room was already negative before this loan — outranks the routine reading.
+    cleanup();
+    installFetch();
+    checkResponse = () => okResponse({ ...referenceCheck, breathing_room_before: -5000, breathing_room_after: -22089 });
+    const user3 = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user3);
+    await completeStep3(user3);
+    expect(screen.getByText("You're already short by about ₹5,000 a month before this loan, based on what you've told us.")).toBeInTheDocument();
   });
 
   it("never mentions a later phase: no pilot, mobile number, OTP, consent or connection on any step", async () => {

@@ -244,6 +244,7 @@ export function RewardsJourney() {
         <Step4RewardsCheck
           key={entry.id}
           result={result}
+          balanceBehavior={form.balanceBehavior}
           {...example}
           onBack={goBack}
           onNext={() => advance("example")}
@@ -252,7 +253,15 @@ export function RewardsJourney() {
         />
       ) : null}
       {entry.step === "example" && result ? (
-        <Step5IllustrativeExample key={entry.id} result={result} selectedPriorities={form.priorities} {...example} onBack={goBack} focusHeadingOnMount={focusHeading} />
+        <Step5IllustrativeExample
+          key={entry.id}
+          result={result}
+          balanceBehavior={form.balanceBehavior}
+          selectedPriorities={form.priorities}
+          {...example}
+          onBack={goBack}
+          focusHeadingOnMount={focusHeading}
+        />
       ) : null}
     </JourneyFrame>
   );
