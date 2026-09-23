@@ -7,9 +7,10 @@ import { StepHeading } from "../../../components/journey-ui/StepHeading";
 import { ValueBars } from "../../../components/journey-ui/ValueBars";
 import ui from "../../../components/journey-ui/journeyUi.module.css";
 import styles from "../rewards.module.css";
+import { selectRewardsSituation } from "../rewardsInsight";
 import type { RewardsCheckResult } from "../rewardsApi";
-import { PERIOD_PHRASE, PRIORITY_OPTIONS, type SpendingPriority } from "../rewardsFormState";
-import { buildRewardBars, netUnavailableReason, rupees } from "../rewardsSummary";
+import { PERIOD_PHRASE, PRIORITY_OPTIONS, type BalanceBehavior, type SpendingPriority } from "../rewardsFormState";
+import { buildRewardBars, rupees } from "../rewardsSummary";
 
 /**
  * The illustrative panel below is fixed synthetic content: the numbers are constants from the approved Rewards
@@ -33,6 +34,7 @@ const PRIORITY_LABELS: Record<string, string> = Object.fromEntries(PRIORITY_OPTI
 
 export function Step5IllustrativeExample({
   result,
+  balanceBehavior,
   selectedPriorities,
   exampleApplied,
   exampleEdited,
@@ -40,6 +42,7 @@ export function Step5IllustrativeExample({
   focusHeadingOnMount,
 }: {
   result: RewardsCheckResult;
+  balanceBehavior: BalanceBehavior | null;
   /** The customer's own priorities from the active dataset, not an echo from the backend. */
   selectedPriorities: readonly SpendingPriority[];
   exampleApplied: boolean;
@@ -48,8 +51,10 @@ export function Step5IllustrativeExample({
   focusHeadingOnMount: boolean;
 }) {
   const headingId = useId();
-  const bars = buildRewardBars(result);
-  const reason = netUnavailableReason(result);
+  const finding = selectRewardsSituation(result, balanceBehavior);
+  const netLabel = finding.netBeforeInterest !== null && !finding.isFinal ? "Net annual value (before interest)" : "Net annual value";
+  const bars = buildRewardBars(result, true, { value: finding.netBeforeInterest, label: netLabel });
+  const reason = finding.netBeforeInterest === null ? "We need a reward value to work out what your rewards are worth. We haven’t guessed one." : null;
   const priorities = selectedPriorities.map((priority) => PRIORITY_LABELS[priority] ?? priority);
   const period = result.reward_period ? PERIOD_PHRASE[result.reward_period] : null;
 

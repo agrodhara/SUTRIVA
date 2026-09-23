@@ -5,9 +5,10 @@ import { ExampleBanner } from "../../../components/journey-ui/ExampleEntry";
 import { StepHeading } from "../../../components/journey-ui/StepHeading";
 import { ValueBars } from "../../../components/journey-ui/ValueBars";
 import ui from "../../../components/journey-ui/journeyUi.module.css";
+import { illustrativeInterestLine, selectRewardsSituation } from "../rewardsInsight";
 import type { MainPressureCode, RewardsCheckResult } from "../rewardsApi";
-import { PERIOD_PHRASE, PRIORITY_OPTIONS } from "../rewardsFormState";
-import { CANNOT_CALCULATE, buildRewardBars, netUnavailableReason, rupees } from "../rewardsSummary";
+import { PERIOD_PHRASE, PRIORITY_OPTIONS, type BalanceBehavior } from "../rewardsFormState";
+import { buildRewardBars, rupees } from "../rewardsSummary";
 
 const QUANTITY = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
 
@@ -18,8 +19,6 @@ const MAIN_PRESSURE_COPY: Record<MainPressureCode, string> = {
   FEE_REDUCES_VALUE: "Your annual fee reduces the value you get from your rewards.",
   NO_FEE_PRESSURE: "No annual-fee pressure identified from what you entered.",
 };
-
-const NUDGE_COPY = "Compare the rewards you actually receive with the annual fee and any interest you pay.";
 
 const PRIORITY_LABELS: Record<string, string> = Object.fromEntries(PRIORITY_OPTIONS.map((option) => [option.value, option.label]));
 
@@ -47,6 +46,7 @@ function interestLine(result: RewardsCheckResult): string {
 
 export function Step4RewardsCheck({
   result,
+  balanceBehavior,
   exampleApplied,
   exampleEdited,
   onBack,
@@ -55,6 +55,7 @@ export function Step4RewardsCheck({
   focusHeadingOnMount,
 }: {
   result: RewardsCheckResult;
+  balanceBehavior: BalanceBehavior | null;
   exampleApplied: boolean;
   exampleEdited: boolean;
   onBack: () => void;
@@ -63,15 +64,13 @@ export function Step4RewardsCheck({
   focusHeadingOnMount: boolean;
 }) {
   const headingId = useId();
+  const finding = selectRewardsSituation(result, balanceBehavior);
   const rewardsKnown = result.estimated_annual_rewards !== null;
-  const net = result.estimated_net_annual_value;
-  const netKnown = net !== null;
   const unitWord = result.reward_type === "miles" ? "miles" : "points";
   const basisLine = rewardBasisLine(result);
   const priorities = result.spending_priorities ?? [];
-  const reason = netUnavailableReason(result);
-  const bars = buildRewardBars(result, false);
-  const headline = netKnown ? `Your estimated net annual value is ${rupees(net)}.` : "We can’t calculate your net annual value yet.";
+  const netLabel = finding.netBeforeInterest === null ? "Net annual value" : finding.isFinal ? "Net annual value" : "Net annual value (before interest)";
+  const bars = buildRewardBars(result, false, { value: finding.netBeforeInterest, label: netLabel });
 
   return (
     <section aria-labelledby={headingId} className={ui.grid}>
@@ -81,41 +80,54 @@ export function Step4RewardsCheck({
             Back
           </button>
           <StepHeading id={headingId} stepLabel="Step 4 of 5" title="Your Rewards Check" eyebrow focusOnMount={focusHeadingOnMount} />
-          <p className={ui.headline}>{headline}</p>
+          <p className={ui.headline}>{finding.headline}</p>
           <p className={ui.supporting}>Based on the information you provided. This is an indicative estimate.</p>
           {exampleApplied ? <ExampleBanner edited={exampleEdited} /> : null}
         </div>
 
-        <div className={`${ui.darkPanel} ${netKnown ? "" : ui.darkPanelMuted} ${ui.o2}`}>
-          <p className={ui.darkLabel}>Net annual value</p>
-          <p className={ui.darkValue}>{netKnown ? rupees(net) : CANNOT_CALCULATE}</p>
-          <p className={ui.darkNote}>{reason ?? (result.interest_input_basis === "known" ? "Estimated annual rewards minus your annual fee and estimated interest." : "Estimated annual rewards minus your annual fee.")}</p>
+        <div className={`${ui.darkPanel} ${finding.netBeforeInterest === null ? ui.darkPanelMuted : ""} ${ui.o2}`}>
+          <p className={ui.darkLabel}>{netLabel}</p>
+          <p className={ui.darkValue}>{finding.netBeforeInterest === null ? "Can't calculate yet" : rupees(finding.netBeforeInterest)}</p>
+          <p className={ui.darkNote}>{finding.explanation}</p>
         </div>
 
-        {result.main_pressure_code || result.nudge_code === "COMPARE_REWARDS_FEE_INTEREST" ? (
-          <section className={`${ui.insightCard} ${ui.o6}`} aria-label="Pressure and a nudge">
-            {result.main_pressure_code ? (
-              <div className={ui.insightRow}>
-                <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
-                  !
-                </span>
-                <div>
-                  <h3 className={ui.insightTitle}>Main pressure</h3>
-                  <p className={ui.insightBody}>{MAIN_PRESSURE_COPY[result.main_pressure_code]}</p>
-                </div>
+        <section className={`${ui.insightCard} ${ui.o6}`} aria-label="Why this, and one thing to try">
+          <div className={ui.insightRow}>
+            <span className={`${ui.insightIcon} ${finding.netBeforeInterest !== null && finding.netBeforeInterest < 0 ? ui.iconWarn : ui.iconInfo}`} aria-hidden="true">
+              {finding.netBeforeInterest !== null && finding.netBeforeInterest < 0 ? "!" : "i"}
+            </span>
+            <div>
+              <p className={ui.insightBody}>{finding.why}</p>
+            </div>
+          </div>
+          <div className={ui.insightRow}>
+            <span className={`${ui.insightIcon} ${ui.iconGood}`} aria-hidden="true">
+              ✓
+            </span>
+            <div>
+              <p className={ui.insightBody}>{finding.tryThis}</p>
+            </div>
+          </div>
+        </section>
+
+        {finding.code === "carries_balance" ? (
+          <p className={`${ui.notice} ${ui.o6}`}>
+            <strong>Illustrative only, not your figures: </strong>
+            {illustrativeInterestLine()}
+          </p>
+        ) : null}
+
+        {result.main_pressure_code ? (
+          <section className={`${ui.insightCard} ${ui.o6}`} aria-label="Additional pressure code">
+            <div className={ui.insightRow}>
+              <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
+                !
+              </span>
+              <div>
+                <h3 className={ui.insightTitle}>Main pressure</h3>
+                <p className={ui.insightBody}>{MAIN_PRESSURE_COPY[result.main_pressure_code]}</p>
               </div>
-            ) : null}
-            {result.nudge_code === "COMPARE_REWARDS_FEE_INTEREST" ? (
-              <div className={ui.insightRow}>
-                <span className={`${ui.insightIcon} ${ui.iconGood}`} aria-hidden="true">
-                  ✓
-                </span>
-                <div>
-                  <h3 className={ui.insightTitle}>Our nudge</h3>
-                  <p className={ui.insightBody}>{NUDGE_COPY}</p>
-                </div>
-              </div>
-            ) : null}
+            </div>
           </section>
         ) : null}
       </div>
@@ -159,6 +171,7 @@ export function Step4RewardsCheck({
               <p className={ui.cardText}>Reward value is unknown, so we can’t estimate annual rewards.</p>
             ) : null}
             <p className={ui.cardText}>{interestLine(result)}</p>
+            <p className={ui.cardText}>{finding.limitation}</p>
           </div>
         </section>
 

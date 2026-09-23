@@ -576,10 +576,12 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(screen.getByText("Dining")).toBeInTheDocument();
       expect(screen.getByText("Travel")).toBeInTheDocument();
       expect(screen.getByText("We can’t tell from the details you entered how well your card rewards these categories.")).toBeInTheDocument();
+      // Situation-specific finding copy (why/try) sits alongside the backend's own main-pressure code;
+      // the old generic "Our nudge" pairing is replaced by this situation-specific "try" copy.
+      expect(screen.getByText("Paying in full each month means interest never applies to this card.")).toBeInTheDocument();
+      expect(screen.getByText("None required — optionally, see how this changes if your fee is waived.")).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Main pressure" })).toBeInTheDocument();
       expect(screen.getByText("Your annual fee reduces the value you get from your rewards.")).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "Our nudge" })).toBeInTheDocument();
-      expect(screen.getByText("Compare the rewards you actually receive with the annual fee and any interest you pay.")).toBeInTheDocument();
       expect(screen.getByText(/not a card recommendation/)).toBeInTheDocument();
     });
 
@@ -612,19 +614,23 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(screen.getByText("Your annual fee is higher than the estimated annual rewards.")).toBeInTheDocument();
     });
 
-    it("does not fabricate interest or a final net value after interest for 'carry a balance'", async () => {
+    it("shows the known before-interest value for 'carry a balance' instead of a dead end, plus a separate fictional interest illustration", async () => {
       mockFetchOk({ interest_input_basis: "unknown", interest_value_known: false, estimated_annual_interest_cost: null, estimated_net_annual_value: null, main_pressure_code: "INTEREST_EFFECT_UNKNOWN", value_status: "UNKNOWN_VALUE" });
       const user = await renderJourney();
       await runToStep4(user, "Carry a balance");
 
       expect(screen.getByText("Estimated annual rewards").nextSibling).toHaveTextContent("₹10,800");
-      expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("Can't calculate yet");
+      // Rewards minus fee is known and shown, not withheld as "can't calculate" — the "dead end" this fixes.
+      expect(screen.getByText("Net annual value (before interest)").nextSibling).toHaveTextContent("₹6,800");
       expect(screen.getByText("Interest impact is unknown. No interest cost has been assumed.")).toBeInTheDocument();
-      expect(screen.getByText("Interest impact is unknown, so we can’t show your value after interest. We haven’t assumed an interest cost.")).toBeInTheDocument();
-      expect(screen.getByText("Interest impact is unknown, so we can’t show your net value after interest.")).toBeInTheDocument();
+      expect(screen.getByText(/Your net value before interest is ₹6,800, but interest on your balance is likely larger than your rewards\./)).toBeInTheDocument();
+      // The separate, explicitly fictional illustration — never merged into the customer's own ₹6,800.
+      expect(screen.getByText(/Illustrative only, not your figures/)).toBeInTheDocument();
+      expect(screen.getByText(/₹10,000 balance/)).toBeInTheDocument();
+      expect(screen.getByText(/₹3,000–₹4,200/)).toBeInTheDocument();
     });
 
-    it("shows an unknown reward value as unknown, not zero", async () => {
+    it("shows an unknown reward value as unknown, not zero, with no chart until a value is entered", async () => {
       mockFetchOk({ reward_value_known: false, estimated_annual_rewards: null, estimated_net_annual_value: null, reward_amount_per_period: null, reward_period: null, main_pressure_code: "REWARD_VALUE_UNKNOWN" });
       const user = await renderJourney();
       await completeStep2(user, "Pay in full each month", "Not sure");
@@ -1100,7 +1106,7 @@ describe("Rewards journey: reconciled frame, example mode and honest incomplete 
     await submitStep3(user);
 
     expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("Can't calculate yet");
-    expect(screen.getByText("We can’t calculate your net annual value yet.")).toBeInTheDocument();
+    expect(screen.getByText("We need your monthly reward value to show anything here.")).toBeInTheDocument();
     expect(screen.getByText("We need a reward value to work out what your rewards are worth. We haven’t guessed one.")).toBeInTheDocument();
     const bars = screen.getByRole("region", { name: /Rewards vs fee/ });
     expect(bars).toHaveTextContent("Unknown");
@@ -1114,12 +1120,12 @@ describe("Rewards journey: reconciled frame, example mode and honest incomplete 
     expect(glance).not.toHaveTextContent("₹0");
   });
 
-  it("does not guess interest for a carried balance: net stays Can't calculate yet", async () => {
+  it("shows the known before-interest value for a carried balance instead of a dead end", async () => {
     mockFetchOk({ interest_input_basis: "unknown", interest_value_known: false, estimated_annual_interest_cost: null, estimated_net_annual_value: null, main_pressure_code: "INTEREST_EFFECT_UNKNOWN" });
     const user = await renderJourney();
     await runToStep4(user, "Carry a balance");
-    expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("Can't calculate yet");
-    expect(screen.getByText("Interest impact is unknown, so we can’t show your value after interest. We haven’t assumed an interest cost.")).toBeInTheDocument();
+    expect(screen.getByText("Net annual value (before interest)").nextSibling).toHaveTextContent("₹6,800");
+    expect(screen.getByText("Interest impact is unknown. No interest cost has been assumed.")).toBeInTheDocument();
     expect(screen.queryByText(/Estimated annual interest/)).toBeNull();
   });
 

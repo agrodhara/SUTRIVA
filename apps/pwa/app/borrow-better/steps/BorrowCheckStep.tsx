@@ -1,12 +1,16 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { ExampleBanner } from "../../../components/journey-ui/ExampleEntry";
 import { formatRupeesExact } from "../../../components/journey-ui/indian";
+import { PillGroup } from "../../../components/journey-ui/PillGroup";
 import { StepHeading } from "../../../components/journey-ui/StepHeading";
 import ui from "../../../components/journey-ui/journeyUi.module.css";
 import type { BorrowCheckResult } from "../borrowApi";
-import { borrowHeadline, breathingBand } from "../breathingBand";
+import { selectBorrowSituation } from "../borrowInsight";
+import { essentialsTotal } from "../borrowSummary";
+import { exploreTenure } from "../borrowTenureExplorer";
 import { formatLakh, formatTenureYears, formatWholePercent, rateCopy } from "../format";
-import { parseRupeeAmount, type BorrowJourneyForm } from "../journeyState";
+import { parseRupeeAmount, TENURE_OPTIONS, type BorrowJourneyForm } from "../journeyState";
+import { useEmiPreview } from "../useEmiPreview";
 
 export const BORROW_CHECK_DISCLAIMER = "Indicative estimate — not a loan approval, eligibility decision or offer.";
 
@@ -21,6 +25,8 @@ const EMI_ENDING_COPY: Record<NonNullable<BorrowCheckResult["emi_ending_note"]>,
   EMI_MAY_END_WITHIN_SIX_MONTHS:
     "You said an existing EMI may end within six months. This is a note only and is not used in the figures above.",
 };
+
+const TENURE_PILL_OPTIONS = TENURE_OPTIONS.map((months) => ({ value: String(months), label: `${months} mo` }));
 
 type Props = {
   result: BorrowCheckResult;
@@ -42,13 +48,50 @@ const amount = (raw: string): number => {
 
 export function BorrowCheckStep({ result, form, focusHeadingOnMount, exampleApplied, exampleEdited, onBack, onExplore, onAdjustLoan, onChangeFigures }: Props) {
   const headingId = useId();
+  const income = amount(form.monthlyIncome);
+  const existingPayments = amount(form.existingPayments);
+  const essentials = essentialsTotal(form) ?? 0;
+  const loanAmount = amount(form.loanAmount);
+  const submittedTenure = Number(form.tenureMonths);
+
+  // "Try a different tenure": a what-if preview. Nothing here resubmits the check or changes the saved plan.
+  const [exploredTenure, setExploredTenure] = useState<number>(submittedTenure);
+  const exploring = exploredTenure !== submittedTenure;
+  const { state: preview } = useEmiPreview({ loanAmount: form.loanAmount, tenureMonths: String(exploredTenure) as BorrowJourneyForm["tenureMonths"] });
+
+  const exploration =
+    exploring && preview.status === "ready"
+      ? exploreTenure({
+          emi: preview.emi,
+          tenureMonths: exploredTenure,
+          loanAmount,
+          income,
+          existingPayments,
+          breathingRoomBefore: result.breathing_room_before,
+          debtRatioBefore: result.debt_ratio_before,
+        })
+      : null;
+
+  const emi = exploration?.emi ?? result.estimated_new_monthly_commitment;
+  const breathingRoomAfter = exploration?.breathingRoomAfter ?? result.breathing_room_after;
+  const debtRatioAfter = exploration?.debtRatioAfter ?? result.debt_ratio_after;
+  const totalRepayment = exploration?.totalRepayment ?? result.total_repayment;
+  const totalInterest = exploration?.totalInterest ?? result.total_interest;
+  const activeTenureMonths = exploration?.tenureMonths ?? submittedTenure;
+
+  const finding = selectBorrowSituation({
+    income,
+    existingPayments,
+    essentials,
+    emi,
+    breathingRoomBefore: result.breathing_room_before,
+    breathingRoomAfter,
+  });
+
   const nudge = result.loan_reduction_nudge;
-  const belowZero = result.breathing_room_after < 0;
-  const tenureMonths = Number(form.tenureMonths);
-  const band = breathingBand(result.breathing_room_after, amount(form.monthlyIncome));
-  const headline = borrowHeadline(formatRupeesExact(amount(form.loanAmount)), tenureMonths, band);
+  const belowZero = breathingRoomAfter < 0;
   const beforeShare = Math.min(Math.max(result.debt_ratio_before, 0), 1) * 100;
-  const addedShare = Math.min(Math.max(result.debt_ratio_after - result.debt_ratio_before, 0), 1 - beforeShare / 100) * 100;
+  const addedShare = Math.min(Math.max(debtRatioAfter - result.debt_ratio_before, 0), 1 - beforeShare / 100) * 100;
 
   return (
     <section aria-labelledby={headingId} className={ui.grid}>
@@ -58,33 +101,48 @@ export function BorrowCheckStep({ result, form, focusHeadingOnMount, exampleAppl
             Back
           </button>
           <StepHeading id={headingId} stepLabel="Step 4 of 5" title="Your Borrow Better check" eyebrow focusOnMount={focusHeadingOnMount} />
-          <p className={ui.headline}>{headline}</p>
+          <p className={ui.headline}>{finding.headline}</p>
           {exampleApplied ? <ExampleBanner edited={exampleEdited} /> : null}
         </div>
 
         <div className={`${ui.darkPanel} ${ui.o2}`}>
           <p className={ui.darkLabel}>Estimated EMI</p>
           <p className={ui.darkValue}>
-            {formatRupeesExact(result.estimated_new_monthly_commitment)} <span className={ui.darkUnit}>per month</span>
+            {formatRupeesExact(emi)} <span className={ui.darkUnit}>per month</span>
           </p>
           <p className={ui.darkNote}>
-            {formatRupeesExact(amount(form.loanAmount))} over {formatTenureYears(tenureMonths)}
+            {formatRupeesExact(loanAmount)} over {formatTenureYears(activeTenureMonths)}
+            {exploring ? " — trying a different tenure, not your saved plan" : ""}
           </p>
         </div>
 
-        <section className={`${ui.insightCard} ${ui.o6}`} aria-label="Pressure and a possible nudge">
+        <div className={`${ui.card} ${ui.o3}`}>
+          <h3 className={ui.cardHeading}>Try a different tenure</h3>
+          <PillGroup legend="Tenure" name="borrow-check-tenure" options={TENURE_PILL_OPTIONS} value={String(exploredTenure)} onChange={(value) => setExploredTenure(Number(value))} />
+          <p className={ui.cardText} style={{ marginTop: 8 }}>
+            The rate stays fixed — only tenure changes here.
+          </p>
+        </div>
+
+        <section className={`${ui.insightCard} ${ui.o6}`} aria-label="Why this, and one thing to try">
           <div className={ui.insightRow}>
-            <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
-              !
+            <span className={`${ui.insightIcon} ${finding.code === "additional_borrowing" ? ui.iconInfo : ui.iconWarn}`} aria-hidden="true">
+              {finding.code === "additional_borrowing" ? "i" : "!"}
             </span>
             <div>
-              <h3 className={ui.insightTitle}>Main pressure</h3>
-              <p className={ui.insightBody}>
-                The proposed EMI reduces your estimated monthly breathing room by {formatRupeesExact(result.main_pressure.monthly_amount)}.
-              </p>
+              <p className={ui.insightBody}>{finding.explanation}</p>
+              <p className={ui.insightBody}>{finding.why}</p>
             </div>
           </div>
-          {nudge ? (
+          <div className={ui.insightRow}>
+            <span className={`${ui.insightIcon} ${ui.iconGood}`} aria-hidden="true">
+              ✓
+            </span>
+            <div>
+              <p className={ui.insightBody}>{finding.tryThis}</p>
+            </div>
+          </div>
+          {nudge && !exploring ? (
             <div className={ui.insightRow}>
               <span className={`${ui.insightIcon} ${ui.iconGood}`} aria-hidden="true">
                 ✓
@@ -114,7 +172,7 @@ export function BorrowCheckStep({ result, form, focusHeadingOnMount, exampleAppl
               →
             </span>
             <div className={`${ui.compareCell} ${ui.compareAfter}`}>
-              <span className={ui.compareValue}>{formatWholePercent(result.debt_ratio_after)}</span>
+              <span className={ui.compareValue}>{formatWholePercent(debtRatioAfter)}</span>
               <span className={ui.compareCaption}>After</span>
             </div>
           </div>
@@ -137,7 +195,7 @@ export function BorrowCheckStep({ result, form, focusHeadingOnMount, exampleAppl
               →
             </span>
             <div className={`${ui.compareCell} ${ui.compareAfter}`}>
-              <span className={ui.compareValue}>{formatRupeesExact(result.breathing_room_after)}</span>
+              <span className={ui.compareValue}>{formatRupeesExact(breathingRoomAfter)}</span>
               <span className={ui.compareCaption}>After</span>
             </div>
           </div>
@@ -147,12 +205,12 @@ export function BorrowCheckStep({ result, form, focusHeadingOnMount, exampleAppl
         <div className={`${ui.tileRow} ${ui.o5}`}>
           <div className={ui.tile}>
             <span className={ui.tileLabel}>Total repayment</span>
-            <span className={ui.tileValue}>{formatRupeesExact(result.total_repayment)}</span>
-            <span className={ui.tileCaption}>over {formatTenureYears(tenureMonths)}</span>
+            <span className={ui.tileValue}>{formatRupeesExact(totalRepayment)}</span>
+            <span className={ui.tileCaption}>over {formatTenureYears(activeTenureMonths)}</span>
           </div>
           <div className={ui.tile}>
             <span className={ui.tileLabel}>Total interest</span>
-            <span className={ui.tileValue}>{formatRupeesExact(result.total_interest)}</span>
+            <span className={ui.tileValue}>{formatRupeesExact(totalInterest)}</span>
             <span className={ui.tileCaption}>at the illustrative rate</span>
           </div>
         </div>
