@@ -623,11 +623,15 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       // Rewards minus fee is known and shown, not withheld as "can't calculate" — the "dead end" this fixes.
       expect(screen.getByText("Net annual value (before interest)").nextSibling).toHaveTextContent("₹6,800");
       expect(screen.getByText("Interest impact is unknown. No interest cost has been assumed.")).toBeInTheDocument();
-      expect(screen.getByText(/Your net value before interest is ₹6,800, but interest on your balance is likely larger than your rewards\./)).toBeInTheDocument();
-      // The separate, explicitly fictional illustration — never merged into the customer's own ₹6,800.
+      expect(screen.getByText("Before interest, your estimated net value is ₹6,800.")).toBeInTheDocument();
+      // Never claims to know that the customer's own interest is "likely" or "usually" larger than their
+      // rewards — we don't know their balance or APR, so that would compare a real figure with an unknown one.
+      expect(screen.queryByText(/likely.*larger|usually.*larger than.*rewards/i)).toBeNull();
+      // The separate, explicitly fictional illustration — never merged into or compared with the customer's own ₹6,800.
       expect(screen.getByText(/Illustrative only, not your figures/)).toBeInTheDocument();
       expect(screen.getByText(/₹10,000 balance/)).toBeInTheDocument();
       expect(screen.getByText(/₹3,000–₹4,200/)).toBeInTheDocument();
+      expect(screen.getByText(/not a calculation of your own interest cost/)).toBeInTheDocument();
     });
 
     it("shows an unknown reward value as unknown, not zero, with no chart until a value is entered", async () => {

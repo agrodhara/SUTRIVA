@@ -256,7 +256,7 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
               {`Room after this loan is ${formatRupees(WHOLE_LOAN_ROOM_AFTER)}/month — ${formatRupees(ROOM_DIFFERENCE_VS_ADDITIONAL_BORROWING_ONLY)} higher than if the same loan added no replacement, because the old ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month payment is no longer paid separately. The additional-borrowing portion's allocated EMI is ${formatRupees(ADDITIONAL_BORROWING_ALLOCATED_EMI)}/month.`}
             </p>
             <p className={ui.disclaimer} style={{ marginTop: 8 }}>
-              Illustrative example — not your data. In your own journey, name the loans or cards a loan would replace, so this comparison can be run on your real figures.
+              Illustrative example — not your data. A personalised replacement comparison would need details this version doesn&apos;t collect, such as which specific loan or card a new loan would replace and its remaining balance and term.
             </p>
           </section>
         </section>

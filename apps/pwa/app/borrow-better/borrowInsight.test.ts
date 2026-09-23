@@ -77,7 +77,14 @@ describe("consolidationCaveat", () => {
     expect(caveat).not.toBeNull();
     expect(caveat?.headline).toBe("This is new borrowing alongside your existing payments, not a straight replacement.");
     expect(caveat?.explanation).toContain("₹5,00,000");
-    expect(caveat?.limitation).toContain("not confirmed");
+    expect(caveat?.limitation).toContain("doesn't collect");
+  });
+
+  it("never instructs the customer to tell us which obligations a loan replaces — this journey collects no such field", () => {
+    const caveat = consolidationCaveat("debt_consolidation", "₹5,00,000");
+    const allCopy = `${caveat?.headline} ${caveat?.explanation} ${caveat?.why} ${caveat?.tryThis} ${caveat?.limitation}`;
+    expect(allCopy).not.toMatch(/tell us which|so we can compare|so this comparison can be run on your real figures/i);
+    expect(caveat?.tryThis).toContain("illustrative example");
   });
 
   it("is never shown for any other purpose, or when none was given", () => {

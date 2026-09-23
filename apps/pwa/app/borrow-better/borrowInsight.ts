@@ -86,15 +86,20 @@ export type ConsolidationCaveat = {
  * specific obligations a loan replaces, so the full amount is treated as additional borrowing, not a
  * confirmed replacement. Returns null for any other purpose — this caveat is never shown as a conclusion
  * about a customer who didn't select debt consolidation.
+ *
+ * `tryThis` never instructs the customer to "tell us" which obligations a loan replaces: this journey has
+ * no field to collect that, so doing so would be a dead end (an instruction with no way to act on it). It
+ * points instead to the illustrative "Better structure" panel, which shows what a genuine replacement
+ * comparison would look like once those details are known.
  */
 export function consolidationCaveat(loanPurpose: string, loanAmountDisplay: string): ConsolidationCaveat | null {
   if (loanPurpose !== "debt_consolidation") return null;
   return {
     headline: "This is new borrowing alongside your existing payments, not a straight replacement.",
-    explanation: `We don't yet know which specific obligation(s) this ${loanAmountDisplay} loan replaces, so the full amount is treated as additional borrowing on top of what you already pay.`,
+    explanation: `We don't know which specific obligation(s) this ${loanAmountDisplay} loan replaces, so the full amount is treated as additional borrowing on top of what you already pay.`,
     why: "Calling this consolidation would overstate how much existing debt it actually clears.",
-    tryThis: "Tell us which specific loans or cards this would replace, so we can compare like-for-like.",
-    limitation: "We have not confirmed this replaces any specific existing obligation.",
+    tryThis: "See the illustrative example below of how a genuine replacement comparison would work, once specific obligations are known.",
+    limitation: "A personalised replacement comparison would need details this version doesn't collect, such as which obligation a loan replaces and its remaining balance and term.",
   };
 }
 
