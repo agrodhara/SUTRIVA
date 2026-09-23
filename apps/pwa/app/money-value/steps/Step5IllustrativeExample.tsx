@@ -103,7 +103,8 @@ export function Step5IllustrativeExample({
           <h3 id="rewards-connected-heading" className={ui.illustrativeTitle}>
             What connected data could add
           </h3>
-          <p className={ui.cardText}>This synthetic example shows what Sutriva may reveal after you separately choose to connect your data.</p>
+          <p className={ui.cardText}>This fictional example shows what permissioned data could help analyse.</p>
+          <p className={ui.notice}>This version does not connect to your bank data.</p>
 
           <figure className={styles.exampleFigure}>
             <figcaption>Example monthly spend mix</figcaption>

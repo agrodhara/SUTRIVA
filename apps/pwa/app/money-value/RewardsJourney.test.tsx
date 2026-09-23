@@ -621,17 +621,25 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
 
       expect(screen.getByText("Estimated annual rewards").nextSibling).toHaveTextContent("₹10,800");
       // Rewards minus fee is known and shown, not withheld as "can't calculate" — the "dead end" this fixes.
-      expect(screen.getByText("Net annual value (before interest)").nextSibling).toHaveTextContent("₹6,800");
+      expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("₹6,800");
       expect(screen.getByText("Interest impact is unknown. No interest cost has been assumed.")).toBeInTheDocument();
       expect(screen.getByText("Before interest, your estimated net value is ₹6,800.")).toBeInTheDocument();
       // Never claims to know that the customer's own interest is "likely" or "usually" larger than their
       // rewards — we don't know their balance or APR, so that would compare a real figure with an unknown one.
       expect(screen.queryByText(/likely.*larger|usually.*larger than.*rewards/i)).toBeNull();
       // The separate, explicitly fictional illustration — never merged into or compared with the customer's own ₹6,800.
-      expect(screen.getByText(/Illustrative only, not your figures/)).toBeInTheDocument();
+      expect(screen.getByText("Illustrative example — not your figures")).toBeInTheDocument();
       expect(screen.getByText(/₹10,000 balance/)).toBeInTheDocument();
       expect(screen.getByText(/₹3,000–₹4,200/)).toBeInTheDocument();
       expect(screen.getByText(/not a calculation of your own interest cost/)).toBeInTheDocument();
+      // The redundant, now-contradictory "Main pressure" card is suppressed for this pressure code: the
+      // situation copy above already explains that interest is unknown, without implying nothing is shown.
+      expect(screen.queryByText("Interest impact is unknown, so we can’t show your net value after interest.")).toBeNull();
+      expect(screen.queryByRole("heading", { name: "Main pressure" })).toBeNull();
+      // "before interest" is now stated once, in a caption below the number — not repeated in a label
+      // above it, and not appended inline where it caused a mobile wrapping issue.
+      expect(screen.getByText("Estimate from your entries; excludes interest.")).toBeInTheDocument();
+      expect((document.body.textContent ?? "").match(/before interest/gi) ?? []).toHaveLength(1);
     });
 
     it("shows an unknown reward value as unknown, not zero, with no chart until a value is entered", async () => {
@@ -677,7 +685,9 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       await goToStep5(user);
 
       expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
-      expect(screen.getByText("This synthetic example shows what Sutriva may reveal after you separately choose to connect your data.")).toBeInTheDocument();
+      expect(screen.getByText("This fictional example shows what permissioned data could help analyse.")).toBeInTheDocument();
+      // Plain language, not an invitation to connect now: this version doesn't.
+      expect(screen.getByText("This version does not connect to your bank data.")).toBeInTheDocument();
       expect(screen.getByText("Example monthly spend mix")).toBeInTheDocument();
       expect(screen.getByText("₹25,000")).toBeInTheDocument();
       for (const [name, share] of [["Dining", "32%"], ["Travel", "18%"], ["Grocery", "22%"], ["Other", "28%"]]) {
@@ -1128,7 +1138,8 @@ describe("Rewards journey: reconciled frame, example mode and honest incomplete 
     mockFetchOk({ interest_input_basis: "unknown", interest_value_known: false, estimated_annual_interest_cost: null, estimated_net_annual_value: null, main_pressure_code: "INTEREST_EFFECT_UNKNOWN" });
     const user = await renderJourney();
     await runToStep4(user, "Carry a balance");
-    expect(screen.getByText("Net annual value (before interest)").nextSibling).toHaveTextContent("₹6,800");
+    expect(screen.getByText("Net annual value").nextSibling).toHaveTextContent("₹6,800");
+    expect(screen.getByText("Estimate from your entries; excludes interest.")).toBeInTheDocument();
     expect(screen.getByText("Interest impact is unknown. No interest cost has been assumed.")).toBeInTheDocument();
     expect(screen.queryByText(/Estimated annual interest/)).toBeNull();
   });

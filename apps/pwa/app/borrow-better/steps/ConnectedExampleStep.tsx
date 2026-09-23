@@ -166,7 +166,13 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
             <span className={ui.shareAdded} style={{ width: `${addedShare}%` }} />
           </div>
           <p className={ui.cardText} style={{ marginTop: 12 }}>
-            {`That's a ${formatRupeesExact(Math.abs(result.main_pressure.monthly_amount))} monthly increase, leaving about ${formatRupeesExact(result.breathing_room_after)}.`}
+            {result.breathing_room_after < 0
+              ? // The exact shortfall figure is already stated once, in the panel above — repeating it a
+                // third time here added no new information. This names the next action in concrete terms
+                // (return to the check) without suggesting that changing the amount or tenure would
+                // necessarily make the loan affordable — only that it's where those changes can be tried.
+                "This shortfall isn't resolved here. Return to your check to try a different loan amount or tenure."
+              : `That's a ${formatRupeesExact(Math.abs(result.main_pressure.monthly_amount))} monthly increase, leaving about ${formatRupeesExact(result.breathing_room_after)}.`}
           </p>
           <p className={ui.disclaimer} style={{ marginTop: 8 }}>
             Calculated from what you told us and a fixed illustrative rate; not a measure of any specific card&apos;s utilization.

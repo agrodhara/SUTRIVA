@@ -69,7 +69,10 @@ export function Step4RewardsCheck({
   const unitWord = result.reward_type === "miles" ? "miles" : "points";
   const basisLine = rewardBasisLine(result);
   const priorities = result.spending_priorities ?? [];
-  const netLabel = finding.netBeforeInterest === null ? "Net annual value" : finding.isFinal ? "Net annual value" : "Net annual value (before interest)";
+  // A single label here ("Net annual value"), not repeated with "(before interest)": that fact is stated
+  // once, in the caption below the number itself. This bars call never includes a net row (includeNet is
+  // false), so the label passed through is otherwise unused.
+  const netLabel = "Net annual value";
   const bars = buildRewardBars(result, false, { value: finding.netBeforeInterest, label: netLabel });
 
   return (
@@ -88,6 +91,15 @@ export function Step4RewardsCheck({
         <div className={`${ui.darkPanel} ${finding.netBeforeInterest === null ? ui.darkPanelMuted : ""} ${ui.o2}`}>
           <p className={ui.darkLabel}>{netLabel}</p>
           <p className={ui.darkValue}>{finding.netBeforeInterest === null ? "Can't calculate yet" : rupees(finding.netBeforeInterest)}</p>
+          {/*
+           * A short caption below the number, not an inline unit beside it: at narrow widths, appending
+           * "before interest, estimated" straight after the amount wrapped so "estimated" sat alone on its
+           * own line. Stating it once, here, also avoids saying "before interest" a second time next to a
+           * label that no longer repeats it.
+           */}
+          {finding.netBeforeInterest !== null && !finding.isFinal ? (
+            <p className={ui.darkNote}>Estimate from your entries; excludes interest.</p>
+          ) : null}
           <p className={ui.darkNote}>{finding.explanation}</p>
         </div>
 
@@ -111,13 +123,25 @@ export function Step4RewardsCheck({
         </section>
 
         {finding.code === "carries_balance" ? (
-          <p className={`${ui.notice} ${ui.o6}`}>
-            <strong>Illustrative only, not your figures: </strong>
-            {illustrativeInterestLine()}
-          </p>
+          // Reuses the app's existing "illustrative example" box style (dashed blue border) so this
+          // fictional figure is visibly distinct from the customer's own dark-panel estimate above, not
+          // just a differently-worded paragraph in the same plain notice style as everything else here.
+          <section className={`${ui.illustrative} ${ui.o6}`} aria-label="Illustrative interest example, not your figures">
+            <p className={ui.illustrativeTitle}>Illustrative example — not your figures</p>
+            <p className={ui.cardText}>{illustrativeInterestLine()}</p>
+          </section>
         ) : null}
 
-        {result.main_pressure_code ? (
+        {/*
+         * The backend's own INTEREST_EFFECT_UNKNOWN pressure code is technically accurate (the
+         * after-interest value genuinely is unknown) but is worded for the old design where this
+         * situation showed nothing at all. Shown next to the new before-interest estimate above, it reads
+         * as a contradiction ("we can't show your net value" directly under a value that is shown). The
+         * situation's own `why`/`limitation` copy already states the same fact without that contradiction,
+         * so this one pressure code is suppressed here rather than shown redundantly. Every other pressure
+         * code still appears: they add information the situation copy doesn't already give.
+         */}
+        {result.main_pressure_code && result.main_pressure_code !== "INTEREST_EFFECT_UNKNOWN" ? (
           <section className={`${ui.insightCard} ${ui.o6}`} aria-label="Additional pressure code">
             <div className={ui.insightRow}>
               <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
