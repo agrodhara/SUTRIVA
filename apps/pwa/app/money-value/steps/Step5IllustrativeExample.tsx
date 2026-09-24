@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { IllustrativeExampleBanner } from "../../../components/journey-foundation";
+import { Disclosure } from "../../../components/journey-ui/Disclosure";
 import { ExampleBanner } from "../../../components/journey-ui/ExampleEntry";
 import { StepHeading } from "../../../components/journey-ui/StepHeading";
 import { ValueBars } from "../../../components/journey-ui/ValueBars";
@@ -79,6 +80,12 @@ export function Step5IllustrativeExample({
           <h3 id="rewards-glance-heading" className={ui.cardHeading}>
             Rewards, fee and net value <span>(a year)</span>
           </h3>
+          {/*
+           * One short, situation-specific takeaway above the customer's own chart, reusing the same
+           * situation copy as Step 4 so a before-interest figure is always named as such here too — this
+           * is the "point" a reader should reach without working through the bars themselves.
+           */}
+          <p className={ui.takeaway}>{finding.headline}</p>
           <ValueBars summary={bars.summary} rows={bars.rows} />
           {reason ? (
             <p className={ui.notice} style={{ marginTop: 14 }}>
@@ -128,20 +135,51 @@ export function Step5IllustrativeExample({
             </ul>
           </figure>
 
-          <ul className={ui.factList}>
-            <li className={ui.fact}>
-              <span className={ui.factDetail}>Possible fee drag</span>
-              <span className={ui.factTitle}>Annual fee may not be fully offset by rewards.</span>
-            </li>
-            <li className={ui.fact}>
+          {/*
+           * A short, ordered story rather than a flat fact list: spending pattern → potential rewards fit
+           * → fee/interest impact → one question worth investigating. All four steps are fixed synthetic
+           * copy tied to the fixed spend-mix above; none of them read the customer's own figures.
+           */}
+          <ol className={ui.flowSteps} aria-label="How this fictional pattern connects to a question worth checking">
+            <li className={ui.flowStep}>
+              <span className={ui.flowStepEyebrow}>Spending pattern</span>
               <span className={ui.factDetail}>Dining’s your largest category</span>
+              <span className={ui.factTitle}>32% of this example month’s spend.</span>
+            </li>
+            <li className={ui.flowArrow} aria-hidden="true">
+              ↓
+            </li>
+            <li className={ui.flowStep}>
+              <span className={ui.flowStepEyebrow}>Potential rewards fit</span>
               <span className={ui.factTitle}>You may earn more with a card that rewards dining.</span>
             </li>
-            <li className={ui.fact}>
+            <li className={ui.flowArrow} aria-hidden="true">
+              ↓
+            </li>
+            <li className={ui.flowStep}>
+              <span className={ui.flowStepEyebrow}>Fee / interest impact</span>
+              <span className={ui.factDetail}>Possible fee drag</span>
+              <span className={ui.factTitle}>Annual fee may not be fully offset by rewards.</span>
               <span className={ui.factDetail}>Interest may erase rewards</span>
               <span className={ui.factTitle}>If you carry a balance, interest costs can outweigh rewards.</span>
             </li>
-          </ul>
+            <li className={ui.flowArrow} aria-hidden="true">
+              ↓
+            </li>
+            <li className={ui.flowStep}>
+              <span className={ui.flowStepEyebrow}>Worth investigating</span>
+              <span className={ui.factTitle}>Does your card actually reward dining, and would a carried balance change the answer?</span>
+            </li>
+          </ol>
+
+          <Disclosure summary="How this example works">
+            <p className={ui.cardText}>
+              This spend pattern and its category shares are fixed and do not use anything you entered. A connected version could instead use your own category
+              spend, combine it with how your card rewards each category, and factor in whether you carry a balance — to show, with your real figures, whether a
+              category like dining is worth more on a different card, and whether interest would erase the difference.
+            </p>
+            <p className={ui.cardText}>Nothing above is a recommendation of a specific card or an approval likelihood.</p>
+          </Disclosure>
         </section>
 
         {/* Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link. */}

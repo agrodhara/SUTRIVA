@@ -678,6 +678,8 @@ describe("Step 5 — What your real data could reveal", () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await reachStep5(user);
+    // The chart and table now live inside the "How this example works" disclosure, closed by default.
+    await user.click(screen.getByRole("button", { name: "How this example works" }));
 
     const chart = screen.getByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ });
     expect(chart).toBeInTheDocument();
@@ -692,6 +694,7 @@ describe("Step 5 — What your real data could reveal", () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await reachStep5(user);
+    await user.click(screen.getByRole("button", { name: "How this example works" }));
 
     const table = screen.getByRole("table");
     const region = table.closest('[role="region"]') as HTMLElement;
@@ -699,6 +702,59 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(region).toHaveAttribute("tabindex", "0");
     expect(region).toHaveAccessibleName(/Example income and total commitments by month/);
     expect(region.contains(table)).toBe(true);
+  });
+
+  it("keeps the chart and table out of the DOM until the disclosure is opened, and lets it be closed again", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ })).toBeNull();
+    const toggle = screen.getByRole("button", { name: "How this example works" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("keeps the fictional bureau/payment-activity flow and the customer's declared figures visually and structurally separate", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+    const glance = screen.getByRole("region", { name: /Your monthly payment mix/ });
+    // Neither contains the other: the fictional flow and the customer's own declared-data panel are
+    // separate sections, never merged into one visual as though describing the same person.
+    expect(illustrative.contains(glance)).toBe(false);
+    expect(glance.contains(illustrative)).toBe(false);
+    expect(screen.getAllByText("BASED ON WHAT YOU TOLD US — YOUR DECLARED FIGURES").length).toBeGreaterThan(0);
+    // The illustrative banner stays visible even before the disclosure is opened.
+    expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
+  });
+
+  it("keeps the illustrative panel free of user values with the disclosure open too", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await fillPlan(user, "731000", "48");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+    await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
+    await screen.findByRole("note");
+    await user.click(screen.getByRole("button", { name: "How this example works" }));
+
+    const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+    const panelText = illustrative.textContent ?? "";
+    for (const userValue of ["731000", "7,31,000", "1,20,000", "18,000", "57,000", "1,100"]) {
+      expect(panelText).not.toContain(userValue);
+    }
   });
 
   it("keeps the illustrative panel free of user values while the primary graphic uses them", async () => {
@@ -744,7 +800,9 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(screen.queryByRole("link", { name: /pilot|join/i })).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByText(/OTP|mobile number|consent|connect account|connect bureau/i)).toBeNull();
-    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Back to your check"]);
+    // Also no bureau score, approval probability or restructuring-guarantee language in the fictional flow.
+    expect(screen.queryByText(/bureau score|approval (probability|likelihood|odds)|guaranteed saving/i)).toBeNull();
+    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Back to your check", "How this example works+"]);
   });
 
   it("lets the user go back to Step 4 with the result intact", async () => {

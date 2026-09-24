@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { IllustrativeExampleBanner } from "../../../components/journey-foundation";
 import { DeclaredDataBadge } from "../../../components/journey-ui/DeclaredDataBadge";
+import { Disclosure } from "../../../components/journey-ui/Disclosure";
 import { ExampleBanner } from "../../../components/journey-ui/ExampleEntry";
 import { formatRupeesExact } from "../../../components/journey-ui/indian";
 import { StackedBar } from "../../../components/journey-ui/StackedBar";
@@ -202,69 +203,100 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
           <p className={ui.cardText}>{example.intro}</p>
           <p className={ui.notice}>{example.notConnectedNote}</p>
 
-          <ul className={ui.factList}>
-            {[example.incomeRegularity, example.recurringCommitments, example.typicalMonthEndBuffer, example.essentialSpending, example.commitmentRelease].map((fact) => (
-              <li key={fact.title} className={ui.fact}>
-                <span className={ui.factTitle}>{fact.title}</span>
-                <span className={ui.factDetail}>{fact.detail}</span>
-              </li>
-            ))}
-          </ul>
+          {/*
+           * A three-part story rather than a flat five-fact list: a fictional bureau-style snapshot of
+           * named obligations → fictional payment activity over time → one possible pressure or
+           * restructuring question. All copy and figures below are the fixed synthetic example; none of
+           * it reads the customer's own declared figures, and it is never placed beside them as though
+           * describing one person (see the separate declared-data panels in the left column).
+           */}
+          <ol className={ui.flowSteps} aria-label="How a fictional bureau and payment-activity view might connect to a question worth checking">
+            <li className={ui.flowStep}>
+              <span className={ui.flowStepEyebrow}>Fictional credit report</span>
+              <span className={ui.factTitle}>{example.incomeRegularity.title}</span>
+              <span className={ui.factDetail}>{example.incomeRegularity.detail}</span>
+              <span className={ui.factTitle}>{example.recurringCommitments.title}</span>
+              <span className={ui.factDetail}>{example.recurringCommitments.detail}</span>
+            </li>
+            <li className={ui.flowArrow} aria-hidden="true">
+              ↓
+            </li>
+            <li className={ui.flowStep}>
+              <span className={ui.flowStepEyebrow}>Fictional payment activity</span>
+              <span className={ui.factTitle}>{example.typicalMonthEndBuffer.title}</span>
+              <span className={ui.factDetail}>{example.typicalMonthEndBuffer.detail}</span>
+              <span className={ui.factTitle}>{example.essentialSpending.title}</span>
+              <span className={ui.factDetail}>{example.essentialSpending.detail}</span>
+            </li>
+            <li className={ui.flowArrow} aria-hidden="true">
+              ↓
+            </li>
+            <li className={ui.flowStep}>
+              <span className={ui.flowStepEyebrow}>Worth investigating</span>
+              <span className={ui.factTitle}>{example.commitmentRelease.title}</span>
+              <span className={ui.factDetail}>{example.commitmentRelease.detail}</span>
+              <p className={ui.cardText} style={{ marginTop: 4 }}>
+                Whether consolidating the recurring obligation above would ease monthly pressure, and by how much — see the worked example below.
+              </p>
+            </li>
+          </ol>
 
-          <section className={ui.chartBlock} aria-labelledby="borrow-example-chart">
-            <h4 id="borrow-example-chart" className={styles.chartHeading}>
-              {example.chartTitle}
-            </h4>
-            <ul className={styles.legend}>
-              <li className={styles.legendItem}>
-                <span className={styles.swatchIncome} aria-hidden="true" /> Income
-              </li>
-              <li className={styles.legendItem}>
-                <span className={styles.swatchCommitments} aria-hidden="true" /> Total commitments
-              </li>
-            </ul>
-            <CashFlowChart />
-            {/* Very narrow screens scroll the table inside this region, never the page. */}
-            <div className={styles.tableScroll} role="region" aria-labelledby="borrow-example-table-caption" tabIndex={0}>
-              <table className={styles.dataTable}>
-                <caption id="borrow-example-table-caption">Example income and total commitments by month, rounded to the nearest {"₹1,000"}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Month</th>
-                    <th scope="col">Income</th>
-                    <th scope="col">Total commitments</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {example.months.map((entry) => (
-                    <tr key={entry.month}>
-                      <th scope="row">{entry.month}</th>
-                      <td>{formatRupees(entry.income)}</td>
-                      <td>{formatRupees(entry.commitments)}</td>
+          <Disclosure summary="How this example works">
+            <section className={ui.chartBlock} aria-labelledby="borrow-example-chart">
+              <h4 id="borrow-example-chart" className={styles.chartHeading}>
+                {example.chartTitle}
+              </h4>
+              <ul className={styles.legend}>
+                <li className={styles.legendItem}>
+                  <span className={styles.swatchIncome} aria-hidden="true" /> Income
+                </li>
+                <li className={styles.legendItem}>
+                  <span className={styles.swatchCommitments} aria-hidden="true" /> Total commitments
+                </li>
+              </ul>
+              <CashFlowChart />
+              {/* Very narrow screens scroll the table inside this region, never the page. */}
+              <div className={styles.tableScroll} role="region" aria-labelledby="borrow-example-table-caption" tabIndex={0}>
+                <table className={styles.dataTable}>
+                  <caption id="borrow-example-table-caption">Example income and total commitments by month, rounded to the nearest {"₹1,000"}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Month</th>
+                      <th scope="col">Income</th>
+                      <th scope="col">Total commitments</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                  </thead>
+                  <tbody>
+                    {example.months.map((entry) => (
+                      <tr key={entry.month}>
+                        <th scope="row">{entry.month}</th>
+                        <td>{formatRupees(entry.income)}</td>
+                        <td>{formatRupees(entry.commitments)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
-          <section aria-labelledby="borrow-better-structure-heading" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line, #e3e1d3)" }}>
-            <h4 id="borrow-better-structure-heading" className={styles.chartHeading}>
-              Only part of a loan like this would replace named debt — the rest is new borrowing
-            </h4>
-            <p className={ui.cardText}>
-              {`In this fixed example, a named personal loan of ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month with ${OLD_OBLIGATION_MONTHS_REMAINING} months remaining (${formatRupees(OLD_OBLIGATION_REMAINING_SCHEDULED_PAYMENTS)} in remaining scheduled payments) has a separate, lower payoff amount of ${formatRupees(OLD_OBLIGATION_PAYOFF_TODAY)} today. That payoff is the portion of a ${formatRupees(500000)}/36-month/14% loan (full EMI ${formatRupees(NEW_LOAN_EMI)}/month, used in full for every room figure) used to close it — the remaining ${formatRupees(ADDITIONAL_BORROWING_AMOUNT)} is additional borrowing.`}
-            </p>
-            <p className={`${ui.notice} ${ui.noticeWarn}`}>
-              {`Flag: the replaced obligation's monthly payment falls from ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)} to an allocated ${formatRupees(REPLACED_PORTION_ALLOCATED_EMI)}, but its total cost rises from the ${formatRupees(OLD_OBLIGATION_REMAINING_SCHEDULED_PAYMENTS)} in remaining scheduled payments to ${formatRupees(REPLACED_PORTION_TOTAL_COST)} (+${formatRupees(REPLACED_PORTION_COST_INCREASE)}) because the term extends to 36 months. A lower EMI is not automatically a saving.`}
-            </p>
-            <p className={ui.cardText}>
-              {`Room after this loan is ${formatRupees(WHOLE_LOAN_ROOM_AFTER)}/month — ${formatRupees(ROOM_DIFFERENCE_VS_ADDITIONAL_BORROWING_ONLY)} higher than if the same loan added no replacement, because the old ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month payment is no longer paid separately. The additional-borrowing portion's allocated EMI is ${formatRupees(ADDITIONAL_BORROWING_ALLOCATED_EMI)}/month.`}
-            </p>
-            <p className={ui.disclaimer} style={{ marginTop: 8 }}>
-              Illustrative example — not your data. A personalised replacement comparison would need details this version doesn&apos;t collect, such as which specific loan or card a new loan would replace and its remaining balance and term.
-            </p>
-          </section>
+            <section aria-labelledby="borrow-better-structure-heading">
+              <h4 id="borrow-better-structure-heading" className={styles.chartHeading}>
+                Only part of a loan like this would replace named debt — the rest is new borrowing
+              </h4>
+              <p className={ui.cardText}>
+                {`In this fixed example, a named personal loan of ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month with ${OLD_OBLIGATION_MONTHS_REMAINING} months remaining (${formatRupees(OLD_OBLIGATION_REMAINING_SCHEDULED_PAYMENTS)} in remaining scheduled payments) has a separate, lower payoff amount of ${formatRupees(OLD_OBLIGATION_PAYOFF_TODAY)} today. That payoff is the portion of a ${formatRupees(500000)}/36-month/14% loan (full EMI ${formatRupees(NEW_LOAN_EMI)}/month, used in full for every room figure) used to close it — the remaining ${formatRupees(ADDITIONAL_BORROWING_AMOUNT)} is additional borrowing.`}
+              </p>
+              <p className={`${ui.notice} ${ui.noticeWarn}`}>
+                {`Flag: the replaced obligation's monthly payment falls from ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)} to an allocated ${formatRupees(REPLACED_PORTION_ALLOCATED_EMI)}, but its total cost rises from the ${formatRupees(OLD_OBLIGATION_REMAINING_SCHEDULED_PAYMENTS)} in remaining scheduled payments to ${formatRupees(REPLACED_PORTION_TOTAL_COST)} (+${formatRupees(REPLACED_PORTION_COST_INCREASE)}) because the term extends to 36 months. A lower EMI is not automatically a saving.`}
+              </p>
+              <p className={ui.cardText}>
+                {`Room after this loan is ${formatRupees(WHOLE_LOAN_ROOM_AFTER)}/month — ${formatRupees(ROOM_DIFFERENCE_VS_ADDITIONAL_BORROWING_ONLY)} higher than if the same loan added no replacement, because the old ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month payment is no longer paid separately. The additional-borrowing portion's allocated EMI is ${formatRupees(ADDITIONAL_BORROWING_ALLOCATED_EMI)}/month.`}
+              </p>
+              <p className={ui.disclaimer} style={{ marginTop: 8 }}>
+                Illustrative example — not your data. A personalised replacement comparison would need details this version doesn&apos;t collect, such as which specific loan or card a new loan would replace and its remaining balance and term.
+              </p>
+            </section>
+          </Disclosure>
         </section>
 
         {/* Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link. */}

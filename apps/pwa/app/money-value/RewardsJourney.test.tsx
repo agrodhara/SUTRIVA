@@ -724,6 +724,62 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(screen.getByRole("region", { name: /Rewards, fee and net value/ })).toHaveTextContent("Everyday bills");
     });
 
+    it("never interpolates the customer's inputs into the illustrative panel with the disclosure open either", async () => {
+      const user = await renderJourney();
+      await completeStep2(user, "Carry a balance", "Points");
+      await user.click(screen.getByRole("radio", { name: "The approximate ₹ value" }));
+      await fillBasics(user, ["Everyday bills"], "77777", "3333");
+      await user.type(screen.getByLabelText("Approximate reward value"), "4242");
+      await user.selectOptions(screen.getByLabelText("Period"), "yearly");
+      await submitStep3(user);
+      await goToStep5(user);
+      await user.click(screen.getByRole("button", { name: "How this example works" }));
+
+      const text = screen.getByRole("region", { name: "What connected data could add" }).textContent ?? "";
+      for (const leaked of ["77,777", "77777", "3,333", "3333", "4,242", "4242", "Everyday bills"]) {
+        expect(text).not.toContain(leaked);
+      }
+    });
+
+    it("keeps the customer chart and the fictional flow visually and structurally separate", async () => {
+      const user = await renderJourney();
+      await runToStep4(user);
+      await goToStep5(user);
+
+      const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+      const glance = screen.getByRole("region", { name: /Rewards, fee and net value/ });
+      expect(illustrative.contains(glance)).toBe(false);
+      expect(glance.contains(illustrative)).toBe(false);
+      expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
+    });
+
+    it("shows a situation-specific takeaway above the customer's own chart, distinguishing before-interest value", async () => {
+      const user = await renderJourney();
+      await runToStep4(user, "Carry a balance");
+      await goToStep5(user);
+
+      expect(screen.getByText("Before interest, your estimated net value is ₹6,800.")).toBeInTheDocument();
+    });
+
+    it("keeps the fictional flow's detail out of the DOM until the disclosure is opened, and lets it be closed again", async () => {
+      const user = await renderJourney();
+      await runToStep4(user);
+      await goToStep5(user);
+
+      const toggle = screen.getByRole("button", { name: "How this example works" });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText(/A connected version could instead use your own category/)).toBeNull();
+
+      await user.click(toggle);
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByText(/A connected version could instead use your own category/)).toBeInTheDocument();
+      expect(screen.getByText(/Nothing above is a recommendation of a specific card or an approval likelihood\./)).toBeInTheDocument();
+
+      await user.click(toggle);
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText(/A connected version could instead use your own category/)).toBeNull();
+    });
+
     it("shows no pilot call to action, disabled or otherwise, and no data-connection controls", async () => {
       const user = await renderJourney();
       await runToStep4(user);
@@ -734,7 +790,8 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
       expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
       expect(screen.queryByText(/connect (your )?(account|bank|statement)|upload|bureau/i)).not.toBeInTheDocument();
-      expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Back"]);
+      expect(screen.queryByText(/bureau score|approval (probability|likelihood|odds)|guaranteed saving/i)).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Back", "How this example works+"]);
       expect(screen.getByRole("link", { name: "Back to home" })).toHaveAttribute("href", "/");
     });
 

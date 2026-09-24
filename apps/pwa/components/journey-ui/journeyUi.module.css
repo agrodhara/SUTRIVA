@@ -1033,6 +1033,105 @@
   font-weight: 800;
 }
 
+/* ---- Step 5: one-line situation takeaway above a customer's own chart ---- */
+
+.takeaway {
+  margin: 0;
+  color: var(--navy);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+/* ---- Step 5: fictional-section flow (spending/report → activity → question) ---- */
+
+.flowSteps {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flowStep {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.flowStepEyebrow {
+  display: inline-block;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.flowArrow {
+  align-self: center;
+  margin: 4px 0;
+  color: var(--blue);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* ---- Accessible disclosure ("How this example works") ---- */
+
+.disclosure {
+  border-top: 1px solid var(--blue-line);
+  padding-top: 14px;
+}
+
+.disclosureToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--blue-line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--navy);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.disclosureToggle:hover {
+  border-color: var(--blue);
+}
+
+.disclosureToggle:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.disclosureChevron {
+  flex: none;
+  color: var(--blue);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.disclosureContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
 /* ---- Stacked bar ---- */
 
 .stack {
