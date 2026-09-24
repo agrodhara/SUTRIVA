@@ -140,35 +140,32 @@ export function Step5IllustrativeExample({
            * → fee/interest impact → one question worth investigating. All four steps are fixed synthetic
            * copy tied to the fixed spend-mix above; none of them read the customer's own figures.
            */}
+          {/* One short line per step, not a fact pair: the fuller reasoning moved into the disclosure below. */}
           <ol className={ui.flowSteps} aria-label="How this fictional pattern connects to a question worth checking">
             <li className={ui.flowStep}>
               <span className={ui.flowStepEyebrow}>Spending pattern</span>
-              <span className={ui.factDetail}>Dining’s your largest category</span>
-              <span className={ui.factTitle}>32% of this example month’s spend.</span>
+              <span className={ui.factDetail}>Dining is your largest category, at 32%.</span>
             </li>
             <li className={ui.flowArrow} aria-hidden="true">
               ↓
             </li>
             <li className={ui.flowStep}>
               <span className={ui.flowStepEyebrow}>Potential rewards fit</span>
-              <span className={ui.factTitle}>You may earn more with a card that rewards dining.</span>
+              <span className={ui.factDetail}>A card that rewards dining more could earn you more here.</span>
             </li>
             <li className={ui.flowArrow} aria-hidden="true">
               ↓
             </li>
             <li className={ui.flowStep}>
               <span className={ui.flowStepEyebrow}>Fee / interest impact</span>
-              <span className={ui.factDetail}>Possible fee drag</span>
-              <span className={ui.factTitle}>Annual fee may not be fully offset by rewards.</span>
-              <span className={ui.factDetail}>Interest may erase rewards</span>
-              <span className={ui.factTitle}>If you carry a balance, interest costs can outweigh rewards.</span>
+              <span className={ui.factDetail}>The fee may not be fully offset — and if you carry a balance, interest could erase the rewards entirely.</span>
             </li>
             <li className={ui.flowArrow} aria-hidden="true">
               ↓
             </li>
             <li className={ui.flowStep}>
               <span className={ui.flowStepEyebrow}>Worth investigating</span>
-              <span className={ui.factTitle}>Does your card actually reward dining, and would a carried balance change the answer?</span>
+              <span className={ui.factDetail}>Does your card reward dining, and would a carried balance change that?</span>
             </li>
           </ol>
 
@@ -177,6 +174,10 @@ export function Step5IllustrativeExample({
               This spend pattern and its category shares are fixed and do not use anything you entered. A connected version could instead use your own category
               spend, combine it with how your card rewards each category, and factor in whether you carry a balance — to show, with your real figures, whether a
               category like dining is worth more on a different card, and whether interest would erase the difference.
+            </p>
+            <p className={ui.cardText}>
+              On the fee/interest step above: the annual fee may not be fully offset by rewards on its own, and if you carry a balance, interest costs can
+              outweigh the rewards earned entirely — two separate effects that both point the same way.
             </p>
             <p className={ui.cardText}>Nothing above is a recommendation of a specific card or an approval likelihood.</p>
           </Disclosure>

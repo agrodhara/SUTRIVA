@@ -212,17 +212,21 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
            */}
           <ol className={ui.flowSteps} aria-label="How a fictional bureau and payment-activity view might connect to a question worth checking">
             <li className={ui.flowStep}>
+              {/* Only credit-account-style information here: a recorded obligation and its status — not
+                  salary or spending behaviour, which a credit report doesn't carry. */}
               <span className={ui.flowStepEyebrow}>Fictional credit report</span>
-              <span className={ui.factTitle}>{example.incomeRegularity.title}</span>
-              <span className={ui.factDetail}>{example.incomeRegularity.detail}</span>
               <span className={ui.factTitle}>{example.recurringCommitments.title}</span>
               <span className={ui.factDetail}>{example.recurringCommitments.detail}</span>
+              <span className={ui.factTitle}>{example.commitmentRelease.title}</span>
+              <span className={ui.factDetail}>{example.commitmentRelease.detail}</span>
             </li>
             <li className={ui.flowArrow} aria-hidden="true">
               ↓
             </li>
             <li className={ui.flowStep}>
               <span className={ui.flowStepEyebrow}>Fictional payment activity</span>
+              <span className={ui.factTitle}>{example.incomeRegularity.title}</span>
+              <span className={ui.factDetail}>{example.incomeRegularity.detail}</span>
               <span className={ui.factTitle}>{example.typicalMonthEndBuffer.title}</span>
               <span className={ui.factDetail}>{example.typicalMonthEndBuffer.detail}</span>
               <span className={ui.factTitle}>{example.essentialSpending.title}</span>
@@ -233,10 +237,14 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
             </li>
             <li className={ui.flowStep}>
               <span className={ui.flowStepEyebrow}>Worth investigating</span>
-              <span className={ui.factTitle}>{example.commitmentRelease.title}</span>
-              <span className={ui.factDetail}>{example.commitmentRelease.detail}</span>
-              <p className={ui.cardText} style={{ marginTop: 4 }}>
-                Whether consolidating the recurring obligation above would ease monthly pressure, and by how much — see the worked example below.
+              {/*
+               * Names the worked example's own obligation by its own verified constants, rather than
+               * pointing back at the "commitment release" fact above (a different, ₹6,000/5-month
+               * example): the two are separate illustrations and must never be implied to be the same
+               * obligation.
+               */}
+              <p className={ui.cardText}>
+                {`Whether consolidating a named obligation — like the ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month obligation with ${OLD_OBLIGATION_MONTHS_REMAINING} months remaining, worked through below — would ease monthly pressure, and by how much.`}
               </p>
             </li>
           </ol>

@@ -693,9 +693,12 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       for (const [name, share] of [["Dining", "32%"], ["Travel", "18%"], ["Grocery", "22%"], ["Other", "28%"]]) {
         expect(screen.getByText(name).closest("li")).toHaveTextContent(share);
       }
-      expect(screen.getByText("Possible fee drag")).toBeInTheDocument();
-      expect(screen.getByText("Dining’s your largest category")).toBeInTheDocument();
-      expect(screen.getByText("Interest may erase rewards")).toBeInTheDocument();
+      // One short line per flow step, not a fact pair: kept tight for 390px, with the fuller reasoning
+      // moved into the disclosure.
+      expect(screen.getByText("Dining is your largest category, at 32%.")).toBeInTheDocument();
+      expect(screen.getByText("A card that rewards dining more could earn you more here.")).toBeInTheDocument();
+      expect(screen.getByText("The fee may not be fully offset — and if you carry a balance, interest could erase the rewards entirely.")).toBeInTheDocument();
+      expect(screen.getByText("Does your card reward dining, and would a carried balance change that?")).toBeInTheDocument();
     });
 
     it("gives the chart a text alternative", async () => {

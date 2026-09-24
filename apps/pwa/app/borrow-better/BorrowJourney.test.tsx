@@ -674,6 +674,52 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(screen.getByText("This version does not connect to your bank or bureau data.")).toBeInTheDocument();
   });
 
+  it("puts only supportable credit-account information under the fictional credit-report step, and salary/spending under payment activity", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    const creditReportNode = screen.getByText("Fictional credit report").closest("li") as HTMLElement;
+    // Credit-account-style facts only: a recorded obligation and its status.
+    expect(creditReportNode).toHaveTextContent("Recurring commitments");
+    expect(creditReportNode).toHaveTextContent("₹31,500 identified");
+    expect(creditReportNode).toHaveTextContent("Commitment release");
+    expect(creditReportNode).toHaveTextContent("A ₹6,000 EMI may end in 5 months");
+    // Not salary or spending behaviour — a credit report doesn't carry these.
+    expect(creditReportNode).not.toHaveTextContent("Income regularity");
+    expect(creditReportNode).not.toHaveTextContent("Typical month-end buffer");
+    expect(creditReportNode).not.toHaveTextContent("Essential spending increased");
+
+    const paymentActivityNode = screen.getByText("Fictional payment activity").closest("li") as HTMLElement;
+    expect(paymentActivityNode).toHaveTextContent("Income regularity");
+    expect(paymentActivityNode).toHaveTextContent("Salary received consistently");
+    expect(paymentActivityNode).toHaveTextContent("Typical month-end buffer");
+    expect(paymentActivityNode).toHaveTextContent("₹8,200");
+    expect(paymentActivityNode).toHaveTextContent("Essential spending increased");
+    expect(paymentActivityNode).not.toHaveTextContent("Recurring commitments");
+    expect(paymentActivityNode).not.toHaveTextContent("Commitment release");
+  });
+
+  it("points the visible 'worth investigating' question at the worked example's own obligation, never implying it is the same as the ₹6,000/5-month commitment-release fact", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    const worthInvestigatingNode = screen.getByText("Worth investigating").closest("li") as HTMLElement;
+    // References the worked example's own verified constants (₹8,000/month, 10 months remaining).
+    expect(worthInvestigatingNode).toHaveTextContent("₹8,000/month obligation with 10 months remaining");
+    // Never cites the unrelated ₹6,000/5-month commitment-release figure here, which would imply the two
+    // are the same obligation.
+    expect(worthInvestigatingNode).not.toHaveTextContent("₹6,000");
+    expect(worthInvestigatingNode).not.toHaveTextContent("5 months");
+
+    // Opening the disclosure confirms the worked example uses the same ₹8,000/10-month obligation, and
+    // that the two illustrations are never merged into one figure.
+    await user.click(screen.getByRole("button", { name: "How this example works" }));
+    expect(screen.getByText(/a named personal loan of ₹8,000\/month with 10 months remaining/)).toBeInTheDocument();
+    expect(screen.getByText(/A lower EMI is not automatically a saving\./)).toBeInTheDocument();
+  });
+
   it("gives the chart a complete text alternative", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
