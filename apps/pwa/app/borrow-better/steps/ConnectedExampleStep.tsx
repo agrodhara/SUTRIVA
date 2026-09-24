@@ -225,9 +225,9 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
 
           {/*
            * Three compact cues, each explicitly "in this example": income regularity, recurring
-           * debt/payment pressure, and a month-end room that's narrowing. Salary regularity and spending
-           * behaviour are bank/payment-activity facts, not credit-report findings — neither is labelled as
-           * bureau information here.
+           * debt/payment pressure, and month-end room. Salary regularity and spending behaviour are
+           * bank/payment-activity facts, not credit-report findings — neither is labelled as bureau
+           * information here.
            */}
           <ul className={ui.cueRow} aria-label="Fictional patterns in this example">
             <li className={ui.cue}>
@@ -254,9 +254,14 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
               </span>
               <span className={ui.cueText}>
                 <span className={ui.cueLabel}>Month-end room</span>
-                <span className={ui.cueValue}>
-                  About {example.typicalMonthEndBuffer.detail} in this example, narrowing as essential spending increased {example.essentialSpending.detail}
-                </span>
+                {/*
+                 * Two separate fictional facts, not one causal claim: the chart above shows income versus
+                 * total commitments, not a month-end balance over time, so it cannot support saying the
+                 * ₹8,200 buffer is "narrowing" because of the spending increase. Both figures are kept,
+                 * stated independently.
+                 */}
+                <span className={ui.cueValue}>About {example.typicalMonthEndBuffer.detail} typical in this example.</span>
+                <span className={ui.cueValue}>Essential spending also increased {example.essentialSpending.detail}</span>
               </span>
             </li>
           </ul>

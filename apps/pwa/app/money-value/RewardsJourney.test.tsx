@@ -958,16 +958,36 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       await runToStep4(user);
       await goToStep5(user);
 
+      // The exact allowed payload shape: exactly these two fields on every call, nothing else — a stray
+      // third field (e.g. a customer value added by accident) fails this immediately.
+      const ALLOWED_KEYS = ["journeyRunId", "screenName"];
+      // The bounded, categorical screen names this flow can legitimately emit (mirrors the ScreenName
+      // allowlist in lib/api.ts) — not free text, so it can never carry a customer value.
+      const ALLOWED_SCREEN_NAMES = new Set(["rewards_card_behaviour", "rewards_priorities_inputs", "rewards_check", "rewards_connected_example"]);
+
       const runIds = new Set<unknown>();
       for (const [, journey, details] of trackEventMock.mock.calls) {
         expect(journey).toBe("money_value");
-        expect(Object.keys(details).sort()).toEqual(["journeyRunId", "screenName"]);
+        expect(Object.keys(details).sort()).toEqual(ALLOWED_KEYS);
+        expect(typeof details.journeyRunId).toBe("string");
+        // An opaque, randomly generated id (crypto.randomUUID, or a Date.now()-based fallback) — not a
+        // value drawn from the form. Its own digits are not customer data, so — unlike screenName below —
+        // it is deliberately excluded from the forbidden-substring scan: a random id can coincidentally
+        // contain any short digit string (this is what made the previous version of this test flaky).
+        expect(details.journeyRunId as string).toMatch(/^[a-z0-9-]{8,}$/i);
+        expect(ALLOWED_SCREEN_NAMES.has(details.screenName as string)).toBe(true);
         runIds.add(details.journeyRunId);
       }
       expect(runIds.size).toBe(1);
-      const serialized = JSON.stringify(trackEventMock.mock.calls);
+
+      // Customer financial values must be absent from the one field that could ever carry free-form
+      // content: screenName. (journeyRunId is excluded — see above.)
+      const screenNames = trackEventMock.mock.calls
+        .map(([, , details]) => details.screenName)
+        .join(" ")
+        .toLowerCase();
       for (const forbidden of ["25000", "4000", "900", "dining", "travel", "pay_in_full", "cashback", "monthly"]) {
-        expect(serialized.toLowerCase()).not.toContain(forbidden);
+        expect(screenNames).not.toContain(forbidden);
       }
     });
 
@@ -1281,6 +1301,18 @@ describe("Rewards journey: reconciled frame, example mode and honest incomplete 
       ["result_declared", "rewards_check"],
       ["connected_example_seen", "rewards_connected_example"],
     ]);
-    expect(JSON.stringify(trackEventMock.mock.calls)).not.toMatch(/25000|4000|900|cashback|Example mode/i);
+    // The exact allowed payload shape on every call.
+    for (const [, , details] of trackEventMock.mock.calls) {
+      expect(Object.keys(details).sort()).toEqual(["journeyRunId", "screenName"]);
+    }
+    // Scoped to screenName only — never the opaque, randomly generated journeyRunId. Its own digits are
+    // not customer data, and scanning a random id for a short substring like "900" is inherently flaky:
+    // a random id can coincidentally contain any short digit string (this is the same class of failure as
+    // the one previously reported at this file's other analytics test, just missed here on the first pass).
+    const screenNames = trackEventMock.mock.calls
+      .map(([, , details]) => details?.screenName)
+      .join(" ")
+      .toLowerCase();
+    expect(screenNames).not.toMatch(/25000|4000|900|cashback|example mode/i);
   });
 });

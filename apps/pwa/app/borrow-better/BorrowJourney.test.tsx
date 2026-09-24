@@ -666,7 +666,11 @@ describe("Step 5 — What your real data could reveal", () => {
     // Three compact cues, each explicitly tied to the fictional example.
     expect(screen.getByText("Salary received consistently in this example.")).toBeInTheDocument();
     expect(screen.getByText("₹31,500 identified in this example.")).toBeInTheDocument();
-    expect(screen.getByText(/About ₹8,200 in this example, narrowing as essential spending increased/)).toBeInTheDocument();
+    // The buffer figure and the spending-increase observation are two separate fictional facts, not one
+    // causal claim — the chart above shows income versus commitments, not a month-end balance over time,
+    // so it cannot support saying the buffer is "narrowing" because of the spending increase.
+    expect(screen.getByText("About ₹8,200 typical in this example.")).toBeInTheDocument();
+    expect(screen.getByText("Essential spending also increased in 2 of the last 6 months.")).toBeInTheDocument();
     // One visible question, naming neither example EMI.
     expect(screen.getByText("Could existing debt be the pressure to examine before taking another loan?")).toBeInTheDocument();
     // Plain language, not an invitation to connect now: this version doesn't.
@@ -1000,9 +1004,28 @@ describe("analytics", () => {
     await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
     await screen.findByRole("note");
 
-    const serialized = JSON.stringify(trackEventMock.mock.calls);
-    for (const forbidden of ["120000", "500000", "18000", "28000", "14", "fall_short", "debt_consolidation", "yes", "money_left", "17088", "27911"]) {
-      expect(serialized.replace(/[0-9a-f-]{36}/g, "")).not.toContain(forbidden);
+    // The exact allowed payload shape, and the bounded, categorical screen names this flow can legitimately
+    // emit (mirrors the ScreenName allowlist in lib/api.ts) — not free text, so it can never carry a
+    // customer value.
+    const ALLOWED_SCREEN_NAMES = new Set(["borrow_monthly_position", "borrow_plan", "borrow_check", "borrow_connected_example"]);
+    for (const [, , details] of trackEventMock.mock.calls) {
+      expect(Object.keys(details).sort()).toEqual(["journeyRunId", "screenName"]);
+      expect(typeof details.journeyRunId).toBe("string");
+      expect(ALLOWED_SCREEN_NAMES.has(details.screenName)).toBe(true);
+    }
+
+    // Customer values must be absent from the one field that could ever carry free-form content:
+    // screenName. journeyRunId is deliberately excluded from this scan — it's an opaque, randomly
+    // generated id (crypto.randomUUID, or a Date.now()-based fallback), not customer data, and scanning a
+    // random id for short substrings like "14" is inherently flaky: a random id can coincidentally contain
+    // any short digit string, regardless of format, so stripping only a canonical 36-character UUID shape
+    // (the previous approach here) does not fully protect against that fallback format either.
+    const screenNames = trackEventMock.mock.calls
+      .map(([, , details]) => details.screenName)
+      .join(" ")
+      .toLowerCase();
+    for (const forbidden of ["120000", "500000", "18000", "28000", "fall_short", "debt_consolidation", "yes", "money_left", "17088", "27911"]) {
+      expect(screenNames).not.toContain(forbidden);
     }
   });
 
@@ -1298,7 +1321,17 @@ describe("Example mode analytics", () => {
       ["result_declared", "borrow_check"],
       ["connected_example_seen", "borrow_connected_example"],
     ]);
-    const serialised = JSON.stringify(trackEventMock.mock.calls);
-    expect(serialised).not.toMatch(/120000|500000|home_improvement|money_left|Example mode/i);
+    // The exact allowed payload shape on every call — a stray extra field (e.g. a sample value added by
+    // accident) fails this immediately.
+    for (const [, , details] of trackEventMock.mock.calls) {
+      expect(Object.keys(details).sort()).toEqual(["journeyRunId", "screenName"]);
+    }
+    // Scoped to screenName only — never the opaque, randomly generated journeyRunId, whose own digits are
+    // not customer data and can coincidentally match a short forbidden substring by chance.
+    const screenNames = trackEventMock.mock.calls
+      .map(([, , details]) => details?.screenName)
+      .join(" ")
+      .toLowerCase();
+    expect(screenNames).not.toMatch(/120000|500000|home_improvement|money_left|example mode/i);
   });
 });
