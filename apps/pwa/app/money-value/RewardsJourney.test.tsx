@@ -693,12 +693,22 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       for (const [name, share] of [["Dining", "32%"], ["Travel", "18%"], ["Grocery", "22%"], ["Other", "28%"]]) {
         expect(screen.getByText(name).closest("li")).toHaveTextContent(share);
       }
-      // One short line per flow step, not a fact pair: kept tight for 390px, with the fuller reasoning
-      // moved into the disclosure.
-      expect(screen.getByText("Dining is your largest category, at 32%.")).toBeInTheDocument();
-      expect(screen.getByText("A card that rewards dining more could earn you more here.")).toBeInTheDocument();
-      expect(screen.getByText("The fee may not be fully offset — and if you carry a balance, interest could erase the rewards entirely.")).toBeInTheDocument();
-      expect(screen.getByText("Does your card reward dining, and would a carried balance change that?")).toBeInTheDocument();
+      // One graphic (the donut above), up to three compact cues, one question — not four text-heavy
+      // cards. Fictional figures are always "this example's", never "your".
+      expect(screen.getByText("32% of this example’s spend.")).toBeInTheDocument();
+      expect(screen.getByText("This example’s dining spend may be a rewards mismatch.")).toBeInTheDocument();
+      expect(screen.getByText("Could offset the gains in this example.")).toBeInTheDocument();
+      expect(screen.getByText("Is this card rewarding where you actually spend, and do its costs outweigh the benefit?")).toBeInTheDocument();
+    });
+
+    it("never calls the fictional spend pattern 'your dining' or 'your spending'", async () => {
+      const user = await renderJourney();
+      await runToStep4(user);
+      await goToStep5(user);
+
+      const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+      expect(illustrative).not.toHaveTextContent(/your dining/i);
+      expect(illustrative).not.toHaveTextContent(/your spending/i);
     });
 
     it("gives the chart a text alternative", async () => {

@@ -136,38 +136,45 @@ export function Step5IllustrativeExample({
           </figure>
 
           {/*
-           * A short, ordered story rather than a flat fact list: spending pattern → potential rewards fit
-           * → fee/interest impact → one question worth investigating. All four steps are fixed synthetic
-           * copy tied to the fixed spend-mix above; none of them read the customer's own figures.
+           * One graphic (the donut above), up to three short cues, one question — not four text-heavy
+           * cards. Fictional figures are always "this example's", never "your": the pattern belongs to the
+           * fixed synthetic spend mix, not to the customer's own spending.
            */}
-          {/* One short line per step, not a fact pair: the fuller reasoning moved into the disclosure below. */}
-          <ol className={ui.flowSteps} aria-label="How this fictional pattern connects to a question worth checking">
-            <li className={ui.flowStep}>
-              <span className={ui.flowStepEyebrow}>Spending pattern</span>
-              <span className={ui.factDetail}>Dining is your largest category, at 32%.</span>
+          <ul className={ui.cueRow} aria-label="Fictional patterns in this example">
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconInfo}`} aria-hidden="true">
+                i
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Dining share</span>
+                <span className={ui.cueValue}>32% of this example’s spend.</span>
+              </span>
             </li>
-            <li className={ui.flowArrow} aria-hidden="true">
-              ↓
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconInfo}`} aria-hidden="true">
+                i
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Rewards fit</span>
+                <span className={ui.cueValue}>This example’s dining spend may be a rewards mismatch.</span>
+              </span>
             </li>
-            <li className={ui.flowStep}>
-              <span className={ui.flowStepEyebrow}>Potential rewards fit</span>
-              <span className={ui.factDetail}>A card that rewards dining more could earn you more here.</span>
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
+                !
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Fee / interest drag</span>
+                <span className={ui.cueValue}>Could offset the gains in this example.</span>
+              </span>
             </li>
-            <li className={ui.flowArrow} aria-hidden="true">
-              ↓
-            </li>
-            <li className={ui.flowStep}>
-              <span className={ui.flowStepEyebrow}>Fee / interest impact</span>
-              <span className={ui.factDetail}>The fee may not be fully offset — and if you carry a balance, interest could erase the rewards entirely.</span>
-            </li>
-            <li className={ui.flowArrow} aria-hidden="true">
-              ↓
-            </li>
-            <li className={ui.flowStep}>
-              <span className={ui.flowStepEyebrow}>Worth investigating</span>
-              <span className={ui.factDetail}>Does your card reward dining, and would a carried balance change that?</span>
-            </li>
-          </ol>
+          </ul>
+
+          {/*
+           * The one visible question: framed at the customer about their own card, as a question to
+           * explore — not a recommendation to switch or a promised saving.
+           */}
+          <p className={ui.investigateQuestion}>Is this card rewarding where you actually spend, and do its costs outweigh the benefit?</p>
 
           <Disclosure summary="How this example works">
             <p className={ui.cardText}>
@@ -176,8 +183,8 @@ export function Step5IllustrativeExample({
               category like dining is worth more on a different card, and whether interest would erase the difference.
             </p>
             <p className={ui.cardText}>
-              On the fee/interest step above: the annual fee may not be fully offset by rewards on its own, and if you carry a balance, interest costs can
-              outweigh the rewards earned entirely — two separate effects that both point the same way.
+              On the fee/interest cue above: this example’s annual fee may not be fully offset by its rewards on its own, and if a balance is carried, interest
+              costs can outweigh the rewards earned entirely — two separate effects that both point the same way.
             </p>
             <p className={ui.cardText}>Nothing above is a recommendation of a specific card or an approval likelihood.</p>
           </Disclosure>

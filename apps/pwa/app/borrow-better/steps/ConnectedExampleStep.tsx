@@ -204,65 +204,75 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
           <p className={ui.notice}>{example.notConnectedNote}</p>
 
           {/*
-           * A three-part story rather than a flat five-fact list: a fictional bureau-style snapshot of
-           * named obligations → fictional payment activity over time → one possible pressure or
-           * restructuring question. All copy and figures below are the fixed synthetic example; none of
-           * it reads the customer's own declared figures, and it is never placed beside them as though
-           * describing one person (see the separate declared-data panels in the left column).
+           * One graphic, up to three short cues, one question — not a five-fact list or a bordered
+           * three-card flow. The six-month trend is the visual hook (restored to the default view per the
+           * approved Borrow Better Journey v1.0 diagram); the detailed table stays behind the disclosure.
            */}
-          <ol className={ui.flowSteps} aria-label="How a fictional bureau and payment-activity view might connect to a question worth checking">
-            <li className={ui.flowStep}>
-              {/* Only credit-account-style information here: a recorded obligation and its status — not
-                  salary or spending behaviour, which a credit report doesn't carry. */}
-              <span className={ui.flowStepEyebrow}>Fictional credit report</span>
-              <span className={ui.factTitle}>{example.recurringCommitments.title}</span>
-              <span className={ui.factDetail}>{example.recurringCommitments.detail}</span>
-              <span className={ui.factTitle}>{example.commitmentRelease.title}</span>
-              <span className={ui.factDetail}>{example.commitmentRelease.detail}</span>
+          <section className={ui.chartBlock} aria-labelledby="borrow-example-chart">
+            <h4 id="borrow-example-chart" className={styles.chartHeading}>
+              {example.chartTitle}
+            </h4>
+            <ul className={styles.legend}>
+              <li className={styles.legendItem}>
+                <span className={styles.swatchIncome} aria-hidden="true" /> Income
+              </li>
+              <li className={styles.legendItem}>
+                <span className={styles.swatchCommitments} aria-hidden="true" /> Total commitments
+              </li>
+            </ul>
+            <CashFlowChart />
+          </section>
+
+          {/*
+           * Three compact cues, each explicitly "in this example": income regularity, recurring
+           * debt/payment pressure, and a month-end room that's narrowing. Salary regularity and spending
+           * behaviour are bank/payment-activity facts, not credit-report findings — neither is labelled as
+           * bureau information here.
+           */}
+          <ul className={ui.cueRow} aria-label="Fictional patterns in this example">
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconInfo}`} aria-hidden="true">
+                i
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Income regularity</span>
+                <span className={ui.cueValue}>Salary received consistently in this example.</span>
+              </span>
             </li>
-            <li className={ui.flowArrow} aria-hidden="true">
-              ↓
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
+                !
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Recurring debt</span>
+                <span className={ui.cueValue}>{example.recurringCommitments.detail} in this example.</span>
+              </span>
             </li>
-            <li className={ui.flowStep}>
-              <span className={ui.flowStepEyebrow}>Fictional payment activity</span>
-              <span className={ui.factTitle}>{example.incomeRegularity.title}</span>
-              <span className={ui.factDetail}>{example.incomeRegularity.detail}</span>
-              <span className={ui.factTitle}>{example.typicalMonthEndBuffer.title}</span>
-              <span className={ui.factDetail}>{example.typicalMonthEndBuffer.detail}</span>
-              <span className={ui.factTitle}>{example.essentialSpending.title}</span>
-              <span className={ui.factDetail}>{example.essentialSpending.detail}</span>
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
+                !
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Month-end room</span>
+                <span className={ui.cueValue}>
+                  About {example.typicalMonthEndBuffer.detail} in this example, narrowing as essential spending increased {example.essentialSpending.detail}
+                </span>
+              </span>
             </li>
-            <li className={ui.flowArrow} aria-hidden="true">
-              ↓
-            </li>
-            <li className={ui.flowStep}>
-              <span className={ui.flowStepEyebrow}>Worth investigating</span>
-              {/*
-               * Names the worked example's own obligation by its own verified constants, rather than
-               * pointing back at the "commitment release" fact above (a different, ₹6,000/5-month
-               * example): the two are separate illustrations and must never be implied to be the same
-               * obligation.
-               */}
-              <p className={ui.cardText}>
-                {`Whether consolidating a named obligation — like the ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month obligation with ${OLD_OBLIGATION_MONTHS_REMAINING} months remaining, worked through below — would ease monthly pressure, and by how much.`}
-              </p>
-            </li>
-          </ol>
+          </ul>
+
+          {/*
+           * The one visible question: framed at the customer, about their own situation — not a promised
+           * saving or approval improvement, and not naming either the ₹6,000 or ₹8,000 example EMI, so it
+           * can never read as pointing at one specific figure over the other.
+           */}
+          <p className={ui.investigateQuestion}>Could existing debt be the pressure to examine before taking another loan?</p>
 
           <Disclosure summary="How this example works">
-            <section className={ui.chartBlock} aria-labelledby="borrow-example-chart">
-              <h4 id="borrow-example-chart" className={styles.chartHeading}>
-                {example.chartTitle}
+            <section aria-labelledby="borrow-example-table-heading">
+              <h4 id="borrow-example-table-heading" className={styles.chartHeading}>
+                Month-by-month figures
               </h4>
-              <ul className={styles.legend}>
-                <li className={styles.legendItem}>
-                  <span className={styles.swatchIncome} aria-hidden="true" /> Income
-                </li>
-                <li className={styles.legendItem}>
-                  <span className={styles.swatchCommitments} aria-hidden="true" /> Total commitments
-                </li>
-              </ul>
-              <CashFlowChart />
               {/* Very narrow screens scroll the table inside this region, never the page. */}
               <div className={styles.tableScroll} role="region" aria-labelledby="borrow-example-table-caption" tabIndex={0}>
                 <table className={styles.dataTable}>
@@ -285,6 +295,19 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
                   </tbody>
                 </table>
               </div>
+            </section>
+
+            <section aria-labelledby="borrow-commitment-release-heading">
+              <h4 id="borrow-commitment-release-heading" className={styles.chartHeading}>
+                A separate obligation in this example
+              </h4>
+              {/*
+               * Explicitly distinguished from the ₹8,000/10-month obligation below: same fixed example,
+               * but a different, smaller obligation. The two must never be read as the same one.
+               */}
+              <p className={ui.cardText}>
+                {`This example also notes a separate, smaller obligation: ${example.commitmentRelease.detail} This is unrelated to the ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month obligation used in the worked comparison below.`}
+              </p>
             </section>
 
             <section aria-labelledby="borrow-better-structure-heading">

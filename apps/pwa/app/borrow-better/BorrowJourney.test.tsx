@@ -653,7 +653,7 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(screen.queryByText(/this shortfall isn't resolved here/)).toBeNull();
   });
 
-  it("is reached only by the Step 4 CTA and shows the fixed synthetic example", async () => {
+  it("is reached only by the Step 4 CTA and shows the fixed synthetic example: one graphic, up to three cues, one question", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await reachStep5(user);
@@ -661,88 +661,77 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
     expect(screen.getByRole("heading", { name: "What connected data could add" })).toBeInTheDocument();
     expect(screen.getByText("This fictional example shows what permissioned data could help analyse.")).toBeInTheDocument();
-    expect(screen.getByText("Essential spending increased")).toBeInTheDocument();
-    expect(screen.getByText("in 2 of the last 6 months.")).toBeInTheDocument();
-    expect(screen.getByText("Income regularity")).toBeInTheDocument();
-    expect(screen.getByText("Salary received consistently")).toBeInTheDocument();
-    expect(screen.getByText("Recurring commitments")).toBeInTheDocument();
-    expect(screen.getByText("₹31,500 identified")).toBeInTheDocument();
-    expect(screen.getByText("Typical month-end buffer")).toBeInTheDocument();
-    expect(screen.getByText("₹8,200")).toBeInTheDocument();
-    expect(screen.getByText("A ₹6,000 EMI may end in 5 months")).toBeInTheDocument();
+    // The six-month trend graphic is restored to the default visible view (not behind the disclosure).
+    expect(screen.getByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ })).toBeInTheDocument();
+    // Three compact cues, each explicitly tied to the fictional example.
+    expect(screen.getByText("Salary received consistently in this example.")).toBeInTheDocument();
+    expect(screen.getByText("₹31,500 identified in this example.")).toBeInTheDocument();
+    expect(screen.getByText(/About ₹8,200 in this example, narrowing as essential spending increased/)).toBeInTheDocument();
+    // One visible question, naming neither example EMI.
+    expect(screen.getByText("Could existing debt be the pressure to examine before taking another loan?")).toBeInTheDocument();
     // Plain language, not an invitation to connect now: this version doesn't.
     expect(screen.getByText("This version does not connect to your bank or bureau data.")).toBeInTheDocument();
   });
 
-  it("puts only supportable credit-account information under the fictional credit-report step, and salary/spending under payment activity", async () => {
+  it("labels salary regularity and spending activity as bank/payment-activity facts, not credit-report findings", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await reachStep5(user);
 
-    const creditReportNode = screen.getByText("Fictional credit report").closest("li") as HTMLElement;
-    // Credit-account-style facts only: a recorded obligation and its status.
-    expect(creditReportNode).toHaveTextContent("Recurring commitments");
-    expect(creditReportNode).toHaveTextContent("₹31,500 identified");
-    expect(creditReportNode).toHaveTextContent("Commitment release");
-    expect(creditReportNode).toHaveTextContent("A ₹6,000 EMI may end in 5 months");
-    // Not salary or spending behaviour — a credit report doesn't carry these.
-    expect(creditReportNode).not.toHaveTextContent("Income regularity");
-    expect(creditReportNode).not.toHaveTextContent("Typical month-end buffer");
-    expect(creditReportNode).not.toHaveTextContent("Essential spending increased");
-
-    const paymentActivityNode = screen.getByText("Fictional payment activity").closest("li") as HTMLElement;
-    expect(paymentActivityNode).toHaveTextContent("Income regularity");
-    expect(paymentActivityNode).toHaveTextContent("Salary received consistently");
-    expect(paymentActivityNode).toHaveTextContent("Typical month-end buffer");
-    expect(paymentActivityNode).toHaveTextContent("₹8,200");
-    expect(paymentActivityNode).toHaveTextContent("Essential spending increased");
-    expect(paymentActivityNode).not.toHaveTextContent("Recurring commitments");
-    expect(paymentActivityNode).not.toHaveTextContent("Commitment release");
+    const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+    // Not labelled "credit report": salary and spending activity are bank/payment-activity facts. "Bureau"
+    // still appears once, correctly, in the plain boundary disclaimer ("does not connect to your ... bureau
+    // data") — that's a scope statement, not a data-source label on these cues.
+    expect(within(illustrative).queryByText(/credit report/i)).toBeNull();
+    expect(screen.getByText("This version does not connect to your bank or bureau data.")).toBeInTheDocument();
+    expect(screen.getByText("Salary received consistently in this example.")).toBeInTheDocument();
   });
 
-  it("points the visible 'worth investigating' question at the worked example's own obligation, never implying it is the same as the ₹6,000/5-month commitment-release fact", async () => {
+  it("never implies the ₹6,000/5-month commitment-release fact and the ₹8,000/10-month worked example are the same obligation", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await reachStep5(user);
 
-    const worthInvestigatingNode = screen.getByText("Worth investigating").closest("li") as HTMLElement;
-    // References the worked example's own verified constants (₹8,000/month, 10 months remaining).
-    expect(worthInvestigatingNode).toHaveTextContent("₹8,000/month obligation with 10 months remaining");
-    // Never cites the unrelated ₹6,000/5-month commitment-release figure here, which would imply the two
-    // are the same obligation.
-    expect(worthInvestigatingNode).not.toHaveTextContent("₹6,000");
-    expect(worthInvestigatingNode).not.toHaveTextContent("5 months");
+    // The one visible question names neither figure, so it can never be read as pointing at one over the other.
+    const question = screen.getByText("Could existing debt be the pressure to examine before taking another loan?");
+    expect(question).not.toHaveTextContent("₹6,000");
+    expect(question).not.toHaveTextContent("₹8,000");
+    // Neither example EMI is visible by default outside the question itself.
+    expect(screen.queryByText(/₹6,000/)).toBeNull();
+    expect(screen.queryByText(/₹8,000/)).toBeNull();
 
-    // Opening the disclosure confirms the worked example uses the same ₹8,000/10-month obligation, and
-    // that the two illustrations are never merged into one figure.
+    // Opening the disclosure makes both available, each in its own, separately labelled section, and each
+    // says explicitly that the two are unrelated.
     await user.click(screen.getByRole("button", { name: "How this example works" }));
+    expect(screen.getByText(/A ₹6,000 EMI may end in 5 months/)).toBeInTheDocument();
+    expect(screen.getByText(/unrelated to the ₹8,000\/month obligation used in the worked comparison below/)).toBeInTheDocument();
     expect(screen.getByText(/a named personal loan of ₹8,000\/month with 10 months remaining/)).toBeInTheDocument();
     expect(screen.getByText(/A lower EMI is not automatically a saving\./)).toBeInTheDocument();
   });
 
-  it("gives the chart a complete text alternative", async () => {
+  it("gives the always-visible chart a complete text alternative", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await reachStep5(user);
-    // The chart and table now live inside the "How this example works" disclosure, closed by default.
-    await user.click(screen.getByRole("button", { name: "How this example works" }));
 
+    // Restored to the default view — no disclosure interaction needed to see it.
     const chart = screen.getByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ });
     expect(chart).toBeInTheDocument();
+  });
+
+  it("keeps the detailed month-by-month table behind the disclosure, in a labelled, keyboard-focusable scroll region", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+    expect(screen.queryByRole("table")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "How this example works" }));
+
     const table = screen.getByRole("table");
     expect(within(table).getAllByRole("row")).toHaveLength(7);
     for (const month of ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]) {
       expect(within(table).getByRole("rowheader", { name: month })).toBeInTheDocument();
     }
-  });
-
-  it("keeps the data table inside a labelled, keyboard-focusable scroll region so narrow screens never scroll the page", async () => {
-    const user = userEvent.setup();
-    render(<BorrowJourney />);
-    await reachStep5(user);
-    await user.click(screen.getByRole("button", { name: "How this example works" }));
-
-    const table = screen.getByRole("table");
     const region = table.closest('[role="region"]') as HTMLElement;
     expect(region).not.toBeNull();
     expect(region).toHaveAttribute("tabindex", "0");
@@ -750,13 +739,14 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(region.contains(table)).toBe(true);
   });
 
-  it("keeps the chart and table out of the DOM until the disclosure is opened, and lets it be closed again", async () => {
+  it("keeps the table (but not the chart) out of the DOM until the disclosure is opened, and lets it be closed again", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await reachStep5(user);
 
+    // The chart is always visible now; only the detailed table and worked arithmetic are gated.
+    expect(screen.getByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ })).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.queryByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ })).toBeNull();
     const toggle = screen.getByRole("button", { name: "How this example works" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
 
