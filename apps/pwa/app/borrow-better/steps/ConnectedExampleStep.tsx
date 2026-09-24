@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { IllustrativeExampleBanner } from "../../../components/journey-foundation";
 import { DeclaredDataBadge } from "../../../components/journey-ui/DeclaredDataBadge";
+import { Disclosure } from "../../../components/journey-ui/Disclosure";
 import { ExampleBanner } from "../../../components/journey-ui/ExampleEntry";
 import { formatRupeesExact } from "../../../components/journey-ui/indian";
 import { StackedBar } from "../../../components/journey-ui/StackedBar";
@@ -202,15 +203,11 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
           <p className={ui.cardText}>{example.intro}</p>
           <p className={ui.notice}>{example.notConnectedNote}</p>
 
-          <ul className={ui.factList}>
-            {[example.incomeRegularity, example.recurringCommitments, example.typicalMonthEndBuffer, example.essentialSpending, example.commitmentRelease].map((fact) => (
-              <li key={fact.title} className={ui.fact}>
-                <span className={ui.factTitle}>{fact.title}</span>
-                <span className={ui.factDetail}>{fact.detail}</span>
-              </li>
-            ))}
-          </ul>
-
+          {/*
+           * One graphic, up to three short cues, one question — not a five-fact list or a bordered
+           * three-card flow. The six-month trend is the visual hook (restored to the default view per the
+           * approved Borrow Better Journey v1.0 diagram); the detailed table stays behind the disclosure.
+           */}
           <section className={ui.chartBlock} aria-labelledby="borrow-example-chart">
             <h4 id="borrow-example-chart" className={styles.chartHeading}>
               {example.chartTitle}
@@ -224,47 +221,118 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
               </li>
             </ul>
             <CashFlowChart />
-            {/* Very narrow screens scroll the table inside this region, never the page. */}
-            <div className={styles.tableScroll} role="region" aria-labelledby="borrow-example-table-caption" tabIndex={0}>
-              <table className={styles.dataTable}>
-                <caption id="borrow-example-table-caption">Example income and total commitments by month, rounded to the nearest {"₹1,000"}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Month</th>
-                    <th scope="col">Income</th>
-                    <th scope="col">Total commitments</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {example.months.map((entry) => (
-                    <tr key={entry.month}>
-                      <th scope="row">{entry.month}</th>
-                      <td>{formatRupees(entry.income)}</td>
-                      <td>{formatRupees(entry.commitments)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </section>
 
-          <section aria-labelledby="borrow-better-structure-heading" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line, #e3e1d3)" }}>
-            <h4 id="borrow-better-structure-heading" className={styles.chartHeading}>
-              Only part of a loan like this would replace named debt — the rest is new borrowing
-            </h4>
-            <p className={ui.cardText}>
-              {`In this fixed example, a named personal loan of ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month with ${OLD_OBLIGATION_MONTHS_REMAINING} months remaining (${formatRupees(OLD_OBLIGATION_REMAINING_SCHEDULED_PAYMENTS)} in remaining scheduled payments) has a separate, lower payoff amount of ${formatRupees(OLD_OBLIGATION_PAYOFF_TODAY)} today. That payoff is the portion of a ${formatRupees(500000)}/36-month/14% loan (full EMI ${formatRupees(NEW_LOAN_EMI)}/month, used in full for every room figure) used to close it — the remaining ${formatRupees(ADDITIONAL_BORROWING_AMOUNT)} is additional borrowing.`}
-            </p>
-            <p className={`${ui.notice} ${ui.noticeWarn}`}>
-              {`Flag: the replaced obligation's monthly payment falls from ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)} to an allocated ${formatRupees(REPLACED_PORTION_ALLOCATED_EMI)}, but its total cost rises from the ${formatRupees(OLD_OBLIGATION_REMAINING_SCHEDULED_PAYMENTS)} in remaining scheduled payments to ${formatRupees(REPLACED_PORTION_TOTAL_COST)} (+${formatRupees(REPLACED_PORTION_COST_INCREASE)}) because the term extends to 36 months. A lower EMI is not automatically a saving.`}
-            </p>
-            <p className={ui.cardText}>
-              {`Room after this loan is ${formatRupees(WHOLE_LOAN_ROOM_AFTER)}/month — ${formatRupees(ROOM_DIFFERENCE_VS_ADDITIONAL_BORROWING_ONLY)} higher than if the same loan added no replacement, because the old ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month payment is no longer paid separately. The additional-borrowing portion's allocated EMI is ${formatRupees(ADDITIONAL_BORROWING_ALLOCATED_EMI)}/month.`}
-            </p>
-            <p className={ui.disclaimer} style={{ marginTop: 8 }}>
-              Illustrative example — not your data. A personalised replacement comparison would need details this version doesn&apos;t collect, such as which specific loan or card a new loan would replace and its remaining balance and term.
-            </p>
-          </section>
+          {/*
+           * Three compact cues, each explicitly "in this example": income regularity, recurring
+           * debt/payment pressure, and month-end room. Salary regularity and spending behaviour are
+           * bank/payment-activity facts, not credit-report findings — neither is labelled as bureau
+           * information here.
+           */}
+          <ul className={ui.cueRow} aria-label="Fictional patterns in this example">
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconInfo}`} aria-hidden="true">
+                i
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Income regularity</span>
+                <span className={ui.cueValue}>Salary received consistently in this example.</span>
+              </span>
+            </li>
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
+                !
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Recurring debt</span>
+                <span className={ui.cueValue}>{example.recurringCommitments.detail} in this example.</span>
+              </span>
+            </li>
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
+                !
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Month-end room</span>
+                {/*
+                 * Two separate fictional facts, not one causal claim: the chart above shows income versus
+                 * total commitments, not a month-end balance over time, so it cannot support saying the
+                 * ₹8,200 buffer is "narrowing" because of the spending increase. Both figures are kept,
+                 * stated independently.
+                 */}
+                <span className={ui.cueValue}>About {example.typicalMonthEndBuffer.detail} typical in this example.</span>
+                <span className={ui.cueValue}>Essential spending also increased {example.essentialSpending.detail}</span>
+              </span>
+            </li>
+          </ul>
+
+          {/*
+           * The one visible question: framed at the customer, about their own situation — not a promised
+           * saving or approval improvement, and not naming either the ₹6,000 or ₹8,000 example EMI, so it
+           * can never read as pointing at one specific figure over the other.
+           */}
+          <p className={ui.investigateQuestion}>Could existing debt be the pressure to examine before taking another loan?</p>
+
+          <Disclosure summary="How this example works">
+            <section aria-labelledby="borrow-example-table-heading">
+              <h4 id="borrow-example-table-heading" className={styles.chartHeading}>
+                Month-by-month figures
+              </h4>
+              {/* Very narrow screens scroll the table inside this region, never the page. */}
+              <div className={styles.tableScroll} role="region" aria-labelledby="borrow-example-table-caption" tabIndex={0}>
+                <table className={styles.dataTable}>
+                  <caption id="borrow-example-table-caption">Example income and total commitments by month, rounded to the nearest {"₹1,000"}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Month</th>
+                      <th scope="col">Income</th>
+                      <th scope="col">Total commitments</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {example.months.map((entry) => (
+                      <tr key={entry.month}>
+                        <th scope="row">{entry.month}</th>
+                        <td>{formatRupees(entry.income)}</td>
+                        <td>{formatRupees(entry.commitments)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section aria-labelledby="borrow-commitment-release-heading">
+              <h4 id="borrow-commitment-release-heading" className={styles.chartHeading}>
+                A separate obligation in this example
+              </h4>
+              {/*
+               * Explicitly distinguished from the ₹8,000/10-month obligation below: same fixed example,
+               * but a different, smaller obligation. The two must never be read as the same one.
+               */}
+              <p className={ui.cardText}>
+                {`This example also notes a separate, smaller obligation: ${example.commitmentRelease.detail} This is unrelated to the ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month obligation used in the worked comparison below.`}
+              </p>
+            </section>
+
+            <section aria-labelledby="borrow-better-structure-heading">
+              <h4 id="borrow-better-structure-heading" className={styles.chartHeading}>
+                Only part of a loan like this would replace named debt — the rest is new borrowing
+              </h4>
+              <p className={ui.cardText}>
+                {`In this fixed example, a named personal loan of ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month with ${OLD_OBLIGATION_MONTHS_REMAINING} months remaining (${formatRupees(OLD_OBLIGATION_REMAINING_SCHEDULED_PAYMENTS)} in remaining scheduled payments) has a separate, lower payoff amount of ${formatRupees(OLD_OBLIGATION_PAYOFF_TODAY)} today. That payoff is the portion of a ${formatRupees(500000)}/36-month/14% loan (full EMI ${formatRupees(NEW_LOAN_EMI)}/month, used in full for every room figure) used to close it — the remaining ${formatRupees(ADDITIONAL_BORROWING_AMOUNT)} is additional borrowing.`}
+              </p>
+              <p className={`${ui.notice} ${ui.noticeWarn}`}>
+                {`Flag: the replaced obligation's monthly payment falls from ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)} to an allocated ${formatRupees(REPLACED_PORTION_ALLOCATED_EMI)}, but its total cost rises from the ${formatRupees(OLD_OBLIGATION_REMAINING_SCHEDULED_PAYMENTS)} in remaining scheduled payments to ${formatRupees(REPLACED_PORTION_TOTAL_COST)} (+${formatRupees(REPLACED_PORTION_COST_INCREASE)}) because the term extends to 36 months. A lower EMI is not automatically a saving.`}
+              </p>
+              <p className={ui.cardText}>
+                {`Room after this loan is ${formatRupees(WHOLE_LOAN_ROOM_AFTER)}/month — ${formatRupees(ROOM_DIFFERENCE_VS_ADDITIONAL_BORROWING_ONLY)} higher than if the same loan added no replacement, because the old ${formatRupees(OLD_OBLIGATION_MONTHLY_PAYMENT)}/month payment is no longer paid separately. The additional-borrowing portion's allocated EMI is ${formatRupees(ADDITIONAL_BORROWING_ALLOCATED_EMI)}/month.`}
+              </p>
+              <p className={ui.disclaimer} style={{ marginTop: 8 }}>
+                Illustrative example — not your data. A personalised replacement comparison would need details this version doesn&apos;t collect, such as which specific loan or card a new loan would replace and its remaining balance and term.
+              </p>
+            </section>
+          </Disclosure>
         </section>
 
         {/* Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link. */}

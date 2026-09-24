@@ -693,9 +693,22 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       for (const [name, share] of [["Dining", "32%"], ["Travel", "18%"], ["Grocery", "22%"], ["Other", "28%"]]) {
         expect(screen.getByText(name).closest("li")).toHaveTextContent(share);
       }
-      expect(screen.getByText("Possible fee drag")).toBeInTheDocument();
-      expect(screen.getByText("Dining’s your largest category")).toBeInTheDocument();
-      expect(screen.getByText("Interest may erase rewards")).toBeInTheDocument();
+      // One graphic (the donut above), up to three compact cues, one question — not four text-heavy
+      // cards. Fictional figures are always "this example's", never "your".
+      expect(screen.getByText("32% of this example’s spend.")).toBeInTheDocument();
+      expect(screen.getByText("This example’s dining spend may be a rewards mismatch.")).toBeInTheDocument();
+      expect(screen.getByText("Could offset the gains in this example.")).toBeInTheDocument();
+      expect(screen.getByText("Is this card rewarding where you actually spend, and do its costs outweigh the benefit?")).toBeInTheDocument();
+    });
+
+    it("never calls the fictional spend pattern 'your dining' or 'your spending'", async () => {
+      const user = await renderJourney();
+      await runToStep4(user);
+      await goToStep5(user);
+
+      const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+      expect(illustrative).not.toHaveTextContent(/your dining/i);
+      expect(illustrative).not.toHaveTextContent(/your spending/i);
     });
 
     it("gives the chart a text alternative", async () => {
@@ -724,6 +737,62 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(screen.getByRole("region", { name: /Rewards, fee and net value/ })).toHaveTextContent("Everyday bills");
     });
 
+    it("never interpolates the customer's inputs into the illustrative panel with the disclosure open either", async () => {
+      const user = await renderJourney();
+      await completeStep2(user, "Carry a balance", "Points");
+      await user.click(screen.getByRole("radio", { name: "The approximate ₹ value" }));
+      await fillBasics(user, ["Everyday bills"], "77777", "3333");
+      await user.type(screen.getByLabelText("Approximate reward value"), "4242");
+      await user.selectOptions(screen.getByLabelText("Period"), "yearly");
+      await submitStep3(user);
+      await goToStep5(user);
+      await user.click(screen.getByRole("button", { name: "How this example works" }));
+
+      const text = screen.getByRole("region", { name: "What connected data could add" }).textContent ?? "";
+      for (const leaked of ["77,777", "77777", "3,333", "3333", "4,242", "4242", "Everyday bills"]) {
+        expect(text).not.toContain(leaked);
+      }
+    });
+
+    it("keeps the customer chart and the fictional flow visually and structurally separate", async () => {
+      const user = await renderJourney();
+      await runToStep4(user);
+      await goToStep5(user);
+
+      const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+      const glance = screen.getByRole("region", { name: /Rewards, fee and net value/ });
+      expect(illustrative.contains(glance)).toBe(false);
+      expect(glance.contains(illustrative)).toBe(false);
+      expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
+    });
+
+    it("shows a situation-specific takeaway above the customer's own chart, distinguishing before-interest value", async () => {
+      const user = await renderJourney();
+      await runToStep4(user, "Carry a balance");
+      await goToStep5(user);
+
+      expect(screen.getByText("Before interest, your estimated net value is ₹6,800.")).toBeInTheDocument();
+    });
+
+    it("keeps the fictional flow's detail out of the DOM until the disclosure is opened, and lets it be closed again", async () => {
+      const user = await renderJourney();
+      await runToStep4(user);
+      await goToStep5(user);
+
+      const toggle = screen.getByRole("button", { name: "How this example works" });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText(/A connected version could instead use your own category/)).toBeNull();
+
+      await user.click(toggle);
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByText(/A connected version could instead use your own category/)).toBeInTheDocument();
+      expect(screen.getByText(/Nothing above is a recommendation of a specific card or an approval likelihood\./)).toBeInTheDocument();
+
+      await user.click(toggle);
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText(/A connected version could instead use your own category/)).toBeNull();
+    });
+
     it("shows no pilot call to action, disabled or otherwise, and no data-connection controls", async () => {
       const user = await renderJourney();
       await runToStep4(user);
@@ -734,7 +803,8 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
       expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
       expect(screen.queryByText(/connect (your )?(account|bank|statement)|upload|bureau/i)).not.toBeInTheDocument();
-      expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Back"]);
+      expect(screen.queryByText(/bureau score|approval (probability|likelihood|odds)|guaranteed saving/i)).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Back", "How this example works+"]);
       expect(screen.getByRole("link", { name: "Back to home" })).toHaveAttribute("href", "/");
     });
 
@@ -888,16 +958,36 @@ describe("Rewards Intelligence 1.1A steps 2-5", () => {
       await runToStep4(user);
       await goToStep5(user);
 
+      // The exact allowed payload shape: exactly these two fields on every call, nothing else — a stray
+      // third field (e.g. a customer value added by accident) fails this immediately.
+      const ALLOWED_KEYS = ["journeyRunId", "screenName"];
+      // The bounded, categorical screen names this flow can legitimately emit (mirrors the ScreenName
+      // allowlist in lib/api.ts) — not free text, so it can never carry a customer value.
+      const ALLOWED_SCREEN_NAMES = new Set(["rewards_card_behaviour", "rewards_priorities_inputs", "rewards_check", "rewards_connected_example"]);
+
       const runIds = new Set<unknown>();
       for (const [, journey, details] of trackEventMock.mock.calls) {
         expect(journey).toBe("money_value");
-        expect(Object.keys(details).sort()).toEqual(["journeyRunId", "screenName"]);
+        expect(Object.keys(details).sort()).toEqual(ALLOWED_KEYS);
+        expect(typeof details.journeyRunId).toBe("string");
+        // An opaque, randomly generated id (crypto.randomUUID, or a Date.now()-based fallback) — not a
+        // value drawn from the form. Its own digits are not customer data, so — unlike screenName below —
+        // it is deliberately excluded from the forbidden-substring scan: a random id can coincidentally
+        // contain any short digit string (this is what made the previous version of this test flaky).
+        expect(details.journeyRunId as string).toMatch(/^[a-z0-9-]{8,}$/i);
+        expect(ALLOWED_SCREEN_NAMES.has(details.screenName as string)).toBe(true);
         runIds.add(details.journeyRunId);
       }
       expect(runIds.size).toBe(1);
-      const serialized = JSON.stringify(trackEventMock.mock.calls);
+
+      // Customer financial values must be absent from the one field that could ever carry free-form
+      // content: screenName. (journeyRunId is excluded — see above.)
+      const screenNames = trackEventMock.mock.calls
+        .map(([, , details]) => details.screenName)
+        .join(" ")
+        .toLowerCase();
       for (const forbidden of ["25000", "4000", "900", "dining", "travel", "pay_in_full", "cashback", "monthly"]) {
-        expect(serialized.toLowerCase()).not.toContain(forbidden);
+        expect(screenNames).not.toContain(forbidden);
       }
     });
 
@@ -1211,6 +1301,18 @@ describe("Rewards journey: reconciled frame, example mode and honest incomplete 
       ["result_declared", "rewards_check"],
       ["connected_example_seen", "rewards_connected_example"],
     ]);
-    expect(JSON.stringify(trackEventMock.mock.calls)).not.toMatch(/25000|4000|900|cashback|Example mode/i);
+    // The exact allowed payload shape on every call.
+    for (const [, , details] of trackEventMock.mock.calls) {
+      expect(Object.keys(details).sort()).toEqual(["journeyRunId", "screenName"]);
+    }
+    // Scoped to screenName only — never the opaque, randomly generated journeyRunId. Its own digits are
+    // not customer data, and scanning a random id for a short substring like "900" is inherently flaky:
+    // a random id can coincidentally contain any short digit string (this is the same class of failure as
+    // the one previously reported at this file's other analytics test, just missed here on the first pass).
+    const screenNames = trackEventMock.mock.calls
+      .map(([, , details]) => details?.screenName)
+      .join(" ")
+      .toLowerCase();
+    expect(screenNames).not.toMatch(/25000|4000|900|cashback|example mode/i);
   });
 });

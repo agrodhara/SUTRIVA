@@ -653,7 +653,7 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(screen.queryByText(/this shortfall isn't resolved here/)).toBeNull();
   });
 
-  it("is reached only by the Step 4 CTA and shows the fixed synthetic example", async () => {
+  it("is reached only by the Step 4 CTA and shows the fixed synthetic example: one graphic, up to three cues, one question", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await reachStep5(user);
@@ -661,44 +661,140 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
     expect(screen.getByRole("heading", { name: "What connected data could add" })).toBeInTheDocument();
     expect(screen.getByText("This fictional example shows what permissioned data could help analyse.")).toBeInTheDocument();
-    expect(screen.getByText("Essential spending increased")).toBeInTheDocument();
-    expect(screen.getByText("in 2 of the last 6 months.")).toBeInTheDocument();
-    expect(screen.getByText("Income regularity")).toBeInTheDocument();
-    expect(screen.getByText("Salary received consistently")).toBeInTheDocument();
-    expect(screen.getByText("Recurring commitments")).toBeInTheDocument();
-    expect(screen.getByText("₹31,500 identified")).toBeInTheDocument();
-    expect(screen.getByText("Typical month-end buffer")).toBeInTheDocument();
-    expect(screen.getByText("₹8,200")).toBeInTheDocument();
-    expect(screen.getByText("A ₹6,000 EMI may end in 5 months")).toBeInTheDocument();
+    // The six-month trend graphic is restored to the default visible view (not behind the disclosure).
+    expect(screen.getByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ })).toBeInTheDocument();
+    // Three compact cues, each explicitly tied to the fictional example.
+    expect(screen.getByText("Salary received consistently in this example.")).toBeInTheDocument();
+    expect(screen.getByText("₹31,500 identified in this example.")).toBeInTheDocument();
+    // The buffer figure and the spending-increase observation are two separate fictional facts, not one
+    // causal claim — the chart above shows income versus commitments, not a month-end balance over time,
+    // so it cannot support saying the buffer is "narrowing" because of the spending increase.
+    expect(screen.getByText("About ₹8,200 typical in this example.")).toBeInTheDocument();
+    expect(screen.getByText("Essential spending also increased in 2 of the last 6 months.")).toBeInTheDocument();
+    // One visible question, naming neither example EMI.
+    expect(screen.getByText("Could existing debt be the pressure to examine before taking another loan?")).toBeInTheDocument();
     // Plain language, not an invitation to connect now: this version doesn't.
     expect(screen.getByText("This version does not connect to your bank or bureau data.")).toBeInTheDocument();
   });
 
-  it("gives the chart a complete text alternative", async () => {
+  it("labels salary regularity and spending activity as bank/payment-activity facts, not credit-report findings", async () => {
     const user = userEvent.setup();
     render(<BorrowJourney />);
     await reachStep5(user);
 
+    const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+    // Not labelled "credit report": salary and spending activity are bank/payment-activity facts. "Bureau"
+    // still appears once, correctly, in the plain boundary disclaimer ("does not connect to your ... bureau
+    // data") — that's a scope statement, not a data-source label on these cues.
+    expect(within(illustrative).queryByText(/credit report/i)).toBeNull();
+    expect(screen.getByText("This version does not connect to your bank or bureau data.")).toBeInTheDocument();
+    expect(screen.getByText("Salary received consistently in this example.")).toBeInTheDocument();
+  });
+
+  it("never implies the ₹6,000/5-month commitment-release fact and the ₹8,000/10-month worked example are the same obligation", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    // The one visible question names neither figure, so it can never be read as pointing at one over the other.
+    const question = screen.getByText("Could existing debt be the pressure to examine before taking another loan?");
+    expect(question).not.toHaveTextContent("₹6,000");
+    expect(question).not.toHaveTextContent("₹8,000");
+    // Neither example EMI is visible by default outside the question itself.
+    expect(screen.queryByText(/₹6,000/)).toBeNull();
+    expect(screen.queryByText(/₹8,000/)).toBeNull();
+
+    // Opening the disclosure makes both available, each in its own, separately labelled section, and each
+    // says explicitly that the two are unrelated.
+    await user.click(screen.getByRole("button", { name: "How this example works" }));
+    expect(screen.getByText(/A ₹6,000 EMI may end in 5 months/)).toBeInTheDocument();
+    expect(screen.getByText(/unrelated to the ₹8,000\/month obligation used in the worked comparison below/)).toBeInTheDocument();
+    expect(screen.getByText(/a named personal loan of ₹8,000\/month with 10 months remaining/)).toBeInTheDocument();
+    expect(screen.getByText(/A lower EMI is not automatically a saving\./)).toBeInTheDocument();
+  });
+
+  it("gives the always-visible chart a complete text alternative", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    // Restored to the default view — no disclosure interaction needed to see it.
     const chart = screen.getByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ });
     expect(chart).toBeInTheDocument();
+  });
+
+  it("keeps the detailed month-by-month table behind the disclosure, in a labelled, keyboard-focusable scroll region", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+    expect(screen.queryByRole("table")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "How this example works" }));
+
     const table = screen.getByRole("table");
     expect(within(table).getAllByRole("row")).toHaveLength(7);
     for (const month of ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]) {
       expect(within(table).getByRole("rowheader", { name: month })).toBeInTheDocument();
     }
-  });
-
-  it("keeps the data table inside a labelled, keyboard-focusable scroll region so narrow screens never scroll the page", async () => {
-    const user = userEvent.setup();
-    render(<BorrowJourney />);
-    await reachStep5(user);
-
-    const table = screen.getByRole("table");
     const region = table.closest('[role="region"]') as HTMLElement;
     expect(region).not.toBeNull();
     expect(region).toHaveAttribute("tabindex", "0");
     expect(region).toHaveAccessibleName(/Example income and total commitments by month/);
     expect(region.contains(table)).toBe(true);
+  });
+
+  it("keeps the table (but not the chart) out of the DOM until the disclosure is opened, and lets it be closed again", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    // The chart is always visible now; only the detailed table and worked arithmetic are gated.
+    expect(screen.getByRole("img", { name: /Bar chart of an example six-month cash-flow trend/ })).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
+    const toggle = screen.getByRole("button", { name: "How this example works" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("keeps the fictional bureau/payment-activity flow and the customer's declared figures visually and structurally separate", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await reachStep5(user);
+
+    const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+    const glance = screen.getByRole("region", { name: /Your monthly payment mix/ });
+    // Neither contains the other: the fictional flow and the customer's own declared-data panel are
+    // separate sections, never merged into one visual as though describing the same person.
+    expect(illustrative.contains(glance)).toBe(false);
+    expect(glance.contains(illustrative)).toBe(false);
+    expect(screen.getAllByText("BASED ON WHAT YOU TOLD US — YOUR DECLARED FIGURES").length).toBeGreaterThan(0);
+    // The illustrative banner stays visible even before the disclosure is opened.
+    expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
+  });
+
+  it("keeps the illustrative panel free of user values with the disclosure open too", async () => {
+    const user = userEvent.setup();
+    render(<BorrowJourney />);
+    await completeStep2(user);
+    await fillPlan(user, "731000", "48");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Your Borrow Better check" });
+    await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
+    await screen.findByRole("note");
+    await user.click(screen.getByRole("button", { name: "How this example works" }));
+
+    const illustrative = screen.getByRole("region", { name: "What connected data could add" });
+    const panelText = illustrative.textContent ?? "";
+    for (const userValue of ["731000", "7,31,000", "1,20,000", "18,000", "57,000", "1,100"]) {
+      expect(panelText).not.toContain(userValue);
+    }
   });
 
   it("keeps the illustrative panel free of user values while the primary graphic uses them", async () => {
@@ -744,7 +840,9 @@ describe("Step 5 — What your real data could reveal", () => {
     expect(screen.queryByRole("link", { name: /pilot|join/i })).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByText(/OTP|mobile number|consent|connect account|connect bureau/i)).toBeNull();
-    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Back to your check"]);
+    // Also no bureau score, approval probability or restructuring-guarantee language in the fictional flow.
+    expect(screen.queryByText(/bureau score|approval (probability|likelihood|odds)|guaranteed saving/i)).toBeNull();
+    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Back to your check", "How this example works+"]);
   });
 
   it("lets the user go back to Step 4 with the result intact", async () => {
@@ -906,9 +1004,28 @@ describe("analytics", () => {
     await user.click(screen.getByRole("button", { name: "See a connected-data example" }));
     await screen.findByRole("note");
 
-    const serialized = JSON.stringify(trackEventMock.mock.calls);
-    for (const forbidden of ["120000", "500000", "18000", "28000", "14", "fall_short", "debt_consolidation", "yes", "money_left", "17088", "27911"]) {
-      expect(serialized.replace(/[0-9a-f-]{36}/g, "")).not.toContain(forbidden);
+    // The exact allowed payload shape, and the bounded, categorical screen names this flow can legitimately
+    // emit (mirrors the ScreenName allowlist in lib/api.ts) — not free text, so it can never carry a
+    // customer value.
+    const ALLOWED_SCREEN_NAMES = new Set(["borrow_monthly_position", "borrow_plan", "borrow_check", "borrow_connected_example"]);
+    for (const [, , details] of trackEventMock.mock.calls) {
+      expect(Object.keys(details).sort()).toEqual(["journeyRunId", "screenName"]);
+      expect(typeof details.journeyRunId).toBe("string");
+      expect(ALLOWED_SCREEN_NAMES.has(details.screenName)).toBe(true);
+    }
+
+    // Customer values must be absent from the one field that could ever carry free-form content:
+    // screenName. journeyRunId is deliberately excluded from this scan — it's an opaque, randomly
+    // generated id (crypto.randomUUID, or a Date.now()-based fallback), not customer data, and scanning a
+    // random id for short substrings like "14" is inherently flaky: a random id can coincidentally contain
+    // any short digit string, regardless of format, so stripping only a canonical 36-character UUID shape
+    // (the previous approach here) does not fully protect against that fallback format either.
+    const screenNames = trackEventMock.mock.calls
+      .map(([, , details]) => details.screenName)
+      .join(" ")
+      .toLowerCase();
+    for (const forbidden of ["120000", "500000", "18000", "28000", "fall_short", "debt_consolidation", "yes", "money_left", "17088", "27911"]) {
+      expect(screenNames).not.toContain(forbidden);
     }
   });
 
@@ -1204,7 +1321,17 @@ describe("Example mode analytics", () => {
       ["result_declared", "borrow_check"],
       ["connected_example_seen", "borrow_connected_example"],
     ]);
-    const serialised = JSON.stringify(trackEventMock.mock.calls);
-    expect(serialised).not.toMatch(/120000|500000|home_improvement|money_left|Example mode/i);
+    // The exact allowed payload shape on every call — a stray extra field (e.g. a sample value added by
+    // accident) fails this immediately.
+    for (const [, , details] of trackEventMock.mock.calls) {
+      expect(Object.keys(details).sort()).toEqual(["journeyRunId", "screenName"]);
+    }
+    // Scoped to screenName only — never the opaque, randomly generated journeyRunId, whose own digits are
+    // not customer data and can coincidentally match a short forbidden substring by chance.
+    const screenNames = trackEventMock.mock.calls
+      .map(([, , details]) => details?.screenName)
+      .join(" ")
+      .toLowerCase();
+    expect(screenNames).not.toMatch(/120000|500000|home_improvement|money_left|example mode/i);
   });
 });

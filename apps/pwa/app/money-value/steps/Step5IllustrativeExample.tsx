@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { IllustrativeExampleBanner } from "../../../components/journey-foundation";
+import { Disclosure } from "../../../components/journey-ui/Disclosure";
 import { ExampleBanner } from "../../../components/journey-ui/ExampleEntry";
 import { StepHeading } from "../../../components/journey-ui/StepHeading";
 import { ValueBars } from "../../../components/journey-ui/ValueBars";
@@ -79,6 +80,12 @@ export function Step5IllustrativeExample({
           <h3 id="rewards-glance-heading" className={ui.cardHeading}>
             Rewards, fee and net value <span>(a year)</span>
           </h3>
+          {/*
+           * One short, situation-specific takeaway above the customer's own chart, reusing the same
+           * situation copy as Step 4 so a before-interest figure is always named as such here too — this
+           * is the "point" a reader should reach without working through the bars themselves.
+           */}
+          <p className={ui.takeaway}>{finding.headline}</p>
           <ValueBars summary={bars.summary} rows={bars.rows} />
           {reason ? (
             <p className={ui.notice} style={{ marginTop: 14 }}>
@@ -128,20 +135,59 @@ export function Step5IllustrativeExample({
             </ul>
           </figure>
 
-          <ul className={ui.factList}>
-            <li className={ui.fact}>
-              <span className={ui.factDetail}>Possible fee drag</span>
-              <span className={ui.factTitle}>Annual fee may not be fully offset by rewards.</span>
+          {/*
+           * One graphic (the donut above), up to three short cues, one question — not four text-heavy
+           * cards. Fictional figures are always "this example's", never "your": the pattern belongs to the
+           * fixed synthetic spend mix, not to the customer's own spending.
+           */}
+          <ul className={ui.cueRow} aria-label="Fictional patterns in this example">
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconInfo}`} aria-hidden="true">
+                i
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Dining share</span>
+                <span className={ui.cueValue}>32% of this example’s spend.</span>
+              </span>
             </li>
-            <li className={ui.fact}>
-              <span className={ui.factDetail}>Dining’s your largest category</span>
-              <span className={ui.factTitle}>You may earn more with a card that rewards dining.</span>
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconInfo}`} aria-hidden="true">
+                i
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Rewards fit</span>
+                <span className={ui.cueValue}>This example’s dining spend may be a rewards mismatch.</span>
+              </span>
             </li>
-            <li className={ui.fact}>
-              <span className={ui.factDetail}>Interest may erase rewards</span>
-              <span className={ui.factTitle}>If you carry a balance, interest costs can outweigh rewards.</span>
+            <li className={ui.cue}>
+              <span className={`${ui.insightIcon} ${ui.iconWarn}`} aria-hidden="true">
+                !
+              </span>
+              <span className={ui.cueText}>
+                <span className={ui.cueLabel}>Fee / interest drag</span>
+                <span className={ui.cueValue}>Could offset the gains in this example.</span>
+              </span>
             </li>
           </ul>
+
+          {/*
+           * The one visible question: framed at the customer about their own card, as a question to
+           * explore — not a recommendation to switch or a promised saving.
+           */}
+          <p className={ui.investigateQuestion}>Is this card rewarding where you actually spend, and do its costs outweigh the benefit?</p>
+
+          <Disclosure summary="How this example works">
+            <p className={ui.cardText}>
+              This spend pattern and its category shares are fixed and do not use anything you entered. A connected version could instead use your own category
+              spend, combine it with how your card rewards each category, and factor in whether you carry a balance — to show, with your real figures, whether a
+              category like dining is worth more on a different card, and whether interest would erase the difference.
+            </p>
+            <p className={ui.cardText}>
+              On the fee/interest cue above: this example’s annual fee may not be fully offset by its rewards on its own, and if a balance is carried, interest
+              costs can outweigh the rewards earned entirely — two separate effects that both point the same way.
+            </p>
+            <p className={ui.cardText}>Nothing above is a recommendation of a specific card or an approval likelihood.</p>
+          </Disclosure>
         </section>
 
         {/* Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link. */}
