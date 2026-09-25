@@ -133,6 +133,51 @@
   flex: none;
 }
 
+/* ---- Pilot handoff (Step 6): single centered column, not the two-column grid Steps 4/5 use — there's no
+   side panel of fictional data here, so reusing .grid left a large empty second column on desktop. ---- */
+
+.pilotLayout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 560px;
+}
+
+@media (min-width: 960px) {
+  .pilotLayout {
+    margin: 0 auto;
+  }
+}
+
+.pilotOptionalBadge {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.checkboxRow input[type="checkbox"] {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  accent-color: var(--green);
+}
+
 .progressText {
   color: var(--muted);
   font-size: 12px;
@@ -718,6 +763,12 @@
 
 .withPrefix {
   padding-left: 30px;
+}
+
+/* .withPrefix is tuned for a single-character prefix ("₹"). "+91" is three characters wide and needs more
+   clearance, or it visually overlaps the input's own text/placeholder. */
+.withPhonePrefix {
+  padding-left: 52px;
 }
 
 .input:focus,

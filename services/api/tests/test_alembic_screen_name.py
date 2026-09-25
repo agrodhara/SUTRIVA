@@ -10,6 +10,10 @@ from conftest import mapped_runtime_database_url, phaseb_alembic_cfg
 
 PREVIOUS_REVISION = "0002_phase_b_anon_continuity"
 NEW_REVISION = "0003_product_event_screen_name"
+# The actual chain head as of this migration's own addition. Kept separate from NEW_REVISION (which this
+# file's other assertions use to test the screen_name migration specifically, in isolation) so a later
+# migration on top only ever requires updating this one constant.
+LATEST_REVISION = "0004_pilot_registration"
 CONSTRAINT = "ck_product_events_screen_name"
 APPROVED = (
     "rewards_card_behaviour",
@@ -67,7 +71,7 @@ def _insert_event(conn, session_uuid, run_uuid, event_id: str, screen_name: str 
 
 def test_there_is_exactly_one_alembic_head(alembic_ini_path, postgres_test_url: str) -> None:
     script = ScriptDirectory.from_config(phaseb_alembic_cfg(alembic_ini_path, postgres_test_url))
-    assert script.get_heads() == [NEW_REVISION]
+    assert script.get_heads() == [LATEST_REVISION]
     assert script.get_revision(NEW_REVISION).down_revision == PREVIOUS_REVISION
 
 
@@ -92,7 +96,7 @@ def test_upgrade_adds_nullable_bounded_column_and_check_constraint(
     for name in APPROVED:
         assert f"'{name}'" in definition
     assert "IS NULL" in definition
-    assert _revision(engine) == NEW_REVISION
+    assert _revision(engine) == LATEST_REVISION
 
 
 def test_check_constraint_accepts_null_and_all_eight_values_and_rejects_others(
@@ -161,7 +165,7 @@ def test_downgrade_removes_column_and_constraint_then_reupgrade_restores_them(
 
         command.upgrade(cfg, "head")
 
-    assert _revision(engine) == NEW_REVISION
+    assert _revision(engine) == LATEST_REVISION
     assert _column(engine) is not None
     assert _constraint_def(engine) is not None
     with engine.connect() as conn:

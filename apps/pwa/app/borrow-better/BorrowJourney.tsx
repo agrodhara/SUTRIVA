@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { trackEvent, type ScreenName } from "../../lib/api";
-import { createJourneyRunId } from "../../lib/journeySession";
+import { createJourneyRunId, track11bEnabled } from "../../lib/journeySession";
 import { useHydrated } from "../../lib/useHydrated";
 import { BORROW_ILLUSTRATIVE_ANNUAL_RATE_PERCENT } from "../../lib/track11Config";
 import { fetchBorrowCheck, type BorrowCheckResult } from "./borrowApi";
 import { JourneyFrame } from "../../components/journey-ui/JourneyFrame";
+import { PilotHandoff } from "../pilot/PilotHandoff";
 import { BORROW_EXAMPLE_FORM, borrowFormMatchesExample } from "./borrowExample";
 import {
   buildBorrowCheckBody,
@@ -23,9 +24,9 @@ import { BorrowingPlanStep } from "./steps/BorrowingPlanStep";
 import { ConnectedExampleStep } from "./steps/ConnectedExampleStep";
 import { MonthlyPositionStep } from "./steps/MonthlyPositionStep";
 
-export type BorrowStep = "monthly_position" | "plan" | "check" | "connected_example";
+export type BorrowStep = "monthly_position" | "plan" | "check" | "connected_example" | "pilot";
 
-const STEPS: readonly BorrowStep[] = ["monthly_position", "plan", "check", "connected_example"];
+const STEPS: readonly BorrowStep[] = ["monthly_position", "plan", "check", "connected_example", "pilot"];
 const HISTORY_KEY = "borrowStep";
 const JOURNEY = "comfortable_borrowing" as const;
 
@@ -89,11 +90,13 @@ export function BorrowJourney() {
     }
   }, []);
 
-  // A step is only reachable if what it needs exists; anything else falls back to Step 2.
+  // A step is only reachable if what it needs exists; anything else falls back to Step 2. "pilot" is the
+  // optional Step 6 handoff: reachable only with a declared result and only while Phase 1.1B is enabled.
   const resolveAllowedStep = useCallback((target: unknown): BorrowStep => {
     if (!isBorrowStep(target) || target === "monthly_position") return "monthly_position";
     if (!isMonthlyPositionValid(formRef.current)) return "monthly_position";
     if (target === "plan") return "plan";
+    if (target === "pilot") return resultRef.current && track11bEnabled() ? "pilot" : "connected_example";
     return resultRef.current ? target : "plan";
   }, []);
 
@@ -109,14 +112,15 @@ export function BorrowJourney() {
     return () => window.removeEventListener("popstate", onPopState);
   }, [enterStep, resolveAllowedStep]);
 
-  // Exactly one screen-entry event per actual entry, never on an ordinary rerender.
+  // Exactly one screen-entry event per actual entry, never on an ordinary rerender. "pilot" (Step 6) emits
+  // its own five-event funnel from inside PilotHandoff, not this generic step-entry event.
   useEffect(() => {
     if (emittedEntryRef.current === entry) return;
     emittedEntryRef.current = entry;
     if (step === "monthly_position") emit("step_viewed", "borrow_monthly_position");
     else if (step === "plan") emit("step_viewed", "borrow_plan");
     else if (step === "check") emit("result_declared", "borrow_check");
-    else emit("connected_example_seen", "borrow_connected_example");
+    else if (step === "connected_example") emit("connected_example_seen", "borrow_connected_example");
   }, [entry, step, emit]);
 
   const goBack = (previous: BorrowStep) => {
@@ -202,7 +206,14 @@ export function BorrowJourney() {
   const focusHeadingOnMount = entry > 0;
   const exampleEdited = exampleApplied && !borrowFormMatchesExample(form);
   const example = { exampleApplied, exampleEdited };
-  const headerStep = { monthly_position: 2, plan: 3, check: 4, connected_example: 5 }[step];
+  const headerStep = { monthly_position: 2, plan: 3, check: 4, connected_example: 5, pilot: 5 }[step];
+  const pilotEnabled = track11bEnabled();
+
+  if (step === "pilot") {
+    // Finish without joining / Cancel / Done all exit the same way Step 5's own "Back to home" does: a
+    // hard navigation, which intentionally clears transient in-memory journey state.
+    return <PilotHandoff journey="comfortable_borrowing" onExit={() => { window.location.href = "/"; }} />;
+  }
 
   return (
     <JourneyFrame journeyName="Borrow Better" step={headerStep} showHome={step === "monthly_position"}>
@@ -267,7 +278,14 @@ export function BorrowJourney() {
         ) : null}
 
         {step === "connected_example" && result ? (
-          <ConnectedExampleStep form={form} result={result} focusHeadingOnMount={focusHeadingOnMount} {...example} onBack={() => goBack("check")} />
+          <ConnectedExampleStep
+            form={form}
+            result={result}
+            focusHeadingOnMount={focusHeadingOnMount}
+            {...example}
+            onBack={() => goBack("check")}
+            onContinueToPilot={pilotEnabled ? () => enterStep("pilot", "push") : undefined}
+          />
         ) : null}
     </JourneyFrame>
   );

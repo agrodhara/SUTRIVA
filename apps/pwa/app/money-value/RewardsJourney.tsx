@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { trackEvent } from "../../lib/api";
 import type { ProductEventType, ScreenName } from "../../lib/api";
-import { createJourneyRunId } from "../../lib/journeySession";
+import { createJourneyRunId, track11bEnabled } from "../../lib/journeySession";
 import { useHydrated } from "../../lib/useHydrated";
 import { JourneyFrame } from "../../components/journey-ui/JourneyFrame";
+import { PilotHandoff } from "../pilot/PilotHandoff";
 import { REWARDS_EXAMPLE_FORM, rewardsFormMatchesExample } from "./rewardsExample";
 import { postRewardsCheck, type RewardsCheckResult } from "./rewardsApi";
 import { INITIAL_REWARDS_FORM, buildRewardsPayload, type RewardsFormState } from "./rewardsFormState";
@@ -15,19 +16,23 @@ import type { RewardFinderOutcome } from "./steps/RewardFinderDialog";
 import { Step4RewardsCheck } from "./steps/Step4RewardsCheck";
 import { Step5IllustrativeExample } from "./steps/Step5IllustrativeExample";
 
-type Step = "card_behaviour" | "priorities_inputs" | "check" | "example";
+type Step = "card_behaviour" | "priorities_inputs" | "check" | "example" | "pilot";
 
-const STEPS: readonly Step[] = ["card_behaviour", "priorities_inputs", "check", "example"];
+const STEPS: readonly Step[] = ["card_behaviour", "priorities_inputs", "check", "example", "pilot"];
 
-const SCREEN_NAME: Record<Step, ScreenName> = {
+const SCREEN_NAME: Partial<Record<Step, ScreenName>> = {
   card_behaviour: "rewards_card_behaviour",
   priorities_inputs: "rewards_priorities_inputs",
   check: "rewards_check",
   example: "rewards_connected_example",
 };
 
-/** Event fired when a screen is entered. Steps 2-3 are plain views; 4-5 use the approved final-journey events. */
-const ENTRY_EVENT: Record<Step, ProductEventType> = {
+/**
+ * Event fired when a screen is entered. Steps 2-3 are plain views; 4-5 use the approved final-journey
+ * events. "pilot" (Step 6) has no entry here on purpose: it emits its own five-event funnel from inside
+ * PilotHandoff, not a generic step-entry event.
+ */
+const ENTRY_EVENT: Partial<Record<Step, ProductEventType>> = {
   card_behaviour: "step_viewed",
   priorities_inputs: "step_viewed",
   check: "result_declared",
@@ -87,7 +92,9 @@ export function RewardsJourney() {
   useEffect(() => {
     if (emittedEntryRef.current === entry.id) return;
     emittedEntryRef.current = entry.id;
-    emit(ENTRY_EVENT[entry.step], SCREEN_NAME[entry.step]);
+    const eventType = ENTRY_EVENT[entry.step];
+    const screenName = SCREEN_NAME[entry.step];
+    if (eventType && screenName) emit(eventType, screenName);
   }, [entry, emit]);
 
   // Browser history: only the step identifier is stored. A refresh drops React state, so restart at Step 2.
@@ -97,7 +104,7 @@ export function RewardsJourney() {
     function handlePopState(event: PopStateEvent) {
       const marker = (event.state as { rewardsStep?: unknown } | null)?.rewardsStep;
       if (!isStep(marker)) return;
-      const needsResult = marker === "check" || marker === "example";
+      const needsResult = marker === "check" || marker === "example" || marker === "pilot";
       const target: Step = needsResult && !resultRef.current ? "priorities_inputs" : marker;
       setApiError(false);
       setEntry((previous) => ({ step: target, id: previous.id + 1 }));
@@ -207,7 +214,14 @@ export function RewardsJourney() {
   const focusHeading = entry.id > 0;
   const exampleEdited = exampleApplied && !rewardsFormMatchesExample(form);
   const example = { exampleApplied, exampleEdited };
-  const headerStep = { card_behaviour: 2, priorities_inputs: 3, check: 4, example: 5 }[entry.step];
+  const headerStep = { card_behaviour: 2, priorities_inputs: 3, check: 4, example: 5, pilot: 5 }[entry.step];
+  const pilotEnabled = track11bEnabled();
+
+  if (entry.step === "pilot") {
+    // Finish without joining / Cancel / Done all exit the same way Step 5's own "Back to home" does: a
+    // hard navigation, which intentionally clears transient in-memory journey state.
+    return <PilotHandoff journey="money_value" onExit={() => { window.location.href = "/"; }} />;
+  }
 
   return (
     <JourneyFrame journeyName="Rewards Intelligence" step={headerStep} showHome={entry.step === "card_behaviour"}>
@@ -261,6 +275,7 @@ export function RewardsJourney() {
           {...example}
           onBack={goBack}
           focusHeadingOnMount={focusHeading}
+          onContinueToPilot={pilotEnabled ? () => advance("pilot") : undefined}
         />
       ) : null}
     </JourneyFrame>

@@ -49,7 +49,23 @@ ProductEventType = Literal[
     "decline_reason_selected",
     "result_declared",
     "connected_example_seen",
+    # Phase 1.1B Step 6 funnel — the exact five events authorized by
+    # docs/product/journeys/JOURNEY_FLOW_SPEC.md. No payload field on this model carries a phone number,
+    # OTP value or raw authentication data, so these can never be substituted with anything value-bearing.
+    "pilot_interest_clicked",
+    "mobile_submitted",
+    "otp_sent",
+    "otp_verified",
+    "optional_updates_opted_in",
 ]
+
+STEP6_EVENT_TYPES = {
+    "pilot_interest_clicked",
+    "mobile_submitted",
+    "otp_sent",
+    "otp_verified",
+    "optional_updates_opted_in",
+}
 
 ScreenNameType = Literal[
     "rewards_card_behaviour",

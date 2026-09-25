@@ -41,6 +41,7 @@ export function Step5IllustrativeExample({
   exampleEdited,
   onBack,
   focusHeadingOnMount,
+  onContinueToPilot,
 }: {
   result: RewardsCheckResult;
   balanceBehavior: BalanceBehavior | null;
@@ -50,6 +51,9 @@ export function Step5IllustrativeExample({
   exampleEdited: boolean;
   onBack: () => void;
   focusHeadingOnMount: boolean;
+  /** Present only when Phase 1.1B is enabled. Undefined hides the link entirely — Step 5 stays a complete
+   * ending to the anonymous check either way. */
+  onContinueToPilot?: () => void;
 }) {
   const headingId = useId();
   const finding = selectRewardsSituation(result, balanceBehavior);
@@ -190,9 +194,15 @@ export function Step5IllustrativeExample({
           </Disclosure>
         </section>
 
+        {onContinueToPilot ? (
+          <button type="button" className={`${ui.primaryButton} ${ui.o4}`} onClick={onContinueToPilot}>
+            See how to join the pilot
+          </button>
+        ) : null}
+
         {/* Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link. */}
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a className={`${ui.linkButton} ${ui.o4}`} href="/">
+        <a className={`${ui.linkButton} ${ui.o5}`} href="/">
           Back to home
         </a>
       </div>

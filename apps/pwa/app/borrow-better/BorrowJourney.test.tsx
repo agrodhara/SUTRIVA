@@ -19,6 +19,9 @@ vi.mock("../../lib/track11Config", () => ({
   get BORROW_ILLUSTRATIVE_ANNUAL_RATE_PERCENT() {
     return configuredRate.value;
   },
+  TRACK11A_ENABLED: true,
+  TRACK11B_ENABLED: false,
+  TRACK11_VERSION: "test",
 }));
 
 import { BorrowJourney } from "./BorrowJourney";
