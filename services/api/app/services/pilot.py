@@ -22,8 +22,10 @@ from app.repositories.pilot import (
     increment_otp_attempt,
     load_active_otp_challenge_for_update,
     load_pilot_registration_for_update,
+    lock_phone_number_for_send,
     mark_pilot_registration_otp_sent,
     mark_pilot_registration_verified,
+    record_otp_send,
     replace_otp_challenge_for_resend,
     set_pilot_registration_mobile,
 )
@@ -154,11 +156,19 @@ def _enforce_send_quota(
       same row rather than starting a new one.
     - Per-phone, across every registration: a new registration starts its own send_count at zero, so the
       per-registration cap alone could be bypassed by re-registering with the same phone number. This
-      queries actual send activity for the phone number itself, independent of which registration sent it.
+      counts actual recorded sends to the phone number itself (see otp_sends / count_recent_otp_sends_for_phone),
+      independent of which registration sent them or what any registration's phone_number is now.
+
+    Acquires lock_phone_number_for_send's advisory lock first: without it, two concurrent requests for the
+    same phone number (necessarily different registrations, since a single registration's row lock already
+    serializes requests against itself) could both read a nearly-exhausted count before either records its
+    own send, and both pass. The lock is released automatically when the caller's transaction ends, so
+    holding it here does not require any extra cleanup from the caller.
     """
     if current_send_count + 1 > otp_settings.max_sends_per_registration:
         raise PilotServiceError(status.HTTP_429_TOO_MANY_REQUESTS, "resend_limit_reached")
 
+    lock_phone_number_for_send(db, phone_number=phone_number)
     since = now - timedelta(hours=otp_settings.phone_send_window_hours)
     recent_for_phone = count_recent_otp_sends_for_phone(db, phone_number=phone_number, since=since)
     if recent_for_phone + 1 > otp_settings.max_sends_per_phone:
@@ -223,6 +233,7 @@ def submit_mobile_and_send_otp(
                 session, otp_challenge_uuid=existing_challenge.otp_challenge_uuid, code_hash=code_hash, expires_at=expires_at, now=now
             )
             result_expires_at = expires_at
+            otp_challenge_uuid = existing_challenge.otp_challenge_uuid
         else:
             challenge = create_otp_challenge(
                 session,
@@ -232,11 +243,16 @@ def submit_mobile_and_send_otp(
                 max_attempts=otp_settings.max_attempts,
             )
             result_expires_at = challenge["expires_at"]
+            otp_challenge_uuid = str(challenge["otp_challenge_uuid"])
 
         # Sent only after the DB rows exist, but before commit: if the provider raises or rejects the send,
         # the whole transaction rolls back rather than leaving a "sent" row for a message that never went
         # out — see send_or_raise, which checks the provider's own accepted result.
         send_or_raise(get_sms_sender(otp_settings), phone_number=phone_number, code=code)
+
+        # Recorded with the exact number just sent to, not read back from pilot_registrations later — see
+        # count_recent_otp_sends_for_phone's docstring for why that distinction is the whole point.
+        record_otp_send(session, pilot_registration_uuid=pilot_registration_id, otp_challenge_uuid=otp_challenge_uuid, phone_number=phone_number, now=now)
 
         mark_pilot_registration_otp_sent(session, pilot_registration_uuid=pilot_registration_id, now=now)
         session.commit()
@@ -280,6 +296,9 @@ def resend_otp(*, pilot_registration_id: str, settings: PilotOtpSettings | None 
 
         send_or_raise(get_sms_sender(otp_settings), phone_number=record.phone_number, code=code)
 
+        record_otp_send(
+            session, pilot_registration_uuid=pilot_registration_id, otp_challenge_uuid=challenge.otp_challenge_uuid, phone_number=record.phone_number, now=now
+        )
         replace_otp_challenge_for_resend(session, otp_challenge_uuid=challenge.otp_challenge_uuid, code_hash=code_hash, expires_at=expires_at, now=now)
         session.commit()
         return MobileSubmitResult(expires_at=expires_at, resend_after_seconds=otp_settings.resend_cooldown_seconds)

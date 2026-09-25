@@ -194,20 +194,62 @@ def replace_otp_challenge_for_resend(
     )
 
 
-def count_recent_otp_sends_for_phone(db: Session, *, phone_number: str, since: datetime) -> int:
-    """Sums send_count across every OTP challenge (any registration, any journey) ever tied to this phone
-    number, restricted to challenges with recent send activity. Used to cap total sends to one phone number
-    across registrations — a per-registration cap alone can be bypassed by starting a fresh registration
-    for the same number, since a new registration gets its own, empty send-count budget."""
-    total = db.execute(
+def lock_phone_number_for_send(db: Session, *, phone_number: str) -> None:
+    """Takes a Postgres transaction-scoped advisory lock keyed on the phone number, auto-released at the
+    end of the current transaction (commit or rollback).
+
+    Two different pilot_registrations rows targeting the same phone number take no row lock in common —
+    each only locks its own row (see load_pilot_registration_for_update) — so without this, two concurrent
+    requests for the same number could both read the per-phone send count before either records its own
+    send, and both pass a nearly-exhausted quota. Call this before reading count_recent_otp_sends_for_phone
+    and before recording a new send, so a second concurrent request for the same number blocks here until
+    the first one has committed (and its send is visible to the count).
+
+    hashtext() is a 32-bit hash, so two different phone numbers can in principle collide onto the same
+    lock key; that only ever costs unrelated numbers a moment of unnecessary blocking, it can never let two
+    sends to the same real number both slip past the quota check, since same-number collisions are exact
+    (the lock key is always the same value for the same number).
+    """
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:phone_number))"), {"phone_number": phone_number})
+
+
+def record_otp_send(
+    db: Session,
+    *,
+    pilot_registration_uuid: str,
+    otp_challenge_uuid: str,
+    phone_number: str,
+    now: datetime,
+) -> None:
+    """Appends one immutable row recording that this exact phone number was just sent a code, independent
+    of what pilot_registrations.phone_number is or later becomes. Called only after the SMS provider has
+    actually accepted the send (see send_or_raise) — a rejected or failed send must never appear here."""
+    db.execute(
         text(
             """
-            SELECT COALESCE(SUM(oc.send_count), 0)
-            FROM otp_challenges oc
-            JOIN pilot_registrations pr ON pr.pilot_registration_uuid = oc.pilot_registration_uuid
-            WHERE pr.phone_number = :phone_number AND oc.last_sent_at >= :since
+            INSERT INTO otp_sends (pilot_registration_uuid, otp_challenge_uuid, phone_number, sent_at)
+            VALUES (:pilot_registration_uuid, :otp_challenge_uuid, :phone_number, :now)
             """
         ),
+        {"pilot_registration_uuid": pilot_registration_uuid, "otp_challenge_uuid": otp_challenge_uuid, "phone_number": phone_number, "now": now},
+    )
+
+
+def count_recent_otp_sends_for_phone(db: Session, *, phone_number: str, since: datetime) -> int:
+    """Counts actual sends recorded to this exact phone number (see record_otp_send / otp_sends), not sends
+    inferred from a registration's current phone_number.
+
+    The previous version of this query joined otp_challenges to pilot_registrations and filtered on
+    pilot_registrations.phone_number — the registration's *current* number. Because "Change number" updates
+    that column in place, a registration that sent to +91A and then changed to +91B would have BOTH sends
+    attributed to +91B once the join ran, silently erasing +91A's real usage from its own quota. otp_sends
+    is an append-only log of each send's actual destination at the time it happened, so this count is
+    accurate regardless of any number changes that happen afterward. Callers must hold
+    lock_phone_number_for_send's advisory lock for this phone number before trusting this count to decide
+    whether another send is allowed.
+    """
+    total = db.execute(
+        text("SELECT count(*) FROM otp_sends WHERE phone_number = :phone_number AND sent_at >= :since"),
         {"phone_number": phone_number, "since": since},
     ).scalar_one()
     return int(total)

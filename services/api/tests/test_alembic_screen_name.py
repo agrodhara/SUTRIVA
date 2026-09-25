@@ -13,7 +13,7 @@ NEW_REVISION = "0003_product_event_screen_name"
 # The actual chain head as of this migration's own addition. Kept separate from NEW_REVISION (which this
 # file's other assertions use to test the screen_name migration specifically, in isolation) so a later
 # migration on top only ever requires updating this one constant.
-LATEST_REVISION = "0004_pilot_registration"
+LATEST_REVISION = "0005_otp_send_log"
 CONSTRAINT = "ck_product_events_screen_name"
 APPROVED = (
     "rewards_card_behaviour",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -574,6 +576,163 @@ def test_per_phone_send_cap_cannot_be_bypassed_by_starting_a_new_registration(ph
     third = _submit_mobile(phaseb_client, reg_c, phone_number=same_phone)
     assert third.status_code == 429
     assert third.json()["detail"] == "phone_send_limit_reached"
+
+
+def test_per_phone_quota_is_not_erased_when_a_registration_changes_its_number(
+    phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bug this fixes: the old per-phone count joined otp_challenges to pilot_registrations and
+    filtered on the registration's *current* phone_number. "Change number" updates that column in place, so
+    a registration that sent to A and then changed to B would have BOTH sends attributed to B once the join
+    ran — silently erasing A's real usage. A fresh registration reusing A must still see it as already
+    used."""
+    _enable_track11b(monkeypatch)
+    _configure_dev_sms(monkeypatch)
+    _configure_otp_keys(monkeypatch)
+    monkeypatch.setenv("PILOT_OTP_MAX_SENDS_PER_PHONE", "1")
+    phone_a = "+919555500001"
+    phone_b = "+919555500002"
+
+    reg1 = _register_interest(phaseb_client)
+    # Send 1: to A.
+    assert _submit_mobile(phaseb_client, reg1, phone_number=phone_a).status_code == 200
+    # "Change number": reg1 now sends to B instead. Working Change-number behavior — this must still
+    # succeed (a different number is not cooldown-limited, see the change-number tests below).
+    changed = _submit_mobile(phaseb_client, reg1, phone_number=phone_b)
+    assert changed.status_code == 200
+
+    # A brand-new registration trying to send to A must see A's real usage (1 send, cap 1) and be blocked —
+    # not treated as if A had never been sent to, which is what the buggy join-based count would show.
+    reg2 = _register_interest(phaseb_client)
+    blocked = _submit_mobile(phaseb_client, reg2, phone_number=phone_a)
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"] == "phone_send_limit_reached"
+
+    # B correctly shows its own real usage too (reg1's change-number send counts against B, not nothing):
+    # with the same cap of 1, a second registration sending to B is also blocked — proving the fix counts
+    # both destinations correctly, not just "not zero for A".
+    reg3 = _register_interest(phaseb_client)
+    blocked_for_b = _submit_mobile(phaseb_client, reg3, phone_number=phone_b)
+    assert blocked_for_b.status_code == 429
+    assert blocked_for_b.json()["detail"] == "phone_send_limit_reached"
+
+
+def test_per_phone_quota_counts_resends_to_the_same_number(
+    phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch, phaseb_upgraded_database: str
+) -> None:
+    _enable_track11b(monkeypatch)
+    _configure_dev_sms(monkeypatch)
+    _configure_otp_keys(monkeypatch)
+    monkeypatch.setenv("PILOT_OTP_MAX_SENDS_PER_PHONE", "2")
+    phone = "+919555500003"
+
+    reg1 = _register_interest(phaseb_client)
+    assert _submit_mobile(phaseb_client, reg1, phone_number=phone).status_code == 200
+
+    engine = create_engine(phaseb_upgraded_database, future=True)
+    _push_last_sent_into_the_past(engine, reg1)
+    # Second send to the same number, via resend rather than a fresh registration — must count the same.
+    assert _resend(phaseb_client, reg1).status_code == 200
+
+    # The cap (2) is now used up by reg1 alone; a different registration sending to the same number is
+    # blocked.
+    reg2 = _register_interest(phaseb_client)
+    blocked = _submit_mobile(phaseb_client, reg2, phone_number=phone)
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"] == "phone_send_limit_reached"
+
+
+def test_per_phone_quota_only_counts_sends_within_the_configured_window(
+    phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch, phaseb_upgraded_database: str
+) -> None:
+    _enable_track11b(monkeypatch)
+    _configure_dev_sms(monkeypatch)
+    _configure_otp_keys(monkeypatch)
+    monkeypatch.setenv("PILOT_OTP_MAX_SENDS_PER_PHONE", "1")
+    monkeypatch.setenv("PILOT_OTP_PHONE_SEND_WINDOW_HOURS", "1")
+    phone = "+919555500004"
+
+    reg1 = _register_interest(phaseb_client)
+    assert _submit_mobile(phaseb_client, reg1, phone_number=phone).status_code == 200
+
+    # Push the recorded send outside the 1-hour window — it must stop counting toward the quota.
+    engine = create_engine(phaseb_upgraded_database, future=True)
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE otp_sends SET sent_at = :past WHERE phone_number = :phone"),
+            {"past": datetime.now(UTC) - timedelta(hours=2), "phone": phone},
+        )
+
+    reg2 = _register_interest(phaseb_client)
+    allowed = _submit_mobile(phaseb_client, reg2, phone_number=phone)
+    assert allowed.status_code == 200
+
+
+def test_concurrent_sends_to_the_same_phone_cannot_both_pass_a_nearly_exhausted_quota(
+    monkeypatch: pytest.MonkeyPatch, phaseb_upgraded_database: str
+) -> None:
+    """Two different registrations targeting the same phone number, both attempting a send while the
+    phone's quota has exactly one slot left, must not both succeed. Calls the service functions directly
+    (not through TestClient, whose async transport can serialize concurrent calls in ways that would hide a
+    real race) with two genuine threads, each opening its own database connection, so this actually
+    exercises lock_phone_number_for_send's Postgres advisory lock rather than relying on incidental
+    timing."""
+    from app.services import sms as sms_module
+    from app.services.pilot import PilotServiceError, register_interest, submit_mobile_and_send_otp
+
+    monkeypatch.setenv("PILOT_OTP_HMAC_KEYS", "concurrency-test-key")
+    monkeypatch.setenv("PILOT_SMS_PROVIDER", "logging-dev-only")
+    monkeypatch.setenv("PILOT_OTP_MAX_SENDS_PER_PHONE", "1")
+    monkeypatch.setenv("PILOT_OTP_MAX_SENDS_PER_REGISTRATION", "5")
+
+    shared_phone = "+919444444444"
+    reg_a = register_interest(journey="money_value", journey_run_id=None)
+    reg_b = register_interest(journey="money_value", journey_run_id=None)
+
+    first_call_paused = threading.Event()
+    release_first_call = threading.Event()
+    original_send = sms_module.LoggingSmsSender.send
+    call_count_lock = threading.Lock()
+    call_count = {"n": 0}
+
+    def pausing_send(self, *, phone_number: str, code: str):
+        with call_count_lock:
+            call_count["n"] += 1
+            is_first_call = call_count["n"] == 1
+        if is_first_call:
+            # Signal that this call has already passed _enforce_send_quota (it runs before send_or_raise)
+            # and is still holding the phone-number advisory lock, since its transaction hasn't committed.
+            first_call_paused.set()
+            assert release_first_call.wait(timeout=5), "test setup error: never released the first call"
+        return original_send(self, phone_number=phone_number, code=code)
+
+    monkeypatch.setattr("app.services.sms.LoggingSmsSender.send", pausing_send)
+
+    outcomes: dict[str, str] = {}
+
+    def run(name: str, pilot_registration_id: str) -> None:
+        try:
+            submit_mobile_and_send_otp(pilot_registration_id=pilot_registration_id, phone_number=shared_phone, optional_updates_opted_in=False)
+            outcomes[name] = "ok"
+        except PilotServiceError as exc:
+            outcomes[name] = exc.code
+
+    thread_a = threading.Thread(target=run, args=("a", reg_a))
+    thread_a.start()
+    assert first_call_paused.wait(timeout=5), "the first send never reached the pausable SMS sender"
+
+    thread_b = threading.Thread(target=run, args=("b", reg_b))
+    thread_b.start()
+    # Give thread B a real chance to reach and block on the same advisory lock while A is still paused (and
+    # therefore still holding it, since A's transaction has not committed).
+    time.sleep(0.5)
+    assert "b" not in outcomes, "the second send should still be blocked on the phone-number advisory lock"
+
+    release_first_call.set()
+    thread_a.join(timeout=5)
+    thread_b.join(timeout=5)
+
+    assert set(outcomes.values()) == {"ok", "phone_send_limit_reached"}
 
 
 def test_resubmitting_the_same_number_without_waiting_is_treated_as_a_resend_and_cooldown_limited(

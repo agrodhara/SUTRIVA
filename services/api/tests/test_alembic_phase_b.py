@@ -20,7 +20,7 @@ def test_phaseb_upgrade_current_and_repeatable(
     engine = create_engine(postgres_test_url, future=True)
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == "0004_pilot_registration"
+    assert revision == "0005_otp_send_log"
 
 
 def test_phaseb_downgrade_and_reupgrade(
@@ -37,7 +37,7 @@ def test_phaseb_downgrade_and_reupgrade(
     engine = create_engine(postgres_test_url, future=True)
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == "0004_pilot_registration"
+    assert revision == "0005_otp_send_log"
 
 
 def test_phaseb_schema_contains_expected_tables_indexes_and_triggers(
