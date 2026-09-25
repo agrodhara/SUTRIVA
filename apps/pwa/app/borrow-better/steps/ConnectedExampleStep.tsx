@@ -36,6 +36,9 @@ type Props = {
   exampleApplied: boolean;
   exampleEdited: boolean;
   onBack: () => void;
+  /** Present only when Phase 1.1B is enabled. Undefined hides the link entirely — Step 5 stays a complete
+   * ending to the anonymous check either way. */
+  onContinueToPilot?: () => void;
 };
 
 // Chart geometry (viewBox units). The y axis runs from ₹0 to ₹1.5 lakh.
@@ -95,7 +98,7 @@ const amount = (raw: string): number => {
   return parsed.ok ? parsed.value : 0;
 };
 
-export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampleApplied, exampleEdited, onBack }: Props) {
+export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampleApplied, exampleEdited, onBack, onContinueToPilot }: Props) {
   const headingId = useId();
   const example = SYNTHETIC_EXAMPLE;
   const glance = buildBorrowGlance(form, result);
@@ -335,9 +338,15 @@ export function ConnectedExampleStep({ form, result, focusHeadingOnMount, exampl
           </Disclosure>
         </section>
 
+        {onContinueToPilot ? (
+          <button type="button" className={`${ui.primaryButton} ${ui.o6}`} onClick={onContinueToPilot}>
+            See how to join the pilot
+          </button>
+        ) : null}
+
         {/* Intentional full-page navigation: a hard load of "/" clears transient in-memory journey state. Do not convert to next/link. */}
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a className={`${ui.linkButton} ${ui.o6}`} href="/">
+        <a className={`${ui.linkButton} ${ui.o7}`} href="/">
           Back to home
         </a>
       </div>

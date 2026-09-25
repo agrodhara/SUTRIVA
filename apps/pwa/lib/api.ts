@@ -76,7 +76,15 @@ export type ProductEventType =
   | "next_interest_skipped"
   | "decline_reason_selected"
   | "result_declared"
-  | "connected_example_seen";
+  | "connected_example_seen"
+  // Phase 1.1B Step 6 funnel — the exact five events authorized by
+  // docs/product/journeys/JOURNEY_FLOW_SPEC.md. Never pass a phone number, OTP value or any other
+  // free-form/value-bearing field in `details` alongside these — see TrackEventDetails below.
+  | "pilot_interest_clicked"
+  | "mobile_submitted"
+  | "otp_sent"
+  | "otp_verified"
+  | "optional_updates_opted_in";
 
 /**
  * Bounded, categorical screen identifier for final 1.1A journey events. Mirrors the API allowlist;

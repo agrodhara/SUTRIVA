@@ -36,7 +36,7 @@ export default function Home() {
         <DoorCard
           title="Borrow Better"
           optionLabel="OPTION B"
-          description="Check whether a desired borrowing amount feels comfortable for your monthly cash flow and commitments."
+          description="See how your existing payments and a proposed EMI affect your monthly room, so you can spot what's driving the pressure before you borrow more."
           href="/borrow-better"
           cta="Open Borrow Better"
           benefits={["Understand your monthly borrowing comfort", "See how commitments affect cash flow", "Spot what you may want to adjust first"]}

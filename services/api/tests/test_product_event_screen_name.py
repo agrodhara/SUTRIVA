@@ -134,14 +134,16 @@ def test_every_other_event_type_rejects_a_supplied_screen_name() -> None:
 def test_event_type_vocabulary_gains_exactly_the_two_approved_types_and_keeps_history() -> None:
     from typing import get_args
 
-    from app.models.product_event import ProductEventType
+    from app.models.product_event import ProductEventType, STEP6_EVENT_TYPES
 
     types = set(get_args(ProductEventType))
     assert {"result_declared", "connected_example_seen"} <= types
     # Historical vocabulary stays accepted for compatibility.
     assert {"step_viewed", "step_completed", "otp_requested", "pilot_consent_recorded", "journey_started"} <= types
-    # Step 6 funnel names are 1.1B and must not be introduced here.
-    assert not types & {"pilot_interest_clicked", "mobile_submitted", "otp_sent", "otp_verified", "optional_updates_opted_in"}
+    # Phase 1.1B (this PR): exactly the five Step 6 funnel events authorized by
+    # docs/product/journeys/JOURNEY_FLOW_SPEC.md, no more and no fewer.
+    assert STEP6_EVENT_TYPES == {"pilot_interest_clicked", "mobile_submitted", "otp_sent", "otp_verified", "optional_updates_opted_in"}
+    assert STEP6_EVENT_TYPES <= types
 
 
 @pytest.mark.parametrize(

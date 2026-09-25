@@ -12,6 +12,7 @@ from app.routers import (
     borrowing_intelligence,
     financial_intelligence,
     money_value,
+    pilot,
     product_events,
 )
 
@@ -50,3 +51,4 @@ app.include_router(borrow_better.router)
 app.include_router(money_value.router)
 app.include_router(financial_intelligence.router)
 app.include_router(product_events.router)
+app.include_router(pilot.router)
