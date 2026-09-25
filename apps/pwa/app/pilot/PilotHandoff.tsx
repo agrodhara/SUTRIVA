@@ -35,7 +35,7 @@ const JOURNEY_COPY: Record<PilotJourney, JourneyCopy> = {
   comfortable_borrowing: {
     journeyName: "Borrow Better",
     benefitQuestion: "Which commitments are putting pressure on my monthly room, and how might that change over time?",
-    caveat: "This check doesn't know which of your debts a new loan would replace.",
+    caveat: "The pilot could look at which commitments are driving that pressure and what further information would help weigh alternatives — this check alone doesn't know which debt a new loan would replace.",
     illustrativeReminder:
       "In the fictional example you just saw: a recurring obligation of ₹31,500 was identified, alongside essential spending that increased in 2 of the last 6 months.",
   },
@@ -53,8 +53,13 @@ const API_ERROR_COPY: Record<string, string> = {
   code_expired: "That code has expired. Request a new one.",
   too_many_attempts: "Too many attempts on this code. Request a new one.",
   resend_too_soon: "Please wait a little longer before requesting another code.",
+  resend_limit_reached: "We've sent as many codes as we can to this request. Please start again.",
+  phone_send_limit_reached: "We can’t send more codes to this number right now. Please try again later.",
+  rate_limited: "Please wait a little before trying again.",
   already_verified: "This number is already verified.",
   sms_provider_not_configured: "We can’t send a verification code right now. Please try again later.",
+  sms_send_failed: "We couldn’t send a code to that number. Check it and try again.",
+  otp_signing_key_not_configured: "We can’t send a verification code right now. Please try again later.",
   pilot_registration_not_found: "That request has expired. Please start again.",
 };
 
@@ -138,7 +143,6 @@ export function PilotHandoff({ journey, onExit }: { journey: PilotJourney; onExi
       if (!pilotRegistrationId) throw new PilotApiError("pilot_registration_not_found", 409);
       const result = await postPilotMobile(pilotRegistrationId, normalized, optionalUpdates);
       emit("mobile_submitted");
-      if (optionalUpdates) emit("optional_updates_opted_in");
       emit("otp_sent");
       setDisplayPhone(normalized);
       setResendAfterSeconds(result.resend_after_seconds);
@@ -176,13 +180,18 @@ export function PilotHandoff({ journey, onExit }: { journey: PilotJourney; onExi
     try {
       await postPilotVerify(pilotRegistrationId, code);
       emit("otp_verified");
+      // Reported only now, not at mobile-submit time: before verification, the checkbox is only an
+      // unverified intent on a number nobody has proven belongs to this person yet. Reporting it as an
+      // opt-in earlier would let an unverified (or someone else's) number be recorded as if it were a
+      // real marketing consent.
+      if (optionalUpdates) emit("optional_updates_opted_in");
       setSubstep("success");
     } catch (err) {
       setError(err instanceof PilotApiError ? errorMessageFor(err.code) : "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [code, emit, pilotRegistrationId]);
+  }, [code, emit, optionalUpdates, pilotRegistrationId]);
 
   return (
     <PilotFrame journeyName={copy.journeyName}>

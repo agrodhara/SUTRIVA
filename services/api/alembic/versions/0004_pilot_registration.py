@@ -5,13 +5,19 @@ Adds the two tables the Step 6 pilot-interest handoff needs:
 - ``pilot_registrations``: one row per Step 6A interest click. A phone number and
   optional-updates choice are added at Step 6B. ``anonymous_session_uuid`` stays
   NULL until a successful OTP verification links it — never before.
-- ``otp_challenges``: one row per OTP send (including resends). Only a salted hash
-  of the code is stored, never the code itself. Attempt count and expiry are
-  enforced in the database, not just in application code.
+- ``otp_challenges``: one row per OTP send (including resends). Only a keyed
+  HMAC-SHA256 hash of the code is stored, never the code itself and never a bare
+  (unkeyed) hash — the signing key lives in configuration
+  (``PILOT_OTP_HMAC_KEYS``), not in this database, so a stolen row alone cannot be
+  brute-forced back to the 6-digit code the way an unkeyed hash of such a small
+  space could be. See ``app/services/pilot.py``'s ``_keyed_hash``/``_code_matches``
+  for the hashing and the key-rotation path. Attempt count and expiry are enforced
+  in the database, not just in application code.
 
 No column on either table may ever hold the OTP code itself or any raw
 authentication material — see ``ck_otp_challenges_code_hash_length``, which forces
-the hash to be exactly a SHA-256 digest's length, not a plaintext code.
+the hash to be exactly 32 bytes (an HMAC-SHA256 digest's length), not a plaintext
+code.
 
 Revision ID: 0004_pilot_registration
 Revises: 0003_product_event_screen_name
@@ -36,6 +42,11 @@ def upgrade() -> None:
         "pilot_registrations",
         sa.Column("pilot_registration_uuid", sa.UUID(), nullable=False, server_default=sa.text("gen_random_uuid()")),
         sa.Column("journey", sa.Text(), nullable=False),
+        # Reserved for a future phase: Phase 1.1B never writes a value here, even though the client is
+        # allowed to send a journey_run_id (see app/models/pilot.py's PilotInterestRequest). Resolving it to
+        # a real journey_runs row would need the anonymous-session-scoped upsert the product_events pipeline
+        # uses (upsert_journey_run), which Step 6A does not perform — see
+        # app/services/pilot.py's register_interest docstring.
         sa.Column("journey_run_uuid", sa.UUID(), nullable=True),
         # NULL until a successful OTP verification links it (see history-linking rule in
         # docs/product/journeys/JOURNEY_FLOW_SPEC.md). Step 6A never populates this.

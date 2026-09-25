@@ -18,6 +18,10 @@ class PilotInterestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     journey: PilotJourneyType
+    # Accepted but NOT resolved or linked in Phase 1.1B — pilot_registrations.journey_run_uuid is always
+    # NULL. This is a deliberate, documented gap, not a partial implementation of linking: see
+    # app.services.pilot.register_interest's docstring for why, and
+    # test_journey_run_id_is_accepted_but_never_linked_in_phase_1_1b for the regression test.
     journey_run_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
@@ -89,7 +93,12 @@ class PilotErrorResponse(BaseModel):
         "code_expired",
         "too_many_attempts",
         "resend_too_soon",
+        "resend_limit_reached",
+        "phone_send_limit_reached",
+        "rate_limited",
         "already_verified",
         "sms_provider_not_configured",
+        "sms_send_failed",
+        "otp_signing_key_not_configured",
         "feature_disabled",
     ]

@@ -52,7 +52,11 @@ describe("PilotHandoff", () => {
   it("shows the Borrow-specific benefit question and caveat", () => {
     render(<PilotHandoff journey="comfortable_borrowing" onExit={onExit} />);
     expect(screen.getByText("Which commitments are putting pressure on my monthly room, and how might that change over time?")).toBeInTheDocument();
-    expect(screen.getByText("This check doesn't know which of your debts a new loan would replace.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The pilot could look at which commitments are driving that pressure and what further information would help weigh alternatives — this check alone doesn't know which debt a new loan would replace.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows the single required disclaimer line and no long disclaimer list", () => {
@@ -131,7 +135,7 @@ describe("PilotHandoff", () => {
     expect(calls.filter((c) => c.url.includes("/pilot/mobile"))).toHaveLength(0);
   });
 
-  it("sends the mobile number and updates choice, emits mobile_submitted/optional_updates_opted_in/otp_sent, and advances to OTP entry", async () => {
+  it("sends the mobile number and updates choice, emits mobile_submitted/otp_sent, and advances to OTP entry — without yet reporting the updates choice", async () => {
     const user = userEvent.setup();
     const calls = mockFetchSequence([
       { status: 200, body: { pilot_registration_id: "reg-1", status: "interest_clicked" } },
@@ -149,15 +153,18 @@ describe("PilotHandoff", () => {
     const mobileCall = calls.find((c) => c.url.includes("/pilot/mobile") && !c.url.includes("resend"));
     expect(mobileCall?.body).toEqual({ pilot_registration_id: "reg-1", phone_number: "+919876543210", optional_updates_opted_in: true });
     expect(trackEventMock).toHaveBeenCalledWith("mobile_submitted", "money_value", expect.anything());
-    expect(trackEventMock).toHaveBeenCalledWith("optional_updates_opted_in", "money_value", expect.anything());
     expect(trackEventMock).toHaveBeenCalledWith("otp_sent", "money_value", expect.anything());
+    // Not yet: the number hasn't been verified, so checking the box here is only an unverified intent, not
+    // a reportable opt-in. See the "only after a successful verify" test below.
+    expect(trackEventMock).not.toHaveBeenCalledWith("optional_updates_opted_in", expect.anything(), expect.anything());
   });
 
-  it("does not emit optional_updates_opted_in when the checkbox was left unchecked", async () => {
+  it("does not emit optional_updates_opted_in when the checkbox was left unchecked, even after verifying", async () => {
     const user = userEvent.setup();
     mockFetchSequence([
       { status: 200, body: { pilot_registration_id: "reg-1", status: "interest_clicked" } },
       { status: 200, body: { status: "otp_sent", expires_at: new Date(Date.now() + 600_000).toISOString(), resend_after_seconds: 30 } },
+      { status: 200, body: { status: "verified" } },
     ]);
     render(<PilotHandoff journey="money_value" onExit={onExit} />);
     await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -165,8 +172,36 @@ describe("PilotHandoff", () => {
     await user.type(screen.getByLabelText("Mobile number"), "9876543210");
     await user.click(screen.getByRole("button", { name: "Send code" }));
     await screen.findByRole("heading", { name: "Enter the code we sent" });
+    await user.type(screen.getByLabelText("Verification code"), "482913");
+    await user.click(screen.getByRole("button", { name: "Verify" }));
+    await screen.findByRole("heading", { name: "Your interest has been registered." });
 
     expect(trackEventMock).not.toHaveBeenCalledWith("optional_updates_opted_in", expect.anything(), expect.anything());
+  });
+
+  it("emits optional_updates_opted_in only once the number is actually verified, not at mobile-submit time", async () => {
+    const user = userEvent.setup();
+    mockFetchSequence([
+      { status: 200, body: { pilot_registration_id: "reg-1", status: "interest_clicked" } },
+      { status: 200, body: { status: "otp_sent", expires_at: new Date(Date.now() + 600_000).toISOString(), resend_after_seconds: 30 } },
+      { status: 200, body: { status: "verified" } },
+    ]);
+    render(<PilotHandoff journey="money_value" onExit={onExit} />);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Enter your mobile number" });
+    await user.type(screen.getByLabelText("Mobile number"), "9876543210");
+    await user.click(screen.getByRole("checkbox", { name: /occasional Sutriva product updates/ }));
+    await user.click(screen.getByRole("button", { name: "Send code" }));
+    await screen.findByRole("heading", { name: "Enter the code we sent" });
+
+    // Checked the box and sent the code, but not verified yet — must not have reported the opt-in.
+    expect(trackEventMock).not.toHaveBeenCalledWith("optional_updates_opted_in", expect.anything(), expect.anything());
+
+    await user.type(screen.getByLabelText("Verification code"), "482913");
+    await user.click(screen.getByRole("button", { name: "Verify" }));
+    await screen.findByRole("heading", { name: "Your interest has been registered." });
+
+    expect(trackEventMock).toHaveBeenCalledWith("optional_updates_opted_in", "money_value", expect.anything());
   });
 
   async function reachOtpStep(user: ReturnType<typeof userEvent.setup>) {

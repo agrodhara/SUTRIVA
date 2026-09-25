@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import hashlib
+import hmac
 import logging
 import secrets
 from dataclasses import dataclass
@@ -16,6 +16,7 @@ from app.repositories.pilot import (
     OtpChallengeRecord,
     PilotRegistrationRecord,
     consume_otp_challenge,
+    count_recent_otp_sends_for_phone,
     create_otp_challenge,
     create_pilot_registration,
     increment_otp_attempt,
@@ -26,7 +27,7 @@ from app.repositories.pilot import (
     replace_otp_challenge_for_resend,
     set_pilot_registration_mobile,
 )
-from app.services.sms import SmsProviderNotConfiguredError, get_sms_sender
+from app.services.sms import SmsProviderNotConfiguredError, SmsSendRejectedError, get_sms_sender, send_or_raise
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +37,14 @@ class PilotServiceError(Exception):
         super().__init__(code)
         self.status_code = status_code
         self.code = code
+
+
+class PilotOtpKeyNotConfiguredError(RuntimeError):
+    """Raised when PILOT_OTP_HMAC_KEYS is unset. Like SmsProviderNotConfiguredError, this must never be
+    caught and papered over: a code cannot be safely hashed or verified without a keyed secret held
+    outside the database (a bare hash of a 6-digit code is trivially reversible offline from a stolen
+    database row), so a deployment missing this must fail loudly rather than fall back to something
+    unkeyed."""
 
 
 def _utcnow() -> datetime:
@@ -53,12 +62,27 @@ def _generate_code(length: int) -> str:
     return "".join(str(secrets.randbelow(10)) for _ in range(length))
 
 
-def _hash_code(code: str) -> bytes:
-    # A 6-digit code's real protection is the attempt limit and short expiry enforced below, not the hash's
-    # cryptographic strength (a stolen hash of a 6-digit space is trivially brute-forced offline regardless
-    # of algorithm). SHA-256 here exists so the code is never stored in a form readable directly from the
-    # database, not as the primary security boundary.
-    return hashlib.sha256(code.encode("utf-8")).digest()
+def _keyed_hash(code: str, key: str) -> bytes:
+    # HMAC-SHA256, not a bare hash: a 6-digit code is a tiny (10^length) search space, so a bare SHA-256 of
+    # it can be brute-forced offline in a fraction of a second from a stolen database row alone, with no
+    # need for the secret this HMAC key adds. The key is read only from configuration (never stored in the
+    # database next to the hash it protects), so a stolen database row is not enough on its own to recover
+    # or forge a code — see PilotOtpSettings.hmac_keys for the rotation path.
+    return hmac.new(key.encode("utf-8"), code.encode("utf-8"), "sha256").digest()
+
+
+def _sign_new_code(code: str, hmac_keys: tuple[str, ...]) -> bytes:
+    if not hmac_keys:
+        raise PilotOtpKeyNotConfiguredError("PILOT_OTP_HMAC_KEYS is not configured")
+    return _keyed_hash(code, hmac_keys[0])  # the current (newest) key signs every new code
+
+
+def _code_matches(code: str, stored_hash: bytes, hmac_keys: tuple[str, ...]) -> bool:
+    if not hmac_keys:
+        raise PilotOtpKeyNotConfiguredError("PILOT_OTP_HMAC_KEYS is not configured")
+    # Tried against every configured key, not just the current one, so a key rotation (prepending a new
+    # key) never invalidates a code that was already sent under the previous key.
+    return any(secrets.compare_digest(_keyed_hash(code, key), stored_hash) for key in hmac_keys)
 
 
 @dataclass(frozen=True)
@@ -72,9 +96,29 @@ def _wrap_db_errors(exc: Exception) -> PilotServiceError:
     return PilotServiceError(status.HTTP_503_SERVICE_UNAVAILABLE, "service_unavailable")
 
 
+def _map_send_errors(exc: Exception) -> PilotServiceError | None:
+    """Shared error mapping for the two operations that actually place an SMS send: submit and resend."""
+    if isinstance(exc, SmsProviderNotConfiguredError):
+        return PilotServiceError(status.HTTP_503_SERVICE_UNAVAILABLE, "sms_provider_not_configured")
+    if isinstance(exc, SmsSendRejectedError):
+        return PilotServiceError(status.HTTP_503_SERVICE_UNAVAILABLE, "sms_send_failed")
+    if isinstance(exc, PilotOtpKeyNotConfiguredError):
+        return PilotServiceError(status.HTTP_503_SERVICE_UNAVAILABLE, "otp_signing_key_not_configured")
+    return None
+
+
 def register_interest(*, journey: str, journey_run_id: str | None) -> str:
     """Step 6A: anonymous interest click only. Records nothing beyond the journey — no phone, OTP,
-    identity or permission field exists to record here."""
+    identity or permission field exists to record here.
+
+    journey_run_id is accepted from the client (so the request shape matches other trackEvent-adjacent
+    calls) but is intentionally NOT resolved to a journey_runs row in Phase 1.1B: unlike the product_events
+    pipeline (see app/repositories/anonymous_continuity.py's upsert_journey_run, which needs an anonymous
+    session to resolve a client-supplied id into a real journey_runs.journey_run_uuid), Step 6A performs no
+    such resolution. pilot_registrations.journey_run_uuid is therefore always NULL — this is a deliberate,
+    documented gap, not an oversight, and not a claim that a pilot registration is linked to a specific
+    journey run's events. See test_journey_run_id_is_accepted_but_never_linked_in_phase_1_1b.
+    """
     session = _session_factory()()
     try:
         row = create_pilot_registration(session, journey=journey, journey_run_uuid=None)
@@ -94,6 +138,33 @@ def _require_registration(db: Session, pilot_registration_uuid: str) -> PilotReg
     return record
 
 
+def _enforce_send_quota(
+    db: Session,
+    *,
+    phone_number: str,
+    current_send_count: int,
+    otp_settings: PilotOtpSettings,
+    now: datetime,
+) -> None:
+    """Bounds total sends two independent ways, neither of which a resend or a fresh registration can
+    route around:
+
+    - Per-registration: current_send_count already reflects every send (initial + every resend/change-
+      number) this registration has ever made, since replace_otp_challenge_for_resend increments it on the
+      same row rather than starting a new one.
+    - Per-phone, across every registration: a new registration starts its own send_count at zero, so the
+      per-registration cap alone could be bypassed by re-registering with the same phone number. This
+      queries actual send activity for the phone number itself, independent of which registration sent it.
+    """
+    if current_send_count + 1 > otp_settings.max_sends_per_registration:
+        raise PilotServiceError(status.HTTP_429_TOO_MANY_REQUESTS, "resend_limit_reached")
+
+    since = now - timedelta(hours=otp_settings.phone_send_window_hours)
+    recent_for_phone = count_recent_otp_sends_for_phone(db, phone_number=phone_number, since=since)
+    if recent_for_phone + 1 > otp_settings.max_sends_per_phone:
+        raise PilotServiceError(status.HTTP_429_TOO_MANY_REQUESTS, "phone_send_limit_reached")
+
+
 def submit_mobile_and_send_otp(
     *,
     pilot_registration_id: str,
@@ -103,7 +174,15 @@ def submit_mobile_and_send_otp(
 ) -> MobileSubmitResult:
     """Step 6B start: records the phone number and the separate, unchecked-by-default optional-updates
     choice, then generates and sends a fresh OTP. Never links the anonymous session here — that only
-    happens on successful verification."""
+    happens on successful verification.
+
+    Handles re-entry (the frontend's "Back" then resubmit, or "Change number") against an active,
+    unconsumed challenge: the database allows only one such row per registration
+    (uq_otp_challenges_one_active_per_registration), so a second plain INSERT here would raise an
+    IntegrityError. Resubmitting the *same* number is treated exactly like a resend (the cooldown applies,
+    so this can't be used to sidestep it); a genuinely *different* number ("Change number" correcting a
+    mistake) is not time-limited, but still counts against the send caps below like any other send.
+    """
     otp_settings = settings or get_pilot_otp_settings()
     session = _session_factory()()
     try:
@@ -112,6 +191,21 @@ def submit_mobile_and_send_otp(
             raise PilotServiceError(status.HTTP_409_CONFLICT, "already_verified")
 
         now = _utcnow()
+        existing_challenge = load_active_otp_challenge_for_update(session, pilot_registration_id)
+
+        if existing_challenge is not None and record.phone_number == phone_number:
+            cooldown_elapsed = (now - existing_challenge.last_sent_at).total_seconds()
+            if cooldown_elapsed < otp_settings.resend_cooldown_seconds:
+                raise PilotServiceError(status.HTTP_429_TOO_MANY_REQUESTS, "resend_too_soon")
+
+        _enforce_send_quota(
+            session,
+            phone_number=phone_number,
+            current_send_count=existing_challenge.send_count if existing_challenge else 0,
+            otp_settings=otp_settings,
+            now=now,
+        )
+
         set_pilot_registration_mobile(
             session,
             pilot_registration_uuid=pilot_registration_id,
@@ -122,25 +216,34 @@ def submit_mobile_and_send_otp(
 
         code = _generate_code(otp_settings.code_length)
         expires_at = now + timedelta(seconds=otp_settings.code_ttl_seconds)
-        challenge = create_otp_challenge(
-            session,
-            pilot_registration_uuid=pilot_registration_id,
-            code_hash=_hash_code(code),
-            expires_at=expires_at,
-            max_attempts=otp_settings.max_attempts,
-        )
+        code_hash = _sign_new_code(code, otp_settings.hmac_keys)
 
-        # Sent only after the DB rows exist, but before commit: if the provider raises, the whole
-        # transaction rolls back rather than leaving a "sent" row for a message that was never accepted.
-        sender = get_sms_sender(otp_settings)
-        sender.send(phone_number=phone_number, code=code)
+        if existing_challenge is not None:
+            replace_otp_challenge_for_resend(
+                session, otp_challenge_uuid=existing_challenge.otp_challenge_uuid, code_hash=code_hash, expires_at=expires_at, now=now
+            )
+            result_expires_at = expires_at
+        else:
+            challenge = create_otp_challenge(
+                session,
+                pilot_registration_uuid=pilot_registration_id,
+                code_hash=code_hash,
+                expires_at=expires_at,
+                max_attempts=otp_settings.max_attempts,
+            )
+            result_expires_at = challenge["expires_at"]
+
+        # Sent only after the DB rows exist, but before commit: if the provider raises or rejects the send,
+        # the whole transaction rolls back rather than leaving a "sent" row for a message that never went
+        # out — see send_or_raise, which checks the provider's own accepted result.
+        send_or_raise(get_sms_sender(otp_settings), phone_number=phone_number, code=code)
 
         mark_pilot_registration_otp_sent(session, pilot_registration_uuid=pilot_registration_id, now=now)
         session.commit()
-        return MobileSubmitResult(expires_at=challenge["expires_at"], resend_after_seconds=otp_settings.resend_cooldown_seconds)
-    except SmsProviderNotConfiguredError as exc:
+        return MobileSubmitResult(expires_at=result_expires_at, resend_after_seconds=otp_settings.resend_cooldown_seconds)
+    except (SmsProviderNotConfiguredError, SmsSendRejectedError, PilotOtpKeyNotConfiguredError) as exc:
         session.rollback()
-        raise PilotServiceError(status.HTTP_503_SERVICE_UNAVAILABLE, "sms_provider_not_configured") from exc
+        raise _map_send_errors(exc) from exc
     except (DatabaseConfigError, DatabaseNotConfiguredError) as exc:
         session.rollback()
         raise _wrap_db_errors(exc) from exc
@@ -167,18 +270,22 @@ def resend_otp(*, pilot_registration_id: str, settings: PilotOtpSettings | None 
         if cooldown_elapsed < otp_settings.resend_cooldown_seconds:
             raise PilotServiceError(status.HTTP_429_TOO_MANY_REQUESTS, "resend_too_soon")
 
+        _enforce_send_quota(
+            session, phone_number=record.phone_number, current_send_count=challenge.send_count, otp_settings=otp_settings, now=now
+        )
+
         code = _generate_code(otp_settings.code_length)
         expires_at = now + timedelta(seconds=otp_settings.code_ttl_seconds)
+        code_hash = _sign_new_code(code, otp_settings.hmac_keys)
 
-        sender = get_sms_sender(otp_settings)
-        sender.send(phone_number=record.phone_number, code=code)
+        send_or_raise(get_sms_sender(otp_settings), phone_number=record.phone_number, code=code)
 
-        replace_otp_challenge_for_resend(session, otp_challenge_uuid=challenge.otp_challenge_uuid, code_hash=_hash_code(code), expires_at=expires_at, now=now)
+        replace_otp_challenge_for_resend(session, otp_challenge_uuid=challenge.otp_challenge_uuid, code_hash=code_hash, expires_at=expires_at, now=now)
         session.commit()
         return MobileSubmitResult(expires_at=expires_at, resend_after_seconds=otp_settings.resend_cooldown_seconds)
-    except SmsProviderNotConfiguredError as exc:
+    except (SmsProviderNotConfiguredError, SmsSendRejectedError, PilotOtpKeyNotConfiguredError) as exc:
         session.rollback()
-        raise PilotServiceError(status.HTTP_503_SERVICE_UNAVAILABLE, "sms_provider_not_configured") from exc
+        raise _map_send_errors(exc) from exc
     except (DatabaseConfigError, DatabaseNotConfiguredError) as exc:
         session.rollback()
         raise _wrap_db_errors(exc) from exc
@@ -186,10 +293,17 @@ def resend_otp(*, pilot_registration_id: str, settings: PilotOtpSettings | None 
         session.close()
 
 
-def verify_otp(*, pilot_registration_id: str, code: str, anonymous_session_uuid: str | None) -> None:
+def verify_otp(
+    *,
+    pilot_registration_id: str,
+    code: str,
+    anonymous_session_uuid: str | None,
+    settings: PilotOtpSettings | None = None,
+) -> None:
     """Step 6B finish. Anonymous-history linking happens only inside this function, only on success, and
     only using the session already validated by the caller — verify_otp never accepts a session id that
     hasn't already been through the normal anonymous-session cookie validation."""
+    otp_settings = settings or get_pilot_otp_settings()
     session = _session_factory()()
     try:
         record = _require_registration(session, pilot_registration_id)
@@ -206,7 +320,7 @@ def verify_otp(*, pilot_registration_id: str, code: str, anonymous_session_uuid:
         if challenge.attempt_count >= challenge.max_attempts:
             raise PilotServiceError(status.HTTP_429_TOO_MANY_REQUESTS, "too_many_attempts")
 
-        if not secrets.compare_digest(_hash_code(code), challenge.code_hash):
+        if not _code_matches(code, challenge.code_hash, otp_settings.hmac_keys):
             increment_otp_attempt(session, otp_challenge_uuid=challenge.otp_challenge_uuid)
             session.commit()
             raise PilotServiceError(status.HTTP_401_UNAUTHORIZED, "invalid_code")
@@ -219,6 +333,9 @@ def verify_otp(*, pilot_registration_id: str, code: str, anonymous_session_uuid:
             now=now,
         )
         session.commit()
+    except PilotOtpKeyNotConfiguredError as exc:
+        session.rollback()
+        raise PilotServiceError(status.HTTP_503_SERVICE_UNAVAILABLE, "otp_signing_key_not_configured") from exc
     except (DatabaseConfigError, DatabaseNotConfiguredError) as exc:
         session.rollback()
         raise _wrap_db_errors(exc) from exc

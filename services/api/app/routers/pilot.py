@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import JSONResponse
 
 from app.config import track11b_enabled
 from app.models.pilot import (
@@ -13,10 +12,20 @@ from app.models.pilot import (
     PilotOtpVerifyRequest,
     PilotOtpVerifyResponse,
 )
+from app.pilot_config import get_pilot_rate_limit_settings
 from app.services.anonymous_sessions import AnonymousSessionHttpError, get_cookie_name, validate_event_session, validate_request_origin
 from app.services.pilot import PilotServiceError, register_interest, resend_otp, submit_mobile_and_send_otp, verify_otp
+from app.services.pilot_rate_limit import FixedWindowRateLimiter, RateLimitExceededError
 
 router = APIRouter(prefix="/v1/pilot", tags=["pilot"])
+
+_RATE_LIMIT_WINDOW_SECONDS = 3600.0
+# Module-level singletons: process-local rate limit state (see FixedWindowRateLimiter's docstring for why
+# this is not shared across instances). /mobile and /mobile/resend share one limiter because both place an
+# SMS send and should draw from the same per-IP budget for that cost.
+_interest_limiter = FixedWindowRateLimiter(window_seconds=_RATE_LIMIT_WINDOW_SECONDS)
+_mobile_limiter = FixedWindowRateLimiter(window_seconds=_RATE_LIMIT_WINDOW_SECONDS)
+_verify_limiter = FixedWindowRateLimiter(window_seconds=_RATE_LIMIT_WINDOW_SECONDS)
 
 
 def _require_track11b() -> None:
@@ -26,9 +35,22 @@ def _require_track11b() -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="feature_disabled")
 
 
+def _client_key(request: Request) -> str:
+    return request.client.host if request.client is not None else "unknown"
+
+
+def _enforce_rate_limit(limiter: FixedWindowRateLimiter, request: Request, *, max_events: int) -> None:
+    try:
+        limiter.check(_client_key(request), max_events=max_events)
+    except RateLimitExceededError as exc:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="rate_limited") from exc
+
+
 @router.post("/interest", response_model=PilotInterestResponse)
-def post_interest(payload: PilotInterestRequest) -> PilotInterestResponse:
+def post_interest(payload: PilotInterestRequest, request: Request) -> PilotInterestResponse:
     _require_track11b()
+    validate_request_origin(request.headers.get("origin"))
+    _enforce_rate_limit(_interest_limiter, request, max_events=get_pilot_rate_limit_settings().interest_per_ip_per_hour)
     try:
         pilot_registration_id = register_interest(journey=payload.journey, journey_run_id=payload.journey_run_id)
     except PilotServiceError as exc:
@@ -37,8 +59,10 @@ def post_interest(payload: PilotInterestRequest) -> PilotInterestResponse:
 
 
 @router.post("/mobile", response_model=PilotMobileSubmitResponse)
-def post_mobile(payload: PilotMobileSubmitRequest) -> PilotMobileSubmitResponse:
+def post_mobile(payload: PilotMobileSubmitRequest, request: Request) -> PilotMobileSubmitResponse:
     _require_track11b()
+    validate_request_origin(request.headers.get("origin"))
+    _enforce_rate_limit(_mobile_limiter, request, max_events=get_pilot_rate_limit_settings().mobile_per_ip_per_hour)
     try:
         result = submit_mobile_and_send_otp(
             pilot_registration_id=payload.pilot_registration_id,
@@ -51,8 +75,10 @@ def post_mobile(payload: PilotMobileSubmitRequest) -> PilotMobileSubmitResponse:
 
 
 @router.post("/mobile/resend", response_model=PilotMobileSubmitResponse)
-def post_mobile_resend(payload: PilotOtpResendRequest) -> PilotMobileSubmitResponse:
+def post_mobile_resend(payload: PilotOtpResendRequest, request: Request) -> PilotMobileSubmitResponse:
     _require_track11b()
+    validate_request_origin(request.headers.get("origin"))
+    _enforce_rate_limit(_mobile_limiter, request, max_events=get_pilot_rate_limit_settings().mobile_per_ip_per_hour)
     try:
         result = resend_otp(pilot_registration_id=payload.pilot_registration_id)
     except PilotServiceError as exc:
@@ -64,6 +90,7 @@ def post_mobile_resend(payload: PilotOtpResendRequest) -> PilotMobileSubmitRespo
 def post_verify(request: Request, payload: PilotOtpVerifyRequest) -> PilotOtpVerifyResponse:
     _require_track11b()
     validate_request_origin(request.headers.get("origin"))
+    _enforce_rate_limit(_verify_limiter, request, max_events=get_pilot_rate_limit_settings().verify_per_ip_per_hour)
 
     # History linking uses only a session already validated the normal way (the same cookie every other
     # authenticated route checks) — verify_otp never trusts a session id supplied directly by the client.

@@ -170,16 +170,21 @@ def replace_otp_challenge_for_resend(
     expires_at: datetime,
     now: datetime,
 ) -> None:
-    """A resend reuses the same challenge row (incrementing send_count, resetting attempts) rather than
-    creating a second row, so the one-active-challenge-per-registration invariant never needs a race-prone
-    delete-then-insert."""
+    """Reuses the same challenge row — for a resend, a same-number resubmission past cooldown, or a
+    "Change number" resubmission — rather than creating a second row, so the one-active-challenge-per-
+    registration invariant never needs a race-prone delete-then-insert.
+
+    Deliberately does NOT reset attempt_count: attempts are a lifetime budget for the registration's
+    current OTP flow, not a per-code allowance. Resetting it here would let repeated resends manufacture
+    unlimited fresh guesses against the max_attempts cap; send_count (and the caller's own per-registration
+    and per-phone caps in app/services/pilot.py) is what actually bounds how many codes get sent.
+    """
     db.execute(
         text(
             """
             UPDATE otp_challenges
             SET code_hash = :code_hash,
                 expires_at = :expires_at,
-                attempt_count = 0,
                 send_count = send_count + 1,
                 last_sent_at = :now
             WHERE otp_challenge_uuid = :otp_challenge_uuid
@@ -187,6 +192,25 @@ def replace_otp_challenge_for_resend(
         ),
         {"otp_challenge_uuid": otp_challenge_uuid, "code_hash": code_hash, "expires_at": expires_at, "now": now},
     )
+
+
+def count_recent_otp_sends_for_phone(db: Session, *, phone_number: str, since: datetime) -> int:
+    """Sums send_count across every OTP challenge (any registration, any journey) ever tied to this phone
+    number, restricted to challenges with recent send activity. Used to cap total sends to one phone number
+    across registrations — a per-registration cap alone can be bypassed by starting a fresh registration
+    for the same number, since a new registration gets its own, empty send-count budget."""
+    total = db.execute(
+        text(
+            """
+            SELECT COALESCE(SUM(oc.send_count), 0)
+            FROM otp_challenges oc
+            JOIN pilot_registrations pr ON pr.pilot_registration_uuid = oc.pilot_registration_uuid
+            WHERE pr.phone_number = :phone_number AND oc.last_sent_at >= :since
+            """
+        ),
+        {"phone_number": phone_number, "since": since},
+    ).scalar_one()
+    return int(total)
 
 
 def increment_otp_attempt(db: Session, *, otp_challenge_uuid: str) -> None:
