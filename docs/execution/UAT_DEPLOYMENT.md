@@ -536,11 +536,69 @@ the narrowly defined canary described here. The separate Lightsail UAT stays the
 preferred longer-term environment once AWS makes the instance quota effective,
 and this plan is not deleted or changed by the canary.
 
-**Status: nothing in this section has been deployed.** The decision approves the
-exception. The mutating steps run only under the [deployment
-gate](#future-deployment-gate-ordered), which is started by an explicit
-deployment authorization. Until then the legacy production release must not be
-modified.
+**Status: deployed.** The canary is live at `https://sutriva.io`, currently
+running PR #26's merge commit — see
+[Deployed state (current)](#deployed-state-current) below for the exact
+revision, migration, snapshots and verification evidence. The mutating steps
+for each deployment still run only under the [deployment
+gate](#future-deployment-gate-ordered), started by an explicit deployment
+authorization each time.
+
+### Deployed state (current)
+
+| Item | Value |
+|---|---|
+| Deployed commit | `5eb2317f1e2bfed9da07f56df4f80f63766cf5b5` (PR #26 merge) |
+| Release path | `/opt/sutriva/releases/5eb2317f1e2bfed9da07f56df4f80f63766cf5b5` |
+| Rollback release | `/opt/sutriva/releases/a65808bc12c13ba950cbc2a06a7b0dfb35c75f05` (PR #25), untouched |
+| Database migration | `0005_otp_send_log (head)`, applied to `sutriva-uat-db` only |
+| Frontend build flags | `NEXT_PUBLIC_TRACK_11A_ENABLED=true`, `NEXT_PUBLIC_TRACK_11B_ENABLED=false` |
+| Committed flags | `shared/track11_config.json` unchanged: `track11aEnabled=false`, `track11bEnabled=false` |
+| Pre-deployment instance snapshot | `sutriva-alpha-pre-pr26-5eb2317-20260925T112234Z` — verified `available` |
+| Pre-deployment database snapshot | `sutriva-uat-db-pre-pr26-5eb2317-20260925T112234Z` — verified `available` |
+
+PR #26 ships the Phase 1.1B Step 6 pilot-interest code, but it is a **code
+deployment only** — the flag-off rule above still applies in full. Verified
+after activation:
+
+- Every `/v1/pilot/*` route returns `404` (tested with schema-valid payloads,
+  not just malformed ones, to rule out a false pass from request validation
+  short-circuiting the flag check).
+- No Step 6 UI, mobile-number field, OTP interface or Twilio reference appears
+  in any served page or in any built JS chunk.
+- `pilot_registrations`, `otp_challenges` and `otp_sends` all contain zero
+  rows; no forbidden 1.1B/pilot event type exists anywhere in `product_events`.
+- A full six-record Borrow event contract, posted end-to-end through a fresh
+  anonymous session, matches the exact expected sequence and screen names.
+- `/health`, `/ready` (`migration: current`), unauthenticated external access
+  (`401`), `/docs` (`404`) and the `noindex` header all confirmed externally.
+- PR #27 (a Twilio SMS adapter for the still-disabled pilot flow) was **not**
+  deployed; the running release's tree contains no Twilio code. No SMS was
+  sent.
+
+**Deployment lessons from this rollout, carried forward for the next one:**
+
+- `/tmp` on `sutriva-alpha` is RAM-backed tmpfs (about 210 MB) on a 419 MB
+  total-memory instance. Staging a large build artifact there — even
+  temporarily — can drop `MemAvailable` below the 60 MB abort threshold before
+  any service is touched, purely from the artifact sitting in `/tmp`. Extract
+  build artifacts directly to `/opt/sutriva/releases/<sha>/...` (real disk);
+  never stage more than a few MB in `/tmp`.
+- The deploy process must copy `shared/track11_config.json` (and its parent
+  directory) into every new release. Omitting it doesn't only affect Phase
+  1.1B: `app/config.py` reads that file from the release root unconditionally,
+  so the core Borrow Better rate-config endpoints 500 without it too. This was
+  caught by the smoke test before being called complete, not left latent.
+
+**Separate from the deployment itself:** during post-deployment smoke testing,
+an operator credential file was read to test authenticated access and was
+exposed in a session transcript through a redaction error. That credential has
+since been rotated on the host (old value confirmed rejected, new value
+confirmed accepted) and the exposed local file has been removed. Unrelated
+Twilio credentials that happened to be stored in the same file were rotated
+separately by the account owner directly in the Twilio Console and were never
+used by any deployment step. No credential value appears in this document or
+in [decision_log.md](../decision_log.md).
 
 ### Scope
 
