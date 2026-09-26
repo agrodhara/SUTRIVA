@@ -1,11 +1,12 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { ensureAnonymousSessionMock, trackEventMock, track11aEnabledMock, track11bEnabledMock } = vi.hoisted(() => ({
+const { ensureAnonymousSessionMock, trackEventMock, track11aEnabledMock, track11bEnabledMock, searchParamsMock } = vi.hoisted(() => ({
   ensureAnonymousSessionMock: vi.fn(),
   trackEventMock: vi.fn(),
   track11aEnabledMock: vi.fn(() => false),
   track11bEnabledMock: vi.fn(() => false),
+  searchParamsMock: new URLSearchParams(),
 }));
 
 vi.mock("../../lib/api", () => ({
@@ -18,6 +19,10 @@ vi.mock("../../lib/journeySession", async () => {
   const actual = await vi.importActual<typeof import("../../lib/journeySession")>("../../lib/journeySession");
   return { ...actual, track11aEnabled: track11aEnabledMock, track11bEnabled: track11bEnabledMock };
 });
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => searchParamsMock,
+}));
 
 async function renderPage() {
   const pageModule = await import("./page");
@@ -39,6 +44,7 @@ describe("Money Value page flag dispatch", () => {
     track11aEnabledMock.mockReset();
     track11bEnabledMock.mockReset();
     window.sessionStorage.clear();
+    for (const key of Array.from(searchParamsMock.keys())) searchParamsMock.delete(key);
   });
 
   afterEach(() => {
@@ -54,22 +60,23 @@ describe("Money Value page flag dispatch", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Check my money value" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "See what your card use is worth." })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Your card behaviour" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Open reward finder" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Is your card giving you value where it matters?" })).not.toBeInTheDocument();
   });
 
-  it.each(FLAG_COMBINATIONS.filter(([a]) => a))("renders the final Rewards Step 2 when track11aEnabled=true (b=%s)", async (_a, b) => {
+  it.each(FLAG_COMBINATIONS.filter(([a]) => a))("renders the redesigned Rewards Intelligence landing when track11aEnabled=true (b=%s)", async (_a, b) => {
     track11aEnabledMock.mockReturnValue(true);
     track11bEnabledMock.mockReturnValue(b);
 
     await renderPage();
 
-    expect(await screen.findByRole("heading", { name: "Your card behaviour" })).toBeInTheDocument();
-    // The legacy single-page form and its 1.1A/1.1B surfaces are not reachable from the new path.
+    expect(await screen.findByRole("heading", { name: "Is your card giving you value where it matters?" })).toBeInTheDocument();
+    // The legacy single-page form is not reachable from the new path.
     expect(screen.queryByRole("button", { name: "Check my money value" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Use example values" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open reward finder" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "See what I could check next" })).not.toBeInTheDocument();
+    // All five situations are reachable from the landing choice grid.
+    for (const nav of ["Annual fee", "Card and spending fit", "Carrying a balance", "Several cards", "Unused points"]) {
+      expect(screen.getByText(new RegExp(nav))).toBeInTheDocument();
+    }
   });
 
   it("does not expose Step 6 or any pilot control in any flag combination", async () => {
@@ -80,11 +87,25 @@ describe("Money Value page flag dispatch", () => {
       await waitFor(() => expect(document.querySelector("main")).not.toBeNull());
 
       expect(screen.queryByText(/join the pilot/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/mobile number/i)).not.toBeInTheDocument();
+      // The redesigned landing legitimately says "Explore without a mobile number" — the forbidden thing
+      // is a field that collects one, not the phrase itself.
+      expect(screen.queryByLabelText(/mobile number/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("textbox", { name: /mobile/i })).not.toBeInTheDocument();
       expect(screen.queryByText(/\bOTP\b/)).not.toBeInTheDocument();
       expect(screen.queryByRole("checkbox", { name: /updates/i })).not.toBeInTheDocument();
       cleanup();
     }
+  });
+
+  it("a campaign URL opens its matching situation directly, without a chooser step", async () => {
+    track11aEnabledMock.mockReturnValue(true);
+    track11bEnabledMock.mockReturnValue(false);
+    searchParamsMock.set("situation", "fee");
+
+    await renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Did your redeemed rewards cover the fee?" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Is your card giving you value where it matters?" })).not.toBeInTheDocument();
   });
 
   it("emits no legacy continuation or consent events from the new path", async () => {
@@ -92,7 +113,7 @@ describe("Money Value page flag dispatch", () => {
     track11bEnabledMock.mockReturnValue(true);
 
     await renderPage();
-    await screen.findByRole("heading", { name: "Your card behaviour" });
+    await screen.findByRole("heading", { name: "Is your card giving you value where it matters?" });
 
     const emitted = trackEventMock.mock.calls.map(([eventType]) => eventType);
     for (const legacy of [

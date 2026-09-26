@@ -19,6 +19,9 @@ from conftest import phaseb_origin
 REWARDS = "money_value"
 BORROW = "comfortable_borrowing"
 
+_BORROW_SITUATIONS = ("borrow_debt", "borrow_purchase", "borrow_offer", "borrow_rejected")
+_REWARDS_SITUATIONS = ("rewards_fee", "rewards_fit", "rewards_balance", "rewards_multi", "rewards_unused")
+
 APPROVED_SCREEN_NAMES = {
     "rewards_card_behaviour": REWARDS,
     "rewards_priorities_inputs": REWARDS,
@@ -28,10 +31,26 @@ APPROVED_SCREEN_NAMES = {
     "borrow_plan": BORROW,
     "borrow_check": BORROW,
     "borrow_connected_example": BORROW,
+    **{f"{key}_{suffix}": BORROW for key in _BORROW_SITUATIONS for suffix in ("arrival", "inputs", "result", "pilot")},
+    **{f"{key}_{suffix}": REWARDS for key in _REWARDS_SITUATIONS for suffix in ("arrival", "inputs", "result", "pilot")},
 }
-STEP_NAMES = {"rewards_card_behaviour", "rewards_priorities_inputs", "borrow_monthly_position", "borrow_plan"}
-CHECK_NAMES = {"rewards_check", "borrow_check"}
+STEP_NAMES = {
+    "rewards_card_behaviour", "rewards_priorities_inputs", "borrow_monthly_position", "borrow_plan",
+    *(f"{key}_{suffix}" for key in (*_BORROW_SITUATIONS, *_REWARDS_SITUATIONS) for suffix in ("arrival", "inputs")),
+    # The pilot-interest form appearing after a result also reports "step_viewed" (see
+    # apps/pwa/app/situations/PilotInterestForm.tsx), so its screen names are step names too.
+    *(f"{key}_pilot" for key in (*_BORROW_SITUATIONS, *_REWARDS_SITUATIONS)),
+}
+CHECK_NAMES = {
+    "rewards_check", "borrow_check",
+    *(f"{key}_result" for key in (*_BORROW_SITUATIONS, *_REWARDS_SITUATIONS)),
+}
+# No situation has a fourth "connected example" screen — that concept belongs only to the two original,
+# now-superseded comprehensive checks, so this set is deliberately not extended.
 CONNECTED_NAMES = {"rewards_connected_example", "borrow_connected_example"}
+# The pilot-interest form's own submission (migration 0007_situation_pilot_interest) — required by the
+# "situation_pilot_interest_submitted" event type, exactly as CHECK_NAMES is required by "result_declared".
+PILOT_NAMES = {f"{key}_pilot" for key in (*_BORROW_SITUATIONS, *_REWARDS_SITUATIONS)}
 
 
 def _body(**overrides):
@@ -61,12 +80,13 @@ def _valid(**overrides) -> bool:
 # --- Contract: pure model validation ---------------------------------------
 
 
-def test_allowlist_is_exactly_the_eight_approved_values() -> None:
+def test_allowlist_is_exactly_the_approved_values() -> None:
     assert SCREEN_NAME_JOURNEY == APPROVED_SCREEN_NAMES
     assert STEP_SCREEN_NAMES == STEP_NAMES
     assert REQUIRED_SCREEN_NAMES_BY_EVENT_TYPE == {
         "result_declared": CHECK_NAMES,
         "connected_example_seen": CONNECTED_NAMES,
+        "situation_pilot_interest_submitted": PILOT_NAMES,
     }
 
 
@@ -98,7 +118,16 @@ def test_connected_example_seen_accepts_only_connected_names_on_the_matching_jou
     )
 
 
-@pytest.mark.parametrize("event_type", ["result_declared", "connected_example_seen"])
+@pytest.mark.parametrize("screen_name,journey", sorted(APPROVED_SCREEN_NAMES.items()))
+def test_situation_pilot_interest_submitted_accepts_only_pilot_names_on_the_matching_journey(
+    screen_name: str, journey: str
+) -> None:
+    assert _valid(event_type="situation_pilot_interest_submitted", journey=journey, screen_name=screen_name) is (
+        screen_name in PILOT_NAMES
+    )
+
+
+@pytest.mark.parametrize("event_type", ["result_declared", "connected_example_seen", "situation_pilot_interest_submitted"])
 @pytest.mark.parametrize("journey", [REWARDS, BORROW])
 def test_new_event_types_require_screen_name(event_type: str, journey: str) -> None:
     assert not _valid(event_type=event_type, journey=journey)
@@ -118,12 +147,22 @@ def test_cross_journey_combinations_are_rejected(screen_name: str, journey: str)
     assert not _valid(event_type=event_type, journey=other, screen_name=screen_name)
 
 
+@pytest.mark.parametrize("screen_name,journey", sorted((n, j) for n, j in APPROVED_SCREEN_NAMES.items() if n in PILOT_NAMES))
+def test_situation_pilot_interest_submitted_also_rejects_the_wrong_journey(screen_name: str, journey: str) -> None:
+    # test_cross_journey_combinations_are_rejected above always resolves a pilot name to "step_viewed"
+    # (pilot names are step names too), so it never actually exercises this event type's own cross-journey
+    # check — this closes that gap directly.
+    other = BORROW if journey == REWARDS else REWARDS
+    assert _valid(event_type="situation_pilot_interest_submitted", journey=journey, screen_name=screen_name)
+    assert not _valid(event_type="situation_pilot_interest_submitted", journey=other, screen_name=screen_name)
+
+
 def test_every_other_event_type_rejects_a_supplied_screen_name() -> None:
     from typing import get_args
 
     from app.models.product_event import ProductEventType
 
-    exempt = {"step_viewed", "step_completed", "result_declared", "connected_example_seen"}
+    exempt = {"step_viewed", "step_completed", "result_declared", "connected_example_seen", "situation_pilot_interest_submitted"}
     others = [event_type for event_type in get_args(ProductEventType) if event_type not in exempt]
     assert len(others) > 30
     for event_type in others:
@@ -170,7 +209,7 @@ def test_event_type_vocabulary_gains_exactly_the_two_approved_types_and_keeps_hi
     ],
 )
 def test_screen_name_rejects_arbitrary_or_sensitive_values(value) -> None:
-    for event_type in ("step_viewed", "result_declared", "connected_example_seen"):
+    for event_type in ("step_viewed", "result_declared", "connected_example_seen", "situation_pilot_interest_submitted"):
         assert not _valid(event_type=event_type, screen_name=value)
 
 
@@ -219,6 +258,10 @@ def test_every_approved_event_screen_pairing_persists_and_is_returned(
             event_types = ["result_declared"]
         else:
             event_types = ["connected_example_seen"]
+        if screen_name in PILOT_NAMES:
+            # A pilot screen name is both a step name (its own appearance) and this event type's required
+            # role (its submission) — see PILOT_NAMES' docstring above.
+            event_types = event_types + ["situation_pilot_interest_submitted"]
         for event_type in event_types:
             event_id = f"ok-{event_type}-{screen_name}"
             response = _post(

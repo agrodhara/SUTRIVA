@@ -1,18 +1,26 @@
 "use client";
 
+import { Suspense } from "react";
 import { track11aEnabled } from "../../lib/journeySession";
-import { BorrowJourney } from "./BorrowJourney";
+import { SituationsApp } from "../situations/SituationsApp";
 import LegacyBorrowBetterPage from "./LegacyBorrowBetterPage";
 
 /**
  * Flag gate for the Borrow Better route.
  *
  * - `track11aEnabled=false`: the existing Track 1.0 journey, unchanged.
- * - `track11aEnabled=true`: the final 1.1A Steps 2-5 journey. It never enters the legacy Reveal, Intent,
- *   Closure or terminal screens, and `track11bEnabled` does not expose anything beyond Step 5.
+ * - `track11aEnabled=true`: the redesigned 1.1A situations experience (rising EMIs, new purchase, loan
+ *   offer, rejected/offered less) — see ../situations/SituationsApp.tsx. It supersedes the previous single
+ *   Steps 2-5 journey, which is removed rather than left running alongside a route nothing links to.
  *
- * Only `track11aEnabled` is read here, so any `track11bEnabled` value resolves to one of these two paths.
+ * Only `track11aEnabled` is read here, so any `track11bEnabled` value resolves to one of these two paths;
+ * the situations app never reads or exposes the 1.1B pilot flag itself.
  */
 export default function BorrowBetterPage() {
-  return track11aEnabled() ? <BorrowJourney /> : <LegacyBorrowBetterPage />;
+  if (!track11aEnabled()) return <LegacyBorrowBetterPage />;
+  return (
+    <Suspense fallback={null}>
+      <SituationsApp group="borrow" />
+    </Suspense>
+  );
 }

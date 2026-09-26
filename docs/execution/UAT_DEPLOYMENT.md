@@ -34,10 +34,19 @@ PostgreSQL. Those endpoints return `503` when the database is unavailable.
   password when building the URL.
 - Run `alembic upgrade head` from `services/api` before starting a new
   revision. See [SETUP.md](SETUP.md). At this revision the head is
-  `0003_product_event_screen_name`.
+  `0007_situation_pilot_interest` (adds the `situation_pilot_interest` table
+  for the post-result pilot-interest email handoff — see
+  [SITUATIONS_REDESIGN.md](SITUATIONS_REDESIGN.md) — and extends the
+  `screen_name` allowlist; purely additive, no existing table or route changes
+  meaning).
 - `GET /health` is liveness only. `GET /ready` checks database connectivity and
   the Alembic head revision.
 - `DATABASE_REQUIRED` defaults to `false`. Do not rely on that default for UAT.
+- Optional: set `SITUATION_PILOT_INTEREST_ADMIN_TOKEN` (a secret, never
+  committed) if the operator will retrieve the pilot-interest list via
+  `GET /v1/situation-pilot-interest/admin/export`. Unset, that route 404s —
+  the deployment works fully without it; the token only gates that one
+  operator-only export.
 
 Audit events are separate. They are written as local JSONL under
 `/tmp/sutriva` by default, or to `AUDIT_LOG_PATH`. `/tmp` is not durable. On the

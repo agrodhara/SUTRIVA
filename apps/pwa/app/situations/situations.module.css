@@ -1,0 +1,98 @@
+/*
+ * Layout only. Every colour, radius and shadow token here is one already defined in
+ * ../../components/journey-ui/journeyUi.module.css (:root custom properties) — this module adds no new
+ * palette, matching the reviewed mockup's own colours, which were themselves drawn from this app's
+ * existing tokens.
+ */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.7fr);
+  gap: 32px;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.heroTitle {
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 8px 0 14px;
+  color: var(--navy);
+}
+
+.lead {
+  font-size: clamp(16px, 1.4vw, 19px);
+  color: var(--muted);
+  max-width: 620px;
+  margin: 0 0 14px;
+}
+
+.heroCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.linkButton {
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-weight: 800;
+  text-decoration: underline;
+  padding: 4px 0;
+  text-align: left;
+  width: fit-content;
+}
+
+.choiceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 24px 0;
+}
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  text-align: left;
+  gap: 14px;
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--page);
+  border-radius: 16px;
+  padding: 18px;
+  min-height: 96px;
+  color: var(--navy);
+  cursor: pointer;
+}
+
+.choice:hover,
+.choice:focus-visible {
+  border-color: var(--green);
+  box-shadow: 0 6px 20px rgb(27 132 85 / 0.11);
+}
+
+.choice strong {
+  display: block;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.choice small {
+  display: block;
+  color: var(--muted);
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+@media (max-width: 800px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .choiceGrid {
+    grid-template-columns: 1fr;
+  }
+}
