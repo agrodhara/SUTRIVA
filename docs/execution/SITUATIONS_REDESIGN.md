@@ -115,10 +115,33 @@ own address, not the visitor's; keying the limiter on that peer alone would put 
 proxy in one shared budget, letting one group of visitors exhaust it for everyone else. `resolve_client_ip`
 only reads `X-Forwarded-For` when the direct peer is explicitly named in `TRUSTED_PROXY_IPS` (empty by
 default — today's exact behaviour until an operator configures it), walking the chain from the right past
-any hop that is itself a trusted proxy; an untrusted caller can never spoof a different rate-limit identity
-by setting the header itself, since it is only ever consulted once the *connection* itself comes from a
-proxy this deployment named. See `docs/execution/UAT_DEPLOYMENT.md`'s persistence-requirements section for
-the operator-facing configuration note.
+any hop that is itself a trusted proxy.
+
+This depends on nginx doing its own part correctly, and getting it wrong is easy to miss without testing
+through the real chain: nginx is the *one* hop directly facing the internet here (no CDN or load balancer
+in front of it), so its `X-Forwarded-For` directive must **overwrite** any value a client sent with its own
+observed `$remote_addr`, never append to it (`$proxy_add_x_forwarded_for` or a bare pass-through of the
+client's own header both preserve whatever the client put there). Whether an appended-not-overwritten value
+is actually exploitable then depends on an assumption this deployment would otherwise be relying on without
+stating it: that a real remote visitor can never themselves connect to nginx from an address named in
+`TRUSTED_PROXY_IPS` / `--forwarded-allow-ips` — ordinarily true (a public listener's network stack rejects a
+remote packet claiming a loopback or private source address), but not something worth building a rate
+limit's correctness on when a strictly simpler, assumption-free directive exists.
+
+An earlier version of this fix used `$proxy_add_x_forwarded_for` (append) instead, on the reasoning that the
+API only trusts the right-most, nginx-appended hop. Testing it locally (a real nginx and Uvicorn process
+pair, `--forwarded-allow-ips=127.0.0.1` matching the directive) surfaced exactly the gap that reasoning
+depends on: run from one machine, the test client's own connection to the local proxy is itself from
+`127.0.0.1` — coinciding with the proxy's own trusted identity. A forged `X-Forwarded-For: 8.8.8.8` sent
+under those conditions got a fresh `200`/budget with append, and correctly reused the sender's
+already-exhausted budget (`429`) with overwrite (see `app/services/client_ip.py`'s
+`test_an_appending_edge_proxy_can_be_misled_when_the_caller_shares_its_trusted_address` for the same case as
+a unit test). Whether that same coincidence could ever occur for a genuine remote visitor against a
+correctly network-isolated production host is exactly the assumption above — overwrite removes the need to
+reason about it at all, which is why it is the directive used here, not because append was demonstrated to
+be exploitable from the open internet against this specific topology. See
+`docs/execution/UAT_DEPLOYMENT.md`'s nginx section for the corrected directive, and
+`app/services/client_ip.py` for the algorithm it must agree with.
 
 **Operator retrieval, not a public API.** `GET /v1/situation-pilot-interest/admin/export` is excluded from
 the OpenAPI schema (`include_in_schema=False`), not linked from the frontend anywhere, rate-limited
@@ -150,6 +173,80 @@ and deployed, flag-gated and dormant.
 - The mockup's simulated ad screen was dropped: ads are a separate campaign asset, not part of the
   customer website.
 - Prototype labels and review navigation from the mockup do not appear anywhere in the shipped experience.
+
+## Proxy-chain deployment smoke test
+
+Run this once, on the actual deployed nginx + Uvicorn + API, after the configuration in
+`docs/execution/UAT_DEPLOYMENT.md` (the nginx `X-Forwarded-For` directive, `--forwarded-allow-ips`, and
+`TRUSTED_PROXY_IPS` all naming the same trusted address) is in place, and before pilot-interest email
+capture is relied on for real visitors. It exercises the deployed proxy chain directly — an automated test
+against the bare FastAPI app (see `tests/test_situation_pilot_interest.py`) cannot exercise nginx or
+uvicorn's own `ProxyHeadersMiddleware` at all, so this is the one check nothing else in this PR substitutes
+for.
+
+**Safety, so nothing here touches a real address or a real visitor's budget:**
+- Use a syntactically valid but non-deliverable address for every test submission, tagged so it's
+  identifiable afterward: `proxy-smoketest+<unix-timestamp>@example.com`. `example.com` is IANA-reserved for
+  documentation and testing and never delivers mail to anyone.
+- This uses only access already authorized for the closed canary/UAT (the owner and named testers behind
+  Basic Auth) — no new exposure and no additional visitor is affected.
+- The rate limiter is process-local, in-memory state (see `app/services/pilot_rate_limit.py`'s
+  `FixedWindowRateLimiter` docstring) that clears on its own within the one-hour window with no action
+  needed; the test rows this leaves in `situation_pilot_interest` do not, so remove them afterward:
+  `DELETE FROM situation_pilot_interest WHERE email LIKE 'proxy-smoketest+%@example.com';` (run directly by
+  whoever has database access — there is no delete endpoint, by design, since the export route is
+  read-only).
+- If the API is ever run as more than one worker process, this in-memory limiter is not shared across them
+  and this test's results are not meaningful until it is backed by a shared store (Redis or similar) —
+  confirm a single worker before relying on this test.
+
+**1. Repeated requests from one real address reach 429.** From one real client (your own connection to the
+canary), submit distinct test emails in a loop:
+
+```bash
+for i in $(seq 1 11); do
+  curl -s -o /dev/null -w '%{http_code}\n' \
+    -X POST "https://<canary-host>/v1/situation-pilot-interest" \
+    -H "Origin: https://<canary-host>" -H "Content-Type: application/json" \
+    -u "<basic-auth-user>:<basic-auth-password>" \
+    -d "{\"situation_key\":\"fee\",\"email\":\"proxy-smoketest+$(date +%s)-$i@example.com\"}"
+done
+```
+
+Expect ten `200`s (or fewer, matching the configured
+`SITUATION_PILOT_INTEREST_SUBMIT_PER_IP_PER_HOUR`) followed by `429` — proving the limit applies at all
+through the deployed chain.
+
+**2. A forged `X-Forwarded-For` must not evade it.** Immediately after (1), from the same real connection,
+retry with a fabricated header claiming a different address:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -X POST "https://<canary-host>/v1/situation-pilot-interest" \
+  -H "Origin: https://<canary-host>" -H "Content-Type: application/json" \
+  -H "X-Forwarded-For: 8.8.8.8" \
+  -u "<basic-auth-user>:<basic-auth-password>" \
+  -d "{\"situation_key\":\"fee\",\"email\":\"proxy-smoketest+$(date +%s)-forged@example.com\"}"
+```
+
+Expect `429`, the same as (1) — nginx's `X-Forwarded-For $remote_addr` directive **overwrites** this header
+with your real connecting address, discarding the `8.8.8.8` you claimed entirely before the request ever
+reaches Uvicorn or the API, so there is nothing left for either of them to be misled by (see
+`app/services/client_ip.py` and the corrected nginx directive in `docs/execution/UAT_DEPLOYMENT.md`). If
+this instead returns `200` (a fresh budget), the edge is appending to `X-Forwarded-For` instead of
+overwriting it — check the live nginx configuration against the documented directive immediately; this is
+exactly the misconfiguration this smoke test exists to catch, and it was caught this way once already while
+developing this fix (see the paragraph above, in "Protections").
+
+**3. Two genuinely different real addresses get independent budgets.** Unlike (1) and (2), this cannot be
+proven by manipulating a header from one connection — that is exactly the thing (2) shows does *not* work.
+It needs two real, different network paths reaching the canary: for example, the operator's own connection
+and a second named tester's, or the operator's own connection over two different networks (e.g. office
+network, then a VPN or mobile hotspot). From each, repeat step (1)'s loop with its own timestamp-tagged
+emails; expect each to independently reach ten `200`s before its own `429`, unaffected by the other's usage.
+
+If any of these three does not hold on the deployed host, email capture must not be relied on for real
+visitors until it does — the rate limit is either shared (fails (1) or (3)) or spoofable (fails (2)).
 
 ## Future deployment note
 

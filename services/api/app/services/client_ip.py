@@ -60,11 +60,31 @@ def resolve_client_ip(request: Request, *, trusted_proxies: tuple[IpNetwork, ...
     named in `TRUSTED_PROXY_IPS`.
 
     When the peer is trusted and a forwarded-for chain is present, this walks the chain from the right
-    (nearest to us) and returns the first hop that is *not* itself a trusted proxy — the real client as
-    seen by our own trusted proxy chain. A value a visitor injected at the left/start of the header cannot
-    make it through: it is only ever reached by walking past every hop *we* recognise as one of our own
-    proxies, so an attacker who is not connecting from a trusted address has no way to make this function
-    return anything but their own real peer address.
+    (nearest to us) and returns the first hop that is *not* itself a trusted proxy.
+
+    IMPORTANT — this alone does not stop a visitor from choosing their own identity; it depends on the
+    trusted edge proxy itself never forwarding a value the visitor supplied. This function has no way to
+    tell "a value our own trusted proxy appended, describing another proxy further out" apart from "a value
+    the original visitor typed into their own outbound header and the edge proxy left untouched" — both
+    just look like an extra hop to walk past. That distinction rests entirely on the assumption that a real
+    remote visitor can never themselves connect from an address this deployment lists in `TRUSTED_PROXY_IPS`
+    — normally true (a public listener's network stack rejects a remote packet claiming a loopback or
+    private source address; a real attacker cannot make their own connection appear to originate from
+    `127.0.0.1`), but an assumption this function cannot verify or enforce itself, and one that a same-host
+    testing setup cannot avoid relying on (the test client's own connection to a local proxy IS from
+    `127.0.0.1`, coinciding with the proxy's own trusted identity — see
+    test_client_ip.py's test_an_appending_edge_proxy_can_be_misled_when_the_caller_shares_its_trusted_address
+    for exactly this).
+
+    The nginx directive this deployment uses (`X-Forwarded-For $remote_addr`, in
+    docs/execution/UAT_DEPLOYMENT.md) OVERWRITES anything the visitor sent with nginx's own observed peer
+    instead of appending to it, removing this assumption entirely: there is nothing of the visitor's own
+    claimed value left in the header by the time it reaches Uvicorn or this function, regardless of what
+    address the visitor connects from. nginx is the one hop directly facing the internet, with no other
+    proxy in front of it, so it is the one that must discard rather than preserve. If a future topology adds
+    a genuine second proxy hop in front of nginx (e.g. a CDN), that outer-most hop is the one that must
+    overwrite; every hop after it may then safely append, since nothing between it and here can any longer
+    contain an unverified value.
     """
     trusted = trusted_proxies if trusted_proxies is not None else get_trusted_proxy_networks()
     peer = request.client.host if request.client is not None else None

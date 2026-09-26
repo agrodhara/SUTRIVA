@@ -93,12 +93,39 @@ def test_multiple_chained_trusted_proxies_resolve_to_the_real_client_at_the_left
 
 
 def test_a_client_injected_hop_before_the_real_trusted_chain_is_not_returned():
-    # An attacker connecting through the real trusted proxy chain cannot plant a fake address ahead of it:
-    # walking from the right (nearest to us) past the trusted hops still lands on the real client, because
-    # every hop the attacker could have injected is to the left of the proxy's own honestly-appended hop.
-    # Here "9.9.9.9" is a value the origin client supplied and the proxy dutifully appended after it.
+    # A genuine two-hop chain: an origin client's own claimed "9.9.9.9" reaches an INTERMEDIATE trusted
+    # proxy (not the internet-facing edge — some further-out system already set the header), which
+    # correctly appends its own honestly-observed peer, "203.0.113.7", after it. Walking from the right
+    # (nearest to us) past that one trusted hop still lands on "203.0.113.7" — the real, proxy-observed
+    # value, not the client's own claim. This is safe specifically because "203.0.113.7" was appended by
+    # our own trusted proxy, not supplied by the untrusted origin — see
+    # test_an_appending_edge_proxy_can_be_misled_when_the_caller_shares_its_trusted_address below for why
+    # this reasoning breaks down when the "trusted proxy" here is instead the single hop directly facing
+    # genuinely untrusted internet traffic, which must overwrite rather than append (see
+    # docs/execution/UAT_DEPLOYMENT.md's nginx directive).
     request = _request(peer="10.0.0.5", headers={"X-Forwarded-For": "9.9.9.9, 203.0.113.7"})
     assert resolve_client_ip(request, trusted_proxies=_networks("10.0.0.5")) == "203.0.113.7"
+
+
+def test_an_appending_edge_proxy_can_be_misled_when_the_caller_shares_its_trusted_address():
+    # This demonstrates exactly why the internet-facing edge proxy must OVERWRITE X-Forwarded-For, not
+    # append to it (docs/execution/UAT_DEPLOYMENT.md's nginx directive), and why that requirement cannot be
+    # dropped even though a real deployment's own network stack should stop a genuine remote attacker from
+    # ever connecting from an address inside TRUSTED_PROXY_IPS in the first place (a public listener
+    # rejects a remote packet claiming a loopback or private source). This function has no way to verify
+    # that assumption itself, and cannot tell an honestly-appended further-out hop (safe — the case above)
+    # apart from a visitor's own claimed value that an appending edge proxy merely left in place (unsafe —
+    # this case): both are just "one more hop to walk past."
+    #
+    # Here the trusted proxy (10.0.0.5) is the one hop directly facing the caller, and — misconfigured to
+    # append rather than overwrite — merely appended ITS OWN observed peer address after whatever the
+    # caller already sent. Because the caller's connection to that proxy happens to come from an address
+    # the proxy itself considers trusted (exactly what happens when a test client and the proxy share the
+    # same loopback address, and precisely how this exact misconfiguration was found while developing this
+    # fix), the walk skips straight past it and returns the caller's own forged value instead of the proxy's
+    # observation.
+    request = _request(peer="10.0.0.5", headers={"X-Forwarded-For": "8.8.8.8, 10.0.0.5"})
+    assert resolve_client_ip(request, trusted_proxies=_networks("10.0.0.5")) == "8.8.8.8"
 
 
 def test_every_hop_being_a_trusted_proxy_falls_back_to_the_nearest_one():
