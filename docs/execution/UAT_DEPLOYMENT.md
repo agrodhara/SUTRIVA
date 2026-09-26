@@ -34,10 +34,63 @@ PostgreSQL. Those endpoints return `503` when the database is unavailable.
   password when building the URL.
 - Run `alembic upgrade head` from `services/api` before starting a new
   revision. See [SETUP.md](SETUP.md). At this revision the head is
-  `0003_product_event_screen_name`.
+  `0007_situation_pilot_interest` (adds the `situation_pilot_interest` table
+  for the post-result pilot-interest email handoff — see
+  [SITUATIONS_REDESIGN.md](SITUATIONS_REDESIGN.md) — and extends the
+  `screen_name` allowlist; purely additive, no existing table or route changes
+  meaning).
 - `GET /health` is liveness only. `GET /ready` checks database connectivity and
   the Alembic head revision.
 - `DATABASE_REQUIRED` defaults to `false`. Do not rely on that default for UAT.
+- Optional: set `SITUATION_PILOT_INTEREST_ADMIN_TOKEN` (a secret, never
+  committed) if the operator will retrieve the pilot-interest list via
+  `GET /v1/situation-pilot-interest/admin/export`. Unset, that route 404s —
+  the deployment works fully without it; the token only gates that one
+  operator-only export.
+- **Required before the pilot-interest email capture goes live behind the
+  documented nginx reverse proxy** — three settings must all name the same
+  trusted address (nginx's own connecting address; `127.0.0.1` for this
+  same-host, loopback-proxied topology) or the rate limit silently keys on
+  that one shared proxy address for every visitor:
+  1. nginx's `/v1/` location must set the real client address — see
+     [B. nginx](#b-nginx-same-origin-routing-and-access)'s
+     `X-Forwarded-For $remote_addr` directive below, which **overwrites**
+     any value a client sent rather than appending to it (nginx is the one
+     hop directly facing the internet here, so it must discard whatever a
+     visitor claims, not preserve it — see that directive's own comment for
+     why `$proxy_add_x_forwarded_for`/append is unsafe at this exact
+     position and was found and corrected during this fix). Without this
+     header set at all, there is nothing for either uvicorn or the API to
+     read, no matter what the other two settings say.
+  2. **Uvicorn itself**, not just this application, resolves the real client
+     address from that header: `--forwarded-allow-ips` (see step 3 of
+     [A. Deploy on the UAT host](#a-deploy-on-the-uat-host) below) tells
+     uvicorn's own `ProxyHeadersMiddleware` which directly-connecting peers
+     it may trust to set `X-Forwarded-For`, and — this is enabled **by
+     default** (`proxy_headers=True`, defaulting to trusting `127.0.0.1`)
+     even if the startup command passes no proxy-related flag at all. Do
+     not assume the application only ever sees `127.0.0.1` as the direct
+     peer: once nginx forwards the header and uvicorn's trusted-peer check
+     matches, uvicorn rewrites the request's client address to the real
+     visitor *before this application's own code ever runs* — set
+     `--forwarded-allow-ips` explicitly rather than relying on the implicit
+     default, so a future change to the startup command can't silently
+     drop it.
+  3. The application's own `TRUSTED_PROXY_IPS` env var (comma-separated IPs
+     and/or CIDR ranges) must name the same address as (2). This is a
+     second, defense-in-depth layer (`app/services/client_ip.py`'s
+     `resolve_client_ip`), not the primary mechanism — by the time it runs,
+     uvicorn has typically already resolved the real address (per (2)), so
+     this layer's own trusted-peer check will usually see that already-
+     resolved address, not the proxy's, and simply pass it through
+     unchanged. It becomes the *active* layer only if `--proxy-headers` is
+     ever disabled. Left at its empty default, an untrusted caller can never
+     spoof a different rate-limit identity just by setting
+     `X-Forwarded-For` themselves — it is only ever consulted once the
+     *connection itself* comes from a named, trusted address. See
+     `docs/execution/SITUATIONS_REDESIGN.md` for the full design, and its
+     "Proxy-chain deployment smoke test" for how to verify all three agree
+     on a live host without submitting real email addresses.
 
 Audit events are separate. They are written as local JSONL under
 `/tmp/sutriva` by default, or to `AUDIT_LOG_PATH`. `/tmp` is not durable. On the
@@ -168,12 +221,23 @@ changes. Keep the repository layout intact: the API reads
    alembic current
    ```
 
-3. Start the API bound to loopback only:
+3. Start the API bound to loopback only, explicitly naming nginx's own
+   connecting address as the one peer uvicorn's built-in `ProxyHeadersMiddleware`
+   may trust to set `X-Forwarded-For` (uvicorn enables this by default even
+   without the flag, trusting `127.0.0.1` implicitly — passing it explicitly
+   here means that trust boundary is visible in this command, not left to an
+   unstated default, and stays correct if nginx and the API are ever split
+   onto different hosts):
 
    ```bash
    cd services/api
-   PYTHONPATH=../decision_engine python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+   PYTHONPATH=../decision_engine python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --forwarded-allow-ips=127.0.0.1
    ```
+
+   Also set `TRUSTED_PROXY_IPS=127.0.0.1` in the API's environment (see
+   [Persistence requirements](#persistence-requirements) above) — the same
+   address, so this application's own defense-in-depth layer agrees with
+   uvicorn's.
 
 4. Build and start the PWA. The values are baked into the bundle at build time:
 
@@ -247,6 +311,30 @@ server {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # $remote_addr — nginx's own directly-observed connecting peer — OVERWRITES any
+        # X-Forwarded-For a client sent; it is not appended to it. nginx is the only listener
+        # exposed to the internet here (no CDN or load balancer in front of it), so it is the
+        # one hop that must discard whatever a visitor claims and substitute what it actually
+        # saw, rather than $proxy_add_x_forwarded_for (append) or $http_x_forwarded_for
+        # (pass-through). Both of those preserve a value the client supplied; whether that is
+        # exploitable then depends on an assumption this directive is written to avoid needing
+        # at all — that a real remote visitor can never themselves connect from an address this
+        # deployment names in TRUSTED_PROXY_IPS / --forwarded-allow-ips (normally true — a public
+        # listener's network stack rejects a remote packet claiming a loopback or private source
+        # address — but not something to build a security control on top of when a strictly
+        # simpler, assumption-free option exists). Confirmed locally (a real nginx + Uvicorn
+        # process pair, with --forwarded-allow-ips=127.0.0.1 matching this exact directive):
+        # testing from one machine necessarily has the test client and the trusted proxy share
+        # that same loopback address, which is exactly the condition under which append/
+        # pass-through stops being safe — a forged X-Forwarded-For got a fresh rate-limit budget
+        # (200) with either of those, and correctly reused the sender's already-exhausted budget
+        # (429) with this overwrite directive (see app/services/client_ip.py's
+        # test_an_appending_edge_proxy_can_be_misled_when_the_caller_shares_its_trusted_address
+        # for the same case reduced to a unit test). See
+        # docs/execution/SITUATIONS_REDESIGN.md's "Proxy-chain deployment smoke test" to repeat
+        # the check end-to-end on the deployed host, and app/services/client_ip.py for the
+        # API-side logic this directive must agree with.
+        proxy_set_header X-Forwarded-For $remote_addr;
     }
     location = /health { proxy_pass http://127.0.0.1:8000; proxy_set_header Host $host; }
     location = /ready  { proxy_pass http://127.0.0.1:8000; proxy_set_header Host $host; }

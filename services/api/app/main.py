@@ -14,6 +14,8 @@ from app.routers import (
     money_value,
     pilot,
     product_events,
+    situation_pilot_interest,
+    situations,
 )
 
 app = FastAPI(
@@ -52,3 +54,6 @@ app.include_router(money_value.router)
 app.include_router(financial_intelligence.router)
 app.include_router(product_events.router)
 app.include_router(pilot.router)
+app.include_router(situations.borrow_router)
+app.include_router(situations.rewards_router)
+app.include_router(situation_pilot_interest.router)

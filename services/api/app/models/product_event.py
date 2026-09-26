@@ -57,6 +57,12 @@ ProductEventType = Literal[
     "otp_sent",
     "otp_verified",
     "optional_updates_opted_in",
+    # The 1.1A situation pilot-interest email handoff (consolidated product correction — Copilot review +
+    # founder decisions, 2026-09-26; see app/routers/situation_pilot_interest.py). Distinct from the
+    # Phase 1.1B "pilot_interest_clicked" above: that is a Step 6A interest click with no email; this is
+    # the 1.1A form's own submission. Never carries an email — see TrackEventDetails' screen_name-only
+    # payload shape, which structurally cannot.
+    "situation_pilot_interest_submitted",
 ]
 
 STEP6_EVENT_TYPES = {
@@ -76,6 +82,50 @@ ScreenNameType = Literal[
     "borrow_plan",
     "borrow_check",
     "borrow_connected_example",
+    # The nine narrow Phase 1.1A situation checks (see docs/execution/SITUATIONS_REDESIGN.md): each gets
+    # exactly an "arrival" (question-framing), "inputs" and "result" screen. Added by migration
+    # 0006_situation_screen_names, which is the single source for keeping this list and
+    # SCREEN_NAME_JOURNEY below in sync with what the database actually accepts.
+    "borrow_debt_arrival",
+    "borrow_debt_inputs",
+    "borrow_debt_result",
+    "borrow_purchase_arrival",
+    "borrow_purchase_inputs",
+    "borrow_purchase_result",
+    "borrow_offer_arrival",
+    "borrow_offer_inputs",
+    "borrow_offer_result",
+    "borrow_rejected_arrival",
+    "borrow_rejected_inputs",
+    "borrow_rejected_result",
+    "rewards_fee_arrival",
+    "rewards_fee_inputs",
+    "rewards_fee_result",
+    "rewards_fit_arrival",
+    "rewards_fit_inputs",
+    "rewards_fit_result",
+    "rewards_balance_arrival",
+    "rewards_balance_inputs",
+    "rewards_balance_result",
+    "rewards_multi_arrival",
+    "rewards_multi_inputs",
+    "rewards_multi_result",
+    "rewards_unused_arrival",
+    "rewards_unused_inputs",
+    "rewards_unused_result",
+    # The optional, post-result pilot-interest email form each situation's result screen may show. Added
+    # by migration 0007_situation_pilot_interest. One per situation, used by "step_viewed" (the form
+    # appearing) and "situation_pilot_interest_submitted" (its submission) — never by "result_declared" or
+    # "step_completed", which keep their existing, unrelated meanings for this flow.
+    "borrow_debt_pilot",
+    "borrow_purchase_pilot",
+    "borrow_offer_pilot",
+    "borrow_rejected_pilot",
+    "rewards_fee_pilot",
+    "rewards_fit_pilot",
+    "rewards_balance_pilot",
+    "rewards_multi_pilot",
+    "rewards_unused_pilot",
 ]
 
 JourneyType = Literal["money_value", "comfortable_borrowing"]
@@ -146,6 +196,11 @@ JOURNEY_REASONS = {
 
 # screen_name is categorical only. Each value belongs to exactly one journey and
 # one screen role; the tables below are the single source for that mapping.
+_SITUATION_KEYS_BY_JOURNEY = {
+    "comfortable_borrowing": ("borrow_debt", "borrow_purchase", "borrow_offer", "borrow_rejected"),
+    "money_value": ("rewards_fee", "rewards_fit", "rewards_balance", "rewards_multi", "rewards_unused"),
+}
+
 SCREEN_NAME_JOURNEY: dict[str, str] = {
     "rewards_card_behaviour": "money_value",
     "rewards_priorities_inputs": "money_value",
@@ -155,13 +210,29 @@ SCREEN_NAME_JOURNEY: dict[str, str] = {
     "borrow_plan": "comfortable_borrowing",
     "borrow_check": "comfortable_borrowing",
     "borrow_connected_example": "comfortable_borrowing",
+    **{
+        f"{key}_{suffix}": journey
+        for journey, keys in _SITUATION_KEYS_BY_JOURNEY.items()
+        for key in keys
+        for suffix in ("arrival", "inputs", "result", "pilot")
+    },
 }
+
+_SITUATION_ARRIVAL_AND_INPUTS_SCREEN_NAMES = {
+    f"{key}_{suffix}" for keys in _SITUATION_KEYS_BY_JOURNEY.values() for key in keys for suffix in ("arrival", "inputs")
+}
+_SITUATION_RESULT_SCREEN_NAMES = {f"{key}_result" for keys in _SITUATION_KEYS_BY_JOURNEY.values() for key in keys}
+_SITUATION_PILOT_SCREEN_NAMES = {f"{key}_pilot" for keys in _SITUATION_KEYS_BY_JOURNEY.values() for key in keys}
 
 STEP_SCREEN_NAMES = {
     "rewards_card_behaviour",
     "rewards_priorities_inputs",
     "borrow_monthly_position",
     "borrow_plan",
+    *_SITUATION_ARRIVAL_AND_INPUTS_SCREEN_NAMES,
+    # The pilot-interest form appearing after a result is reported with "step_viewed", the same event
+    # type its arrival/inputs screens use — see app/situations/PilotInterestForm.tsx.
+    *_SITUATION_PILOT_SCREEN_NAMES,
 }
 
 # Event types that may carry a Step 2/3 screen_name (optional, legacy compatible).
@@ -169,8 +240,9 @@ STEP_EVENT_TYPES = {"step_viewed", "step_completed"}
 
 # Event types that require a specific screen_name role.
 REQUIRED_SCREEN_NAMES_BY_EVENT_TYPE: dict[str, set[str]] = {
-    "result_declared": {"rewards_check", "borrow_check"},
+    "result_declared": {"rewards_check", "borrow_check", *_SITUATION_RESULT_SCREEN_NAMES},
     "connected_example_seen": {"rewards_connected_example", "borrow_connected_example"},
+    "situation_pilot_interest_submitted": _SITUATION_PILOT_SCREEN_NAMES,
 }
 
 VIEW_EVENT_TYPES = {"teaser_viewed", "teaser_cta_selected", "next_interest_viewed", "next_interest_skipped"}

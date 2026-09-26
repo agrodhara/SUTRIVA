@@ -84,7 +84,11 @@ export type ProductEventType =
   | "mobile_submitted"
   | "otp_sent"
   | "otp_verified"
-  | "optional_updates_opted_in";
+  | "optional_updates_opted_in"
+  // The 1.1A situation pilot-interest email handoff (see app/situations/PilotInterestForm.tsx). Distinct
+  // from "pilot_interest_clicked" above, which is the unrelated Phase 1.1B Step 6A event. Never carries an
+  // email — see TrackEventDetails below, whose screenName-only shape structurally cannot hold one.
+  | "situation_pilot_interest_submitted";
 
 /**
  * Bounded, categorical screen identifier for final 1.1A journey events. Mirrors the API allowlist;
@@ -98,7 +102,47 @@ export type ScreenName =
   | "borrow_monthly_position"
   | "borrow_plan"
   | "borrow_check"
-  | "borrow_connected_example";
+  | "borrow_connected_example"
+  // The nine narrow Phase 1.1A situation checks — see apps/pwa/app/situations/situationsConfig.ts and
+  // migration 0006_situation_screen_names, the single source every one of these must match exactly.
+  | "borrow_debt_arrival"
+  | "borrow_debt_inputs"
+  | "borrow_debt_result"
+  | "borrow_purchase_arrival"
+  | "borrow_purchase_inputs"
+  | "borrow_purchase_result"
+  | "borrow_offer_arrival"
+  | "borrow_offer_inputs"
+  | "borrow_offer_result"
+  | "borrow_rejected_arrival"
+  | "borrow_rejected_inputs"
+  | "borrow_rejected_result"
+  | "rewards_fee_arrival"
+  | "rewards_fee_inputs"
+  | "rewards_fee_result"
+  | "rewards_fit_arrival"
+  | "rewards_fit_inputs"
+  | "rewards_fit_result"
+  | "rewards_balance_arrival"
+  | "rewards_balance_inputs"
+  | "rewards_balance_result"
+  | "rewards_multi_arrival"
+  | "rewards_multi_inputs"
+  | "rewards_multi_result"
+  | "rewards_unused_arrival"
+  | "rewards_unused_inputs"
+  | "rewards_unused_result"
+  // The optional, post-result pilot-interest email form (see ../app/situations/PilotInterestForm.tsx and
+  // migration 0007_situation_pilot_interest, the single source every one of these must match exactly).
+  | "borrow_debt_pilot"
+  | "borrow_purchase_pilot"
+  | "borrow_offer_pilot"
+  | "borrow_rejected_pilot"
+  | "rewards_fee_pilot"
+  | "rewards_fit_pilot"
+  | "rewards_balance_pilot"
+  | "rewards_multi_pilot"
+  | "rewards_unused_pilot";
 
 export type TrackEventDetails = {
   cardCheckNumber?: number;
