@@ -129,6 +129,42 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     await user.click(screen.getByRole("button", { name: "Adjust figures" }));
     expect((screen.getByLabelText("Monthly EMI offered") as HTMLInputElement).value).toBe("22000");
   });
+
+  it("a fractional tenure is rejected on the client, never silently rounded and sent to the API", async () => {
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="offer" onExit={vi.fn()} />);
+    await goToInputs(user);
+
+    const tenureField = screen.getByLabelText("Tenure in months");
+    await user.clear(tenureField);
+    await user.type(tenureField, "48.5");
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+
+    expect(await screen.findByText("Enter a whole number of months (no decimals).")).toBeInTheDocument();
+    // No network request was made at all — the value was never forwarded, rounded or not.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a whole-number tenure (including one written with a trailing .0) is sent to the API unmodified", async () => {
+    let sentBody: unknown = null;
+    global.fetch = vi.fn((_url: string, init?: RequestInit) => {
+      sentBody = init?.body ? JSON.parse(String(init.body)) : null;
+      return Promise.resolve({ ok: true, status: 200, json: async () => LOAN_OFFER_RESULT });
+    }) as unknown as typeof fetch;
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="offer" onExit={vi.fn()} />);
+    await goToInputs(user);
+
+    const tenureField = screen.getByLabelText("Tenure in months");
+    await user.clear(tenureField);
+    await user.type(tenureField, "48.0");
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+
+    await screen.findByText("₹2,56,000 estimated interest");
+    expect((sentBody as { months: number }).months).toBe(48);
+  });
 });
 
 describe("SituationFlow — Annual fee (lead path)", () => {

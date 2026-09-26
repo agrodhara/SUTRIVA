@@ -26,6 +26,7 @@ from app.models.situation_pilot_interest import (
     PilotInterestEmailResponse,
 )
 from app.services.anonymous_sessions import AnonymousSessionHttpError, get_cookie_name, validate_event_session, validate_request_origin
+from app.services.client_ip import resolve_client_ip
 from app.services.pilot_rate_limit import FixedWindowRateLimiter, RateLimitExceededError
 from app.services.situation_pilot_interest import SituationPilotInterestError, list_pilot_interest_for_admin, register_pilot_interest
 from app.situations_pilot_interest_config import get_situation_pilot_interest_admin_token, get_situation_pilot_interest_rate_limit_settings
@@ -47,7 +48,11 @@ def _require_track11a() -> None:
 
 
 def _client_key(request: Request) -> str:
-    return request.client.host if request.client is not None else "unknown"
+    # Trusted-proxy-aware: behind the documented nginx reverse proxy, the raw TCP peer is always nginx's
+    # own address, not the visitor's, which would put every visitor in one shared rate-limit bucket unless
+    # X-Forwarded-For is consulted — but only once nginx's address is named in TRUSTED_PROXY_IPS, so an
+    # untrusted caller can never spoof this by setting the header itself. See app/services/client_ip.py.
+    return resolve_client_ip(request)
 
 
 def _enforce_rate_limit(limiter: FixedWindowRateLimiter, request: Request, *, max_events: int) -> None:

@@ -19,7 +19,10 @@ export type SituationKey =
   | "multi"
   | "unused";
 
-export type FieldType = "select" | "optional" | "conditional" | undefined;
+/** "wholeNumber" marks a field the API only accepts as a whole number (currently the two tenure-in-months
+ * fields) — the client must reject a fractional entry itself rather than silently rounding it before the
+ * API ever sees it; see SituationFlow.tsx's invalidWholeMonthField and toRequestBody. */
+export type FieldType = "select" | "optional" | "conditional" | "wholeNumber" | undefined;
 
 export type FieldDef = {
   id: string;
@@ -95,7 +98,7 @@ export const SITUATIONS: Record<SituationKey, SituationCopy> = {
       { id: "price", label: "Purchase price", example: 1200000 },
       { id: "down", label: "Amount you could pay upfront", example: 300000 },
       { id: "emi", label: "EMI quoted for this purchase", example: 24000 },
-      { id: "months", label: "Quoted tenure in months", example: 48 },
+      { id: "months", label: "Quoted tenure in months", example: 48, type: "wholeNumber" },
       { id: "income", label: "Monthly take-home income", example: 95000 },
       { id: "costs", label: "Current EMIs and essential spending", example: 60000 },
     ],
@@ -111,7 +114,7 @@ export const SITUATIONS: Record<SituationKey, SituationCopy> = {
     fields: [
       { id: "principal", label: "Loan amount offered", example: 800000 },
       { id: "emi", label: "Monthly EMI offered", example: 22000 },
-      { id: "months", label: "Tenure in months", example: 48 },
+      { id: "months", label: "Tenure in months", example: 48, type: "wholeNumber" },
       { id: "income", label: "Monthly take-home income", example: 95000 },
       { id: "costs", label: "Current EMIs and essential spending", example: 60000 },
     ],
@@ -212,4 +215,13 @@ export function otherGroup(group: SituationGroup): SituationGroup {
 
 export function isSituationKey(value: string | null): value is SituationKey {
   return !!value && value in SITUATIONS;
+}
+
+/** Like isSituationKey, but also requires the key to belong to the given group — a valid key from the
+ * *other* group (e.g. `?situation=offer` on /money-value, or `?situation=fee` on /borrow-better) must not
+ * open that situation under the wrong journey's header and copy. Used for the campaign-URL entry point in
+ * SituationsApp.tsx; the landing choice grid never needs this since it only ever offers keys already
+ * scoped to its own group (see situationsInGroup). */
+export function isSituationKeyInGroup(value: string | null, group: SituationGroup): value is SituationKey {
+  return isSituationKey(value) && SITUATIONS[value].group === group;
 }

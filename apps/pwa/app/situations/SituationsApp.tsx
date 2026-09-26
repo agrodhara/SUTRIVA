@@ -7,7 +7,7 @@ import ui from "../../components/journey-ui/journeyUi.module.css";
 import { ensureAnonymousSession } from "../../lib/api";
 import { SituationFlow, type Step } from "./SituationFlow";
 import { SituationLanding } from "./SituationLanding";
-import { GROUP_COPY, isSituationKey, type SituationGroup, type SituationKey } from "./situationsConfig";
+import { GROUP_COPY, isSituationKeyInGroup, type SituationGroup, type SituationKey } from "./situationsConfig";
 
 const STEP_NUMBER: Record<Step, number> = { arrival: 1, inputs: 2, result: 3 };
 const SITUATION_FLOW_TOTAL_STEPS = 3;
@@ -22,7 +22,10 @@ const SITUATION_FLOW_TOTAL_STEPS = 3;
 export function SituationsApp({ group }: { group: SituationGroup }) {
   const searchParams = useSearchParams();
   const requested = searchParams.get("situation");
-  const [active, setActive] = useState<SituationKey | null>(() => (isSituationKey(requested) ? requested : null));
+  // A key from the *other* group (e.g. ?situation=offer on /money-value) must not open that situation
+  // under this journey's header and copy — falls back to the landing chooser exactly as an unrecognized
+  // key already does.
+  const [active, setActive] = useState<SituationKey | null>(() => (isSituationKeyInGroup(requested, group) ? requested : null));
   const [situationStep, setSituationStep] = useState<Step>("arrival");
 
   useEffect(() => {
@@ -43,7 +46,7 @@ export function SituationsApp({ group }: { group: SituationGroup }) {
       {active ? (
         <SituationFlow key={active} situationKey={active} onExit={() => setActive(null)} onStepChange={setSituationStep} />
       ) : (
-        <SituationLanding group={group} onChoose={(key) => isSituationKey(key) && setActive(key)} />
+        <SituationLanding group={group} onChoose={(key) => isSituationKeyInGroup(key, group) && setActive(key)} />
       )}
     </main>
   );

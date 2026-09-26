@@ -108,6 +108,18 @@ describe("Money Value page flag dispatch", () => {
     expect(screen.queryByRole("heading", { name: "Is your card giving you value where it matters?" })).not.toBeInTheDocument();
   });
 
+  it("a campaign URL naming a Borrow situation does not open it under the Rewards Intelligence header", async () => {
+    track11aEnabledMock.mockReturnValue(true);
+    track11bEnabledMock.mockReturnValue(false);
+    // "offer" (Loan offer) belongs to the borrow group, not this rewards group.
+    searchParamsMock.set("situation", "offer");
+
+    await renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Is your card giving you value where it matters?" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "What does this offer really cost?" })).not.toBeInTheDocument();
+  });
+
   it("emits no legacy continuation or consent events from the new path", async () => {
     track11aEnabledMock.mockReturnValue(true);
     track11bEnabledMock.mockReturnValue(true);

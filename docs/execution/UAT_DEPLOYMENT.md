@@ -47,6 +47,20 @@ PostgreSQL. Those endpoints return `503` when the database is unavailable.
   `GET /v1/situation-pilot-interest/admin/export`. Unset, that route 404s —
   the deployment works fully without it; the token only gates that one
   operator-only export.
+- **Required before the pilot-interest email capture goes live behind the
+  documented nginx reverse proxy**: set `TRUSTED_PROXY_IPS` to nginx's own
+  address (e.g. `127.0.0.1` when nginx and the API run on the same host and
+  proxy over loopback, per [B. nginx](#b-nginx-same-origin-routing-and-access)
+  below). Every request's direct TCP peer is nginx's address, not the
+  visitor's; without this set, the pilot-interest submit route's per-IP rate
+  limit keys on that one shared proxy address, so one group of visitors can
+  exhaust the limit for everyone else. `TRUSTED_PROXY_IPS` is empty by
+  default (today's behaviour, unaffected): the API only reads
+  `X-Forwarded-For` from a peer explicitly named here, so an untrusted caller
+  can never spoof a different rate-limit identity just by setting the header
+  themselves. See `app/services/client_ip.py` and
+  `docs/execution/SITUATIONS_REDESIGN.md`. Accepts a comma-separated list of
+  IPs and/or CIDR ranges.
 
 Audit events are separate. They are written as local JSONL under
 `/tmp/sutriva` by default, or to `AUDIT_LOG_PATH`. `/tmp` is not durable. On the

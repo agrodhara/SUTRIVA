@@ -94,4 +94,13 @@ describe("Borrow Better route flag gate", () => {
     expect(await screen.findByRole("heading", { name: "What does this offer really cost?" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: NEW_HEADING })).toBeNull();
   });
+
+  it("a campaign URL naming a Rewards situation does not open it under the Borrow Better header", async () => {
+    setFlags(true, false);
+    // "fee" (Annual fee) belongs to the rewards group, not this borrow group.
+    searchParamsMock.set("situation", "fee");
+    render(<BorrowBetterPage />);
+    expect(await screen.findByRole("heading", { name: NEW_HEADING })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Did your redeemed rewards cover the fee?" })).toBeNull();
+  });
 });

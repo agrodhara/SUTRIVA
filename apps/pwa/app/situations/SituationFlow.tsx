@@ -40,7 +40,9 @@ function toRequestBody(key: SituationKey, values: Record<string, FieldValue>): R
   }
   // Map the situation's own field names onto what each endpoint actually calls them, where they differ.
   if (key === "balance" && body.known === "no") delete body.interest;
-  if (key === "purchase" || key === "offer") body.months = Math.round(Number(body.months));
+  // Deliberately no rounding here: a "wholeNumber" field's value is forwarded exactly as entered (see
+  // invalidWholeMonthField, which blocks submission of a fractional value before this is ever called) so
+  // the API always validates the number the visitor actually typed, never a silently-altered one.
   return body;
 }
 
@@ -50,6 +52,20 @@ function missingRequiredField(key: SituationKey, values: Record<string, FieldVal
     if (f.type === "conditional" && f.showWhen && values[f.showWhen.field] !== f.showWhen.equals) return false;
     const v = values[f.id];
     return v === null || v === "" || Number.isNaN(Number(v));
+  });
+}
+
+/** A "wholeNumber" field (currently: tenure in months) must reject a fractional entry — e.g. "48.5" — on
+ * the client, rather than silently rounding it to "49" before the API ever sees the number the visitor
+ * actually typed. Ignores a field that is missing/blank entirely; missingRequiredField already covers
+ * that. */
+function invalidWholeMonthField(key: SituationKey, values: Record<string, FieldValue>): boolean {
+  return SITUATIONS[key].fields.some((f) => {
+    if (f.type !== "wholeNumber") return false;
+    const v = values[f.id];
+    if (v === null || v === "") return false;
+    const n = Number(v);
+    return !Number.isNaN(n) && !Number.isInteger(n);
   });
 }
 
@@ -107,6 +123,10 @@ export function SituationFlow({
   async function submit() {
     if (missingRequiredField(situationKey, values)) {
       setInputError("Enter a non-negative value for each required figure.");
+      return;
+    }
+    if (invalidWholeMonthField(situationKey, values)) {
+      setInputError("Enter a whole number of months (no decimals).");
       return;
     }
     emit("step_completed", `${situation.screenBase}_inputs` as ScreenName);
@@ -179,6 +199,7 @@ export function SituationFlow({
         <form
           className={ui.form}
           style={{ marginTop: 16 }}
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
@@ -214,7 +235,8 @@ export function SituationFlow({
                 <input
                   className={ui.input}
                   type="number"
-                  inputMode="decimal"
+                  inputMode={field.type === "wholeNumber" ? "numeric" : "decimal"}
+                  step={field.type === "wholeNumber" ? 1 : undefined}
                   min={0}
                   value={value === null ? "" : value}
                   placeholder={field.type === "optional" ? "Leave blank if unknown" : "Enter amount"}

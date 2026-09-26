@@ -39,7 +39,11 @@ One shared engine (`apps/pwa/app/situations/SituationFlow.tsx`) renders all nine
 `SITUATIONS` config object (`situationsConfig.ts`) — mirroring the mockup's own JS pattern. A group landing
 page (`SituationLanding.tsx`) offers a choice grid; `SituationsApp.tsx` reads `?situation=<key>` on mount so
 a campaign URL opens its matching situation directly, without the visitor re-choosing it. The query string
-never carries anything beyond that one categorical key — no financial figure is ever placed in a URL.
+never carries anything beyond that one categorical key — no financial figure is ever placed in a URL. The
+key is validated against both the full set of nine *and* the current route's own group
+(`isSituationKeyInGroup`): `/money-value?situation=offer` (a borrow situation) must not open Loan offer
+under the Rewards Intelligence header, and the reverse must not happen either — an out-of-group key falls
+back to that group's own landing chooser, exactly like an unrecognized key already did.
 
 ## Provenance: example / mixed / own
 
@@ -104,6 +108,17 @@ default 10/hour) on the submit route; the whole feature 404s (indistinguishable 
 exist) when `track11aEnabled` is false, mirroring how `app/routers/pilot.py` gates Phase 1.1B. A best-effort
 anonymous-session link is recorded when a valid session cookie is present, but a missing or invalid cookie
 never blocks a submission.
+
+The per-IP key is trusted-proxy-aware (`app/services/client_ip.py`'s `resolve_client_ip`), not a bare
+`request.client.host`. Behind the documented nginx reverse proxy, the direct TCP peer is always nginx's
+own address, not the visitor's; keying the limiter on that peer alone would put every visitor behind the
+proxy in one shared budget, letting one group of visitors exhaust it for everyone else. `resolve_client_ip`
+only reads `X-Forwarded-For` when the direct peer is explicitly named in `TRUSTED_PROXY_IPS` (empty by
+default — today's exact behaviour until an operator configures it), walking the chain from the right past
+any hop that is itself a trusted proxy; an untrusted caller can never spoof a different rate-limit identity
+by setting the header itself, since it is only ever consulted once the *connection* itself comes from a
+proxy this deployment named. See `docs/execution/UAT_DEPLOYMENT.md`'s persistence-requirements section for
+the operator-facing configuration note.
 
 **Operator retrieval, not a public API.** `GET /v1/situation-pilot-interest/admin/export` is excluded from
 the OpenAPI schema (`include_in_schema=False`), not linked from the frontend anywhere, rate-limited

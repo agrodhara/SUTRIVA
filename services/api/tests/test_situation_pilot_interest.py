@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
+import importlib
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
+from app.db.engine import dispose_engine
 from conftest import phaseb_origin
 
 
@@ -36,6 +40,42 @@ def _submit(client: TestClient, situation_key: str = "fee", email: str = "visito
 def _admin_export(client: TestClient, token: str | None = "test-admin-token"):
     headers = {"X-Admin-Token": token} if token is not None else {}
     return client.get("/v1/situation-pilot-interest/admin/export", headers=headers)
+
+
+@pytest.fixture()
+def phaseb_app(phaseb_upgraded_database: str):
+    """Like conftest.py's phaseb_client, but yields the raw FastAPI app instead of wrapping it in
+    starlette's TestClient — which always reports its own peer as the literal string "testclient", not a
+    real IP, and gives no way to override that. The trusted-proxy tests below need a *real*, controllable
+    peer address to prove the fix, so they build their own httpx.Client per simulated peer from this."""
+    import app.main as app_main
+
+    dispose_engine()
+    app_module = importlib.reload(app_main)
+    try:
+        yield app_module.app
+    finally:
+        dispose_engine()
+
+
+def _client_with_peer(app, peer_ip: str) -> httpx.AsyncClient:
+    # httpx's ASGITransport in this version is async-only (handle_async_request, no sync
+    # handle_request) — starlette's own TestClient hides this behind a sync-looking API via an internal
+    # portal, but gives no way to override the simulated peer, which these tests need. AsyncClient +
+    # asyncio.run (see _run) is the direct, dependency-free way to get a controllable peer address.
+    transport = httpx.ASGITransport(app=app, client=(peer_ip, 12345))
+    return httpx.AsyncClient(transport=transport, base_url="http://testserver")
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+async def _submit_http_async(client: httpx.AsyncClient, *, email: str, forwarded_for: str | None = None, situation_key: str = "fee"):
+    headers = {"Origin": phaseb_origin()}
+    if forwarded_for is not None:
+        headers["X-Forwarded-For"] = forwarded_for
+    return await client.post("/v1/situation-pilot-interest", json={"situation_key": situation_key, "email": email}, headers=headers)
 
 
 def _row_count(postgres_test_url: str) -> int:
@@ -171,6 +211,69 @@ def test_submit_is_rate_limited_per_ip(phaseb_client: TestClient, monkeypatch: p
     limited = _submit(phaseb_client, email="c@example.com")
     assert limited.status_code == 429
     assert limited.json()["detail"] == "rate_limited"
+
+
+# --- Trusted-proxy-aware rate limiting -----------------------------------------------------------
+#
+# The documented nginx reverse proxy (docs/execution/UAT_DEPLOYMENT.md) sits in front of this API, so
+# every request's direct TCP peer is nginx's own address, not the visitor's, unless TRUSTED_PROXY_IPS
+# names it. These prove both halves of that: the vulnerability if it is left unconfigured, and that
+# configuring it correctly attributes each real visitor their own budget without opening an evasion route
+# for anyone not actually connecting through the trusted proxy.
+
+
+def test_without_trusted_proxy_config_every_visitor_behind_the_proxy_shares_one_budget(phaseb_app, monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_track11a(monkeypatch)
+    monkeypatch.delenv("TRUSTED_PROXY_IPS", raising=False)
+    monkeypatch.setenv("SITUATION_PILOT_INTEREST_SUBMIT_PER_IP_PER_HOUR", "1")
+
+    async def _scenario():
+        async with _client_with_peer(phaseb_app, "10.0.0.5") as client:
+            # Both requests arrive from the same proxy peer, each forwarding a different real visitor's
+            # address — but with no trusted proxy configured, the API has no way to tell them apart.
+            first = await _submit_http_async(client, email="a@example.com", forwarded_for="203.0.113.1")
+            second = await _submit_http_async(client, email="b@example.com", forwarded_for="203.0.113.2")
+        return first, second
+
+    first, second = _run(_scenario())
+    assert first.status_code == 200
+    assert second.status_code == 429, "documents the reported vulnerability: an unconfigured deployment shares one bucket for every visitor behind the proxy"
+
+
+def test_with_trusted_proxy_configured_each_real_visitor_gets_an_independent_budget(phaseb_app, monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_track11a(monkeypatch)
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.5")
+    monkeypatch.setenv("SITUATION_PILOT_INTEREST_SUBMIT_PER_IP_PER_HOUR", "1")
+
+    async def _scenario():
+        async with _client_with_peer(phaseb_app, "10.0.0.5") as client:
+            first = await _submit_http_async(client, email="a@example.com", forwarded_for="203.0.113.1")
+            second = await _submit_http_async(client, email="b@example.com", forwarded_for="203.0.113.2")
+            # The first visitor's own budget is still exhausted on a second attempt.
+            first_again = await _submit_http_async(client, email="a2@example.com", forwarded_for="203.0.113.1")
+        return first, second, first_again
+
+    first, second, first_again = _run(_scenario())
+    assert first.status_code == 200
+    assert second.status_code == 200, "a second, different real visitor behind the same trusted proxy must not be blocked by the first visitor's limit"
+    assert first_again.status_code == 429
+
+
+def test_bypassing_the_trusted_proxy_cannot_evade_the_limit_via_the_header(phaseb_app, monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_track11a(monkeypatch)
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.5")
+    monkeypatch.setenv("SITUATION_PILOT_INTEREST_SUBMIT_PER_IP_PER_HOUR", "1")
+
+    async def _scenario():
+        # This caller connects directly — its peer is not the trusted proxy's address.
+        async with _client_with_peer(phaseb_app, "198.51.100.9") as client:
+            first = await _submit_http_async(client, email="c@example.com", forwarded_for="1.2.3.4")
+            second = await _submit_http_async(client, email="d@example.com", forwarded_for="5.6.7.8")
+        return first, second
+
+    first, second = _run(_scenario())
+    assert first.status_code == 200
+    assert second.status_code == 429, "an untrusted peer must not be able to fabricate a fresh identity via X-Forwarded-For"
 
 
 # --- Anonymous session linking (best-effort only) -----------------------------------------------
