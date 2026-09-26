@@ -27,7 +27,7 @@ vi.mock("next/navigation", () => ({
 import BorrowBetterPage from "./page";
 
 const LEGACY_HEADING = "Know what feels comfortable before you borrow.";
-const NEW_HEADING = "Borrowing decisions begin with your situation.";
+const NEW_HEADING = "What is on your mind about borrowing?";
 
 function setFlags(a: boolean, b: boolean) {
   track11aEnabledMock.mockReturnValue(a);
@@ -70,8 +70,8 @@ describe("Borrow Better route flag gate", () => {
     expect(await screen.findByRole("heading", { name: NEW_HEADING })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: LEGACY_HEADING })).toBeNull();
     expect(screen.queryByLabelText("Existing monthly commitments")).toBeNull();
-    for (const nav of ["Rising EMIs", "New purchase", "Loan offer", "Rejected or shortfall"]) {
-      expect(screen.getByText(new RegExp(nav))).toBeInTheDocument();
+    for (const nav of ["Rising EMIs", "New purchase", "Loan offer", "Loan rejected"]) {
+      expect(screen.getAllByText(new RegExp(nav)).length).toBeGreaterThan(0);
     }
   });
 

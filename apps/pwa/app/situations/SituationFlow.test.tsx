@@ -82,9 +82,9 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     for (const [label, value] of [
       ["Loan amount offered", "800000"],
       ["Monthly EMI offered", "22000"],
-      ["Tenure in months", "48"],
+      ["Number of monthly payments", "48"],
       ["Monthly take-home income", "95000"],
-      ["Current EMIs and essential spending", "60000"],
+      ["Current EMIs and monthly essentials", "60000"],
     ] as const) {
       await user.type(screen.getByLabelText(label), value);
     }
@@ -137,12 +137,12 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     render(<SituationFlow situationKey="offer" onExit={vi.fn()} />);
     await goToInputs(user);
 
-    const tenureField = screen.getByLabelText("Tenure in months");
+    const tenureField = screen.getByLabelText("Number of monthly payments");
     await user.clear(tenureField);
     await user.type(tenureField, "48.5");
     await user.click(screen.getByRole("button", { name: "See the result →" }));
 
-    expect(await screen.findByText("Enter a whole number of months (no decimals).")).toBeInTheDocument();
+    expect(await screen.findByText("Enter whole months, such as 48. No decimals.")).toBeInTheDocument();
     // No network request was made at all — the value was never forwarded, rounded or not.
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -157,7 +157,7 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     render(<SituationFlow situationKey="offer" onExit={vi.fn()} />);
     await goToInputs(user);
 
-    const tenureField = screen.getByLabelText("Tenure in months");
+    const tenureField = screen.getByLabelText("Number of monthly payments");
     await user.clear(tenureField);
     await user.type(tenureField, "48.0");
     await user.click(screen.getByRole("button", { name: "See the result →" }));

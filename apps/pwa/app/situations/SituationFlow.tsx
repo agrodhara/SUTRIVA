@@ -10,6 +10,7 @@ import { ProvenanceBadge, type Provenance } from "./ProvenanceBadge";
 import { checkSituation, SituationApiError, type SituationResult } from "./situationsApi";
 import { GROUP_COPY, SITUATIONS, type SituationKey } from "./situationsConfig";
 import { SituationIcon } from "./SituationIcon";
+import { SituationStory } from "./SituationStory";
 import styles from "./situations.module.css";
 
 export type Step = "arrival" | "inputs" | "result";
@@ -124,11 +125,11 @@ export function SituationFlow({
 
   async function submit() {
     if (missingRequiredField(situationKey, values)) {
-      setInputError("Enter a non-negative value for each required figure.");
+      setInputError("Fill in every required amount. Use zero if needed.");
       return;
     }
     if (invalidWholeMonthField(situationKey, values)) {
-      setInputError("Enter a whole number of months (no decimals).");
+      setInputError("Enter whole months, such as 48. No decimals.");
       return;
     }
     emit("step_completed", `${situation.screenBase}_inputs` as ScreenName);
@@ -186,19 +187,20 @@ export function SituationFlow({
         <h2 className={ui.title}>{situation.question}</h2>
         <p className={ui.supporting}>
           {mode === "example"
-            ? "These are illustrative example entries. Change a figure to explore a mixed scenario, or choose Use my figures to enter everything."
+            ? "The form has example figures. Try them, or enter your own."
             : mode === "mixed"
-              ? "This scenario combines example values with your edits. Choose Use my figures for a result based entirely on your entries."
-              : "Your result will use the figures you entered."}
+              ? "Some figures are still examples. Choose ‘Use my figures’ to enter them all yourself."
+              : "Fill in your figures to see your result."}
         </p>
         <div className={ui.actionsRow} role="group" aria-label="Choose how to fill this check">
           <button type="button" className={mode !== "own" ? ui.tabActive : ui.tab} onClick={() => chooseMode("example")}>
-            Try example data
+            Try an example
           </button>
           <button type="button" className={mode === "own" ? ui.tabActive : ui.tab} onClick={() => chooseMode("own")}>
             Use my figures
           </button>
         </div>
+        <div className={styles.inputLayout}>
         <form
           className={`${ui.form} ${styles.inputPanel}`}
           style={{ marginTop: 16 }}
@@ -268,6 +270,8 @@ export function SituationFlow({
             </button>
           </div>
         </form>
+        <SituationStory situationKey={situationKey} />
+        </div>
       </div>
     );
   }

@@ -60,7 +60,7 @@ describe("Money Value page flag dispatch", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Check my money value" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "See what your card use is worth." })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Is your card giving you value where it matters?" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Is your card giving you enough back?" })).not.toBeInTheDocument();
   });
 
   it.each(FLAG_COMBINATIONS.filter(([a]) => a))("renders the redesigned Rewards Intelligence landing when track11aEnabled=true (b=%s)", async (_a, b) => {
@@ -69,12 +69,12 @@ describe("Money Value page flag dispatch", () => {
 
     await renderPage();
 
-    expect(await screen.findByRole("heading", { name: "Is your card giving you value where it matters?" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Is your card giving you enough back?" })).toBeInTheDocument();
     // The legacy single-page form is not reachable from the new path.
     expect(screen.queryByRole("button", { name: "Check my money value" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open reward finder" })).not.toBeInTheDocument();
     // All five situations are reachable from the landing choice grid.
-    for (const nav of ["Annual fee", "Card and spending fit", "Carrying a balance", "Several cards", "Unused points"]) {
+    for (const nav of ["Annual fee", "Card and spending", "Card interest", "Several cards", "Unused points"]) {
       expect(screen.getByText(new RegExp(nav))).toBeInTheDocument();
     }
   });
@@ -105,7 +105,7 @@ describe("Money Value page flag dispatch", () => {
     await renderPage();
 
     expect(await screen.findByRole("heading", { name: "Did your redeemed rewards cover the fee?" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Is your card giving you value where it matters?" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Is your card giving you enough back?" })).not.toBeInTheDocument();
   });
 
   it("a campaign URL naming a Borrow situation does not open it under the Rewards Intelligence header", async () => {
@@ -116,7 +116,7 @@ describe("Money Value page flag dispatch", () => {
 
     await renderPage();
 
-    expect(await screen.findByRole("heading", { name: "Is your card giving you value where it matters?" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Is your card giving you enough back?" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "What does this offer really cost?" })).not.toBeInTheDocument();
   });
 
@@ -125,7 +125,7 @@ describe("Money Value page flag dispatch", () => {
     track11bEnabledMock.mockReturnValue(true);
 
     await renderPage();
-    await screen.findByRole("heading", { name: "Is your card giving you value where it matters?" });
+    await screen.findByRole("heading", { name: "Is your card giving you enough back?" });
 
     const emitted = trackEventMock.mock.calls.map(([eventType]) => eventType);
     for (const legacy of [

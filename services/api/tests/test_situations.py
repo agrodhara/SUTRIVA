@@ -67,7 +67,7 @@ def test_rising_emis_matches_the_reviewed_example() -> None:
     validate_rising_emis(income=75_000, essentials=35_000, emis=32_000)
     r = calculate_rising_emis(income=75_000, essentials=35_000, emis=32_000, overdue="no")
     assert r.headline == "₹8,000"
-    assert "narrow" in r.insight  # room (8,000) is below 15% of income (11,250)
+    assert "little room" in r.insight  # room (8,000) is below 15% of income (11,250)
 
 
 def test_rising_emis_shortfall_is_shown_as_a_positive_shortfall_bar() -> None:
@@ -79,7 +79,7 @@ def test_rising_emis_shortfall_is_shown_as_a_positive_shortfall_bar() -> None:
 
 def test_rising_emis_overdue_yes_overrides_the_room_insight() -> None:
     r = calculate_rising_emis(income=75_000, essentials=35_000, emis=32_000, overdue="yes")
-    assert "overdue" in r.insight
+    assert "already late" in r.insight
 
 
 def test_rising_emis_rejects_zero_income() -> None:
@@ -135,14 +135,14 @@ def test_new_purchase_never_implies_running_costs_are_included() -> None:
 def test_loan_offer_matches_the_reviewed_example_scheduled_repayment_and_interest() -> None:
     validate_loan_offer(principal=800_000, emi=22_000, months=48, income=95_000, costs=60_000)
     r = calculate_loan_offer(principal=800_000, emi=22_000, months=48, income=95_000, costs=60_000)
-    assert r.detail == "₹10,56,000 scheduled repayment over 48 months on ₹8,00,000 principal"  # Indian grouping
+    assert r.detail == "You would pay ₹10,56,000 over 48 months on a ₹8,00,000 loan, before fees"  # Indian grouping
     assert r.headline == "₹2,56,000 estimated interest"
 
 
 def test_loan_offer_rate_is_qualified_as_an_estimate_not_the_lenders_apr() -> None:
     r = calculate_loan_offer(principal=800_000, emi=22_000, months=48, income=95_000, costs=60_000)
     assert "not the lender" in r.insight
-    assert "estimated implied" in r.insight.lower()
+    assert "an estimate" in r.insight.lower()
 
 
 def test_loan_offer_reports_monthly_room_from_the_actual_inputs() -> None:
@@ -166,7 +166,7 @@ def test_loan_offer_rejects_zero_principal() -> None:
 
 def test_rejected_shortfall_never_implies_it_knows_the_lenders_reason() -> None:
     r = calculate_rejected_shortfall(emi=22_000, income=95_000, costs=60_000)
-    assert "cannot explain why" in r.insight
+    assert "cannot tell you why" in r.insight
 
 
 def test_rejected_shortfall_note_disclaims_credit_eligibility() -> None:
@@ -209,7 +209,7 @@ def test_annual_fee_rejects_negative_fee() -> None:
 
 def test_card_fit_rates_are_explicitly_hypothetical() -> None:
     r = calculate_card_fit(category="groceries", spend=12_000)
-    assert "made-up examples" in r.insight
+    assert "rates are examples" in r.insight
     assert r.headline == "₹240 a month in this example"  # (12000*0.03)-(12000*0.01) = 240
 
 
@@ -249,7 +249,7 @@ def test_carrying_balance_requires_interest_when_known_is_yes() -> None:
 
 def test_multi_card_totals_do_not_claim_category_overlap_insight() -> None:
     r = calculate_multi_card(fee1=3_000, reward1=4_200, fee2=1_500, reward2=900)
-    assert "cannot show category overlap" in r.insight
+    assert "cannot show if your cards reward the same purchases" in r.insight
     assert "Card 1: ahead by ₹1,200" in r.headline
     assert "Card 2: short by ₹600" in r.headline
 
