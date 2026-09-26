@@ -8,7 +8,7 @@
 body { margin: 0; }
 
 .shell {
-  max-width: 980px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 56px 20px;
 }
@@ -16,6 +16,9 @@ body { margin: 0; }
 .hero {
   margin-bottom: 48px;
   text-align: center;
+  padding: 40px 24px 20px;
+  border-radius: 28px;
+  background: radial-gradient(circle at 12% 15%, #e4f4ea 0, transparent 28%), radial-gradient(circle at 88% 12%, #eaf2ff 0, transparent 24%);
 }
 
 .eyebrow {
@@ -86,8 +89,21 @@ h1 .highlight {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  box-shadow: 0 10px 24px rgba(23, 23, 23, 0.04);
+  box-shadow: 0 16px 36px rgba(23, 23, 23, 0.06);
 }
+
+.doorCard__icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  background: #e4f4ea;
+  color: #146b44;
+  margin-bottom: 18px;
+}
+
+.doorCard--borrowBetter .doorCard__icon { background: #eaf2ff; color: #1e4fc4; }
 
 .doorCard--moneyValue { border-color: #bfe3cd; background: #f4fbf6; }
 .doorCard--borrowBetter { border-color: #c6d6f2; background: #f4f7fd; }
