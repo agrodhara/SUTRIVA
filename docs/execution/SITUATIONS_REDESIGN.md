@@ -199,6 +199,19 @@ for.
 - If the API is ever run as more than one worker process, this in-memory limiter is not shared across them
   and this test's results are not meaningful until it is backed by a shared store (Redis or similar) —
   confirm a single worker before relying on this test.
+- Never put the Basic Auth password directly in a shell command — it would land in shell history and in
+  process listings (visible to anyone else on the host via `ps`). Load it into a variable first, from
+  either a root-only, mode-`0600` credential file or a prompt that does not echo, and reference the
+  variable in every curl call below, not the literal value:
+
+  ```bash
+  # Either: a protected file (never printed, never logged) —
+  BASIC_AUTH_USER=$(cat /etc/sutriva/basic_auth_user)
+  BASIC_AUTH_PASSWORD=$(cat /etc/sutriva/basic_auth_password)
+  # Or: an interactive prompt (-s suppresses echo; not saved to shell history) —
+  read -rp 'Basic Auth username: ' BASIC_AUTH_USER
+  read -rsp 'Basic Auth password: ' BASIC_AUTH_PASSWORD; echo
+  ```
 
 **1. Repeated requests from one real address reach 429.** From one real client (your own connection to the
 canary), submit distinct test emails in a loop:
@@ -208,7 +221,7 @@ for i in $(seq 1 11); do
   curl -s -o /dev/null -w '%{http_code}\n' \
     -X POST "https://<canary-host>/v1/situation-pilot-interest" \
     -H "Origin: https://<canary-host>" -H "Content-Type: application/json" \
-    -u "<basic-auth-user>:<basic-auth-password>" \
+    -u "$BASIC_AUTH_USER:$BASIC_AUTH_PASSWORD" \
     -d "{\"situation_key\":\"fee\",\"email\":\"proxy-smoketest+$(date +%s)-$i@example.com\"}"
 done
 ```
@@ -225,7 +238,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
   -X POST "https://<canary-host>/v1/situation-pilot-interest" \
   -H "Origin: https://<canary-host>" -H "Content-Type: application/json" \
   -H "X-Forwarded-For: 8.8.8.8" \
-  -u "<basic-auth-user>:<basic-auth-password>" \
+  -u "$BASIC_AUTH_USER:$BASIC_AUTH_PASSWORD" \
   -d "{\"situation_key\":\"fee\",\"email\":\"proxy-smoketest+$(date +%s)-forged@example.com\"}"
 ```
 
@@ -247,6 +260,24 @@ emails; expect each to independently reach ten `200`s before its own `429`, unaf
 
 If any of these three does not hold on the deployed host, email capture must not be relied on for real
 visitors until it does — the rate limit is either shared (fails (1) or (3)) or spoofable (fails (2)).
+
+**Deployment checklist, in order, before pilot-interest email capture goes live for real visitors:**
+1. Confirm the *live* nginx configuration matches this document exactly — in particular, that `/v1/` sets
+   `X-Forwarded-For $remote_addr` (overwrite), not `$proxy_add_x_forwarded_for` or a bare pass-through. Read
+   the running config back from the host itself (e.g. `nginx -T`); do not assume a prior deploy applied it
+   correctly.
+2. Apply migration `0007_situation_pilot_interest` (`alembic upgrade head` from `services/api`) and confirm
+   `alembic current` shows it.
+3. Keep Phase 1.1B off: the committed `shared/track11_config.json` stays `track11bEnabled: false`, and
+   nothing in this deployment sets `NEXT_PUBLIC_TRACK_11B_ENABLED=true`.
+4. Complete all three smoke-test scenarios above against the deployed host, not a local stand-in.
+
+**Scenario 3 (two genuinely different real addresses get independent budgets) remains unverified as of this
+change** — it was not run in the sandbox this work was done in, which has no way to reach the deployed host
+from two distinct real network paths. Scenarios 1 and 2 were verified locally against a real nginx +
+Uvicorn + API chain built to this exact configuration, not against the deployed host itself. Do not rely on
+public email registration until an operator has completed scenario 3 (and re-confirmed 1 and 2) against the
+actual deployed nginx and Uvicorn.
 
 ## Future deployment note
 
