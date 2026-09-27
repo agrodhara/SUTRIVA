@@ -169,6 +169,15 @@ temporary closed production canary described below, which is authenticated and
 limited to named testers. It covers nothing else. It does **not** cover any
 unrestricted access or any Instagram or other public pilot.
 
+**Update, 2026-09-27**: the closed canary's Basic Auth was removed and the site
+is now a public, unauthenticated launch of the limited Phase 1.1A scope (nine
+situation checks and the pilot-interest email handoff only; 1.1B, phone, OTP,
+Twilio and Phase 1.2 remain disabled). The acceptance above does **not** cover
+that public scope by itself — see `docs/decision_log.md`'s 2026-09-27 entry for
+the separate, explicit written re-acceptance this public launch required, and
+its own affected-versions and no-visitor-supplied-CSS-path reasoning. The
+`next@16.3.6` upgrade that clears this finding remains separate, future work.
+
 ## Approved private-UAT target
 
 | Item | Value |
