@@ -52,6 +52,7 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     expect(await screen.findByText("₹2,56,000 estimated interest")).toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
     expect(screen.getByText(/not the lender's disclosed APR/)).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Fictional example: Meera" })).toHaveTextContent("₹10.56 lakh paid in total");
   });
 
   it("editing one field before submitting shows the mixed-provenance label, not the example or own-data one", async () => {
@@ -91,6 +92,7 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     await user.click(screen.getByRole("button", { name: "See the result →" }));
 
     expect(await screen.findByText("BASED ON WHAT YOU TOLD US — YOUR DECLARED FIGURES")).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Fictional example: Meera" })).not.toBeInTheDocument();
   });
 
   it("surfaces the backend's own validation message for an inconsistent entry, without submitting a second time silently", async () => {

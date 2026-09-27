@@ -101,6 +101,6 @@ describe("Borrow Better route flag gate", () => {
     searchParamsMock.set("situation", "fee");
     render(<BorrowBetterPage />);
     expect(await screen.findByRole("heading", { name: NEW_HEADING })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Did your redeemed rewards cover the fee?" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Did your rewards cover the fee?" })).toBeNull();
   });
 });

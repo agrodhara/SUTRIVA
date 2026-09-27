@@ -76,7 +76,7 @@ export const SITUATIONS: Record<SituationKey, SituationCopy> = {
     nav: "Rising EMIs",
     arrival: "Are your EMIs taking too much each month?",
     intro: "See what is left after essential costs and EMIs.",
-    question: "How much room is left each month?",
+    question: "How much is left each month?",
     gap: "This check only knows what you entered. It cannot see all your payments or change your loans.",
     screenBase: "borrow_debt",
     fields: [
@@ -91,7 +91,7 @@ export const SITUATIONS: Record<SituationKey, SituationCopy> = {
     nav: "New purchase",
     arrival: "Thinking of a car, phone or other big purchase?",
     intro: "See what a phone, car or other purchase could leave you each month.",
-    question: "Would this quoted EMI fit beside your current costs?",
+    question: "What would be left after this EMI?",
     gap: "This does not include the purchase's running costs. It cannot tell you if a lender will approve a loan.",
     screenBase: "borrow_purchase",
     fields: [
@@ -108,7 +108,7 @@ export const SITUATIONS: Record<SituationKey, SituationCopy> = {
     nav: "Loan offer",
     arrival: "What does this offer really cost?",
     intro: "See how much you would repay in total, before fees.",
-    question: "What sits behind the monthly EMI?",
+    question: "What would you pay in total?",
     gap: "We only know the offer you enter. We cannot tell you if another lender would approve you or charge less.",
     screenBase: "borrow_offer",
     fields: [
@@ -136,13 +136,13 @@ export const SITUATIONS: Record<SituationKey, SituationCopy> = {
   fee: {
     group: "rewards",
     nav: "Annual fee",
-    arrival: "Did your redeemed rewards cover the fee?",
+    arrival: "Did your rewards cover the fee?",
     intro: "Compare rewards you used with the card's annual fee.",
-    question: "Did redeemed rewards outweigh the annual fee?",
+    question: "Were the rewards you used worth more than the fee?",
     gap: "We cannot see your points, expiry date or card rules here.",
     screenBase: "rewards_fee",
     fields: [
-      { id: "redeemed", label: "Rewards you redeemed, in rupees", example: 4200 },
+      { id: "redeemed", label: "Rewards you used, in rupees", example: 4200 },
       { id: "fee", label: "Annual card fee, in rupees", example: 3000 },
       { id: "interest", label: "Interest paid this year, if known", example: 1500, type: "optional" },
     ],
@@ -165,7 +165,7 @@ export const SITUATIONS: Record<SituationKey, SituationCopy> = {
     nav: "Card interest",
     arrival: "Are rewards keeping up with interest?",
     intro: "Compare card interest with rewards from the same period.",
-    question: "What did interest do to the reward value?",
+    question: "Was the interest more than your rewards?",
     gap: "We cannot see your statement or check the cash value of your rewards.",
     screenBase: "rewards_balance",
     fields: [
@@ -198,7 +198,7 @@ export const SITUATIONS: Record<SituationKey, SituationCopy> = {
     gap: "Your card provider sets the point value and expiry date. We cannot see them here.",
     screenBase: "rewards_unused",
     fields: [
-      { id: "points", label: "Unused points shown by issuer", example: 12000 },
+      { id: "points", label: "Unused points shown in your card app", example: 12000 },
       { id: "value", label: "Cash value shown by your card app, if known", example: null, type: "optional" },
       { id: "fee", label: "Annual fee, if you want a comparison", example: 3000, type: "optional" },
     ],

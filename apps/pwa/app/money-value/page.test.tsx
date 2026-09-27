@@ -104,7 +104,7 @@ describe("Money Value page flag dispatch", () => {
 
     await renderPage();
 
-    expect(await screen.findByRole("heading", { name: "Did your redeemed rewards cover the fee?" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Did your rewards cover the fee?" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Is your card giving you enough back?" })).not.toBeInTheDocument();
   });
 

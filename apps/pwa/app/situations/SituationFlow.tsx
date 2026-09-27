@@ -10,7 +10,7 @@ import { ProvenanceBadge, type Provenance } from "./ProvenanceBadge";
 import { checkSituation, SituationApiError, type SituationResult } from "./situationsApi";
 import { GROUP_COPY, SITUATIONS, type SituationKey } from "./situationsConfig";
 import { SituationIcon } from "./SituationIcon";
-import { SituationStory } from "./SituationStory";
+import { SituationResultStory, SituationStory } from "./SituationStory";
 import styles from "./situations.module.css";
 
 export type Step = "arrival" | "inputs" | "result";
@@ -323,6 +323,7 @@ export function SituationFlow({
               {result.note}
             </p>
           </div>
+          {provenance === "example" ? <SituationResultStory situationKey={situationKey} sparse={barRows.length === 0} /> : null}
         </div>
       </div>
     </div>

@@ -40,3 +40,18 @@ export function SituationStory({ situationKey }: { situationKey: SituationKey })
     </aside>
   );
 }
+
+/** A compact recap of the same fictional example, used next to an example result. */
+export function SituationResultStory({ situationKey, sparse }: { situationKey: SituationKey; sparse: boolean }) {
+  const story = STORIES[situationKey];
+  return (
+    <aside className={`${styles.resultStory} ${sparse ? styles.resultStorySparse : ""}`} aria-label={`Fictional example: ${story.name}`}>
+      <div className={styles.resultStoryHead}>
+        <span className={styles.resultAvatar} aria-hidden="true">{story.name[0]}</span>
+        <span><strong>{story.name}’s example</strong><small>Fictional · not your result</small></span>
+      </div>
+      <p>{story.moment}</p>
+      <strong className={styles.resultStoryAnswer}>{story.answer}</strong>
+    </aside>
+  );
+}
