@@ -18,6 +18,9 @@ const OTHER_GROUP_HREF: Record<SituationGroup, string> = {
 export function SituationLanding({ group, onChoose }: { group: SituationGroup; onChoose: (key: string) => void }) {
   const copy = GROUP_COPY[group];
   const other = otherGroup(group);
+  const preview = group === "borrow"
+    ? { key: "purchase", label: "An example", input: "₹45,000 income · ₹28,000 costs · ₹3,000 phone EMI", result: "₹14,000 left each month", action: "Try the purchase check" }
+    : { key: "fit", label: "An example", input: "₹8,000 online spend · 1% versus 3% rewards", result: "₹160 difference each month", action: "Try the reward-rate check" };
   return (
     <div className={`${ui.content} ${styles.landing}`}>
       <div className={styles.hero}>
@@ -29,8 +32,12 @@ export function SituationLanding({ group, onChoose }: { group: SituationGroup; o
           <p className={ui.disclaimer}>Explore without a mobile number. Example data is labelled; you can try it, edit it, or enter all your own figures.</p>
         </div>
         <div className={`${ui.card} ${styles.heroCard}`}>
-          <strong>What will this tell me?</strong>
-          <p className={ui.disclaimer}>Each check answers one narrow question. You can explore every situation before deciding anything else.</p>
+          <span className={styles.heroExampleLabel}>{preview.label}</span>
+          <strong>{preview.input}</strong>
+          <span className={styles.heroExampleArrow} aria-hidden="true">↓</span>
+          <span className={styles.heroExampleResult}>{preview.result}</span>
+          <p className={ui.disclaimer}>Example figures only. Enter yours to see your own check.</p>
+          <button type="button" className={styles.linkButton} onClick={() => onChoose(preview.key)}>{preview.action} →</button>
           <Link href={OTHER_GROUP_HREF[group]} className={styles.linkButton}>
             Explore {GROUP_COPY[other].eyebrow} →
           </Link>

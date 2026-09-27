@@ -219,6 +219,29 @@ describe("SituationFlow — Annual fee (lead path)", () => {
   });
 });
 
+describe("SituationFlow — example stories", () => {
+  it("the phone story matches the prefilled purchase figures and monthly room", async () => {
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="purchase" onExit={vi.fn()} />);
+    await goToInputs(user);
+
+    expect(screen.getByRole("complementary", { name: "Illustrative example: Arjun" })).toHaveTextContent("₹14,000 each month in this example");
+    const value = (label: string) => Number((screen.getByLabelText(label) as HTMLInputElement).value);
+    expect(value("Monthly take-home income") - value("Current EMIs and monthly essentials") - value("EMI quoted for this purchase")).toBe(14000);
+    expect(value("EMI quoted for this purchase") * value("Number of monthly payments quoted")).toBeGreaterThanOrEqual(value("Purchase price") - value("Amount you could pay upfront"));
+  });
+
+  it("the online-spend story matches the prefilled rate example", async () => {
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="fit" onExit={vi.fn()} />);
+    await goToInputs(user);
+
+    expect(screen.getByRole("complementary", { name: "Illustrative example: Dev" })).toHaveTextContent("₹160 difference per month in this example");
+    expect((screen.getByLabelText("Where do you spend most?") as HTMLSelectElement).value).toBe("online shopping");
+    expect(Number((screen.getByLabelText("How much do you spend here each month?") as HTMLInputElement).value) * (0.03 - 0.01)).toBeCloseTo(160);
+  });
+});
+
 describe("SituationFlow — the post-result pilot-interest email handoff", () => {
   const DEBT_RESULT = {
     title: "Monthly room after current commitments",
