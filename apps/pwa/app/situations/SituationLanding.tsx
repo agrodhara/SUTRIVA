@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ui from "../../components/journey-ui/journeyUi.module.css";
 import styles from "./situations.module.css";
+import { SituationIcon } from "./SituationIcon";
 import { GROUP_COPY, SITUATIONS, situationsInGroup, otherGroup, type SituationGroup } from "./situationsConfig";
 
 const OTHER_GROUP_HREF: Record<SituationGroup, string> = {
@@ -17,34 +18,44 @@ const OTHER_GROUP_HREF: Record<SituationGroup, string> = {
 export function SituationLanding({ group, onChoose }: { group: SituationGroup; onChoose: (key: string) => void }) {
   const copy = GROUP_COPY[group];
   const other = otherGroup(group);
+  const preview = group === "borrow"
+    ? { key: "purchase", label: "An example", input: "₹45,000 income · ₹28,000 costs · ₹3,000 phone EMI", result: "₹14,000 left each month", action: "Try the purchase check" }
+    : { key: "fit", label: "An example", input: "₹8,000 online spend · 1% versus 3% rewards", result: "₹160 difference each month", action: "Try the reward-rate check" };
   return (
-    <div className={ui.content}>
+    <div className={`${ui.content} ${styles.landing}`}>
       <div className={styles.hero}>
         <div>
+          <span className={styles.heroSymbol}><SituationIcon name={group} size={36} /></span>
           <p className={ui.eyebrowTitle}>{copy.eyebrow}</p>
           <h2 className={styles.heroTitle}>{copy.heading}</h2>
           <p className={styles.lead}>{copy.lead}</p>
           <p className={ui.disclaimer}>Explore without a mobile number. Example data is labelled; you can try it, edit it, or enter all your own figures.</p>
         </div>
         <div className={`${ui.card} ${styles.heroCard}`}>
-          <strong>What will this tell me?</strong>
-          <p className={ui.disclaimer}>Each check answers one narrow question. You can explore every situation before deciding anything else.</p>
+          <span className={styles.heroExampleLabel}>{preview.label}</span>
+          <strong>{preview.input}</strong>
+          <span className={styles.heroExampleArrow} aria-hidden="true">↓</span>
+          <span className={styles.heroExampleResult}>{preview.result}</span>
+          <p className={ui.disclaimer}>Example figures only. Enter yours to see your own check.</p>
+          <button type="button" className={styles.linkButton} onClick={() => onChoose(preview.key)}>{preview.action} →</button>
           <Link href={OTHER_GROUP_HREF[group]} className={styles.linkButton}>
             Explore {GROUP_COPY[other].eyebrow} →
           </Link>
         </div>
       </div>
+      <div className={styles.sectionIntro} aria-hidden="true"><span>Choose the question on your mind</span><span className={styles.sectionRule} /></div>
       <div className={styles.choiceGrid}>
         {situationsInGroup(group).map((key) => {
           const situation = SITUATIONS[key];
           return (
             <button key={key} type="button" className={styles.choice} onClick={() => onChoose(key)}>
-              <span>
+              <span className={styles.choiceIcon}><SituationIcon name={key} /></span>
+              <span className={styles.choiceText}>
+                <span className={styles.choiceTag}>{situation.nav}</span>
                 <strong>{situation.arrival}</strong>
-                <small>
-                  {situation.nav} · {situation.intro}
-                </small>
+                <small>{situation.intro}</small>
               </span>
+              <span className={styles.choiceArrow} aria-hidden="true">↗</span>
             </button>
           );
         })}

@@ -1,6 +1,7 @@
 "use client";
 
 import { Journey, trackEvent } from "../lib/api";
+import { SituationIcon } from "../app/situations/SituationIcon";
 
 type DoorCardProps = {
   optionLabel: string;
@@ -27,6 +28,7 @@ export function DoorCard({
 }: DoorCardProps) {
   return (
     <div className={`doorCard doorCard--${accent}`}>
+      <span className="doorCard__icon"><SituationIcon name={accent === "borrowBetter" ? "borrow" : "rewards"} size={34} /></span>
       <p className="doorCard__option">{optionLabel}</p>
       <h2>{title}</h2>
       <p className="doorCard__description">{description}</p>

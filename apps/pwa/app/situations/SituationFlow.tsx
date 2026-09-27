@@ -9,6 +9,9 @@ import { PilotInterestForm } from "./PilotInterestForm";
 import { ProvenanceBadge, type Provenance } from "./ProvenanceBadge";
 import { checkSituation, SituationApiError, type SituationResult } from "./situationsApi";
 import { GROUP_COPY, SITUATIONS, type SituationKey } from "./situationsConfig";
+import { SituationIcon } from "./SituationIcon";
+import { SituationResultStory, SituationStory } from "./SituationStory";
+import styles from "./situations.module.css";
 
 export type Step = "arrival" | "inputs" | "result";
 type FieldValue = string | number | null;
@@ -122,11 +125,11 @@ export function SituationFlow({
 
   async function submit() {
     if (missingRequiredField(situationKey, values)) {
-      setInputError("Enter a non-negative value for each required figure.");
+      setInputError("Fill in every required amount. Use zero if needed.");
       return;
     }
     if (invalidWholeMonthField(situationKey, values)) {
-      setInputError("Enter a whole number of months (no decimals).");
+      setInputError("Enter whole months, such as 48. No decimals.");
       return;
     }
     emit("step_completed", `${situation.screenBase}_inputs` as ScreenName);
@@ -153,12 +156,13 @@ export function SituationFlow({
   if (step === "arrival") {
     return (
       <div className={ui.content}>
+        <span className={styles.situationSymbol}><SituationIcon name={situationKey} size={30} /></span>
         <p className={ui.eyebrowTitle}>
           {GROUP_COPY[situation.group].eyebrow} · {situation.nav}
         </p>
         <h2 className={ui.title}>{situation.arrival}</h2>
         <p className={ui.supporting}>{situation.intro}</p>
-        <div className={`${ui.card} ${ui.o1}`}>
+        <div className={`${ui.card} ${ui.o1} ${styles.arrivalCard}`}>
           <strong className={ui.cardHeading}>{situation.question}</strong>
           <p className={ui.disclaimer} style={{ marginTop: 8 }}>
             Try an example first, or use your own figures. No account or mobile number is needed to see this result.
@@ -183,21 +187,22 @@ export function SituationFlow({
         <h2 className={ui.title}>{situation.question}</h2>
         <p className={ui.supporting}>
           {mode === "example"
-            ? "These are illustrative example entries. Change a figure to explore a mixed scenario, or choose Use my figures to enter everything."
+            ? "The form has example figures. Try them, or enter your own."
             : mode === "mixed"
-              ? "This scenario combines example values with your edits. Choose Use my figures for a result based entirely on your entries."
-              : "Your result will use the figures you entered."}
+              ? "Some figures are still examples. Choose ‘Use my figures’ to enter them all yourself."
+              : "Fill in your figures to see your result."}
         </p>
         <div className={ui.actionsRow} role="group" aria-label="Choose how to fill this check">
           <button type="button" className={mode !== "own" ? ui.tabActive : ui.tab} onClick={() => chooseMode("example")}>
-            Try example data
+            Try an example
           </button>
           <button type="button" className={mode === "own" ? ui.tabActive : ui.tab} onClick={() => chooseMode("own")}>
             Use my figures
           </button>
         </div>
+        <div className={styles.inputLayout}>
         <form
-          className={ui.form}
+          className={`${ui.form} ${styles.inputPanel}`}
           style={{ marginTop: 16 }}
           noValidate
           onSubmit={(e) => {
@@ -265,6 +270,8 @@ export function SituationFlow({
             </button>
           </div>
         </form>
+        <SituationStory situationKey={situationKey} />
+        </div>
       </div>
     );
   }
@@ -273,31 +280,32 @@ export function SituationFlow({
   if (!result) return null;
   return (
     <div className={ui.content} style={{ maxWidth: 1200 }}>
-      <p className={ui.eyebrowTitle}>
-        {situation.nav} · result
-      </p>
+      <div className={styles.resultLabel}>
+        <span className={styles.resultLabelIcon}><SituationIcon name={situationKey} size={24} /></span>
+        <p className={ui.eyebrowTitle}>{situation.nav} · result</p>
+      </div>
       <h2 className={ui.title}>{situation.question}</h2>
       <ProvenanceBadge provenance={provenance} />
-      <div className={ui.grid}>
+      <div className={`${ui.grid} ${styles.resultLayout}`}>
         <div className={ui.colMain}>
-          <div className={ui.darkPanel}>
+          <div className={`${ui.darkPanel} ${styles.resultPanel}`}>
             <p className={ui.darkLabel}>{result.title}</p>
             <p className={ui.darkValue}>{result.headline}</p>
             <p className={ui.darkNote}>{result.detail}</p>
           </div>
-          <div className={ui.insightCard}>
+          <div className={`${ui.insightCard} ${styles.resultInsight}`}>
             <p className={ui.insightTitle}>What this tells you</p>
             <p className={ui.insightBody}>{result.insight}</p>
           </div>
-          <div className={ui.insightCard}>
+          <div className={`${ui.insightCard} ${styles.resultWhatIf}`}>
             <p className={ui.insightTitle}>What if?</p>
             <p className={ui.insightBody}>{result.scenario}</p>
           </div>
-          <div className={`${ui.notice}`}>
+          <div className={`${ui.notice} ${styles.resultLimit}`}>
             <strong>What this cannot tell you yet</strong>
             <p style={{ margin: "6px 0 0" }}>{situation.gap}</p>
           </div>
-          <div className={ui.actionsRow} style={{ marginTop: 16 }}>
+          <div className={`${ui.actionsRow} ${styles.resultActions}`} style={{ marginTop: 16 }}>
             <button type="button" className={ui.secondaryButton} onClick={() => setStep("inputs")}>
               Adjust figures
             </button>
@@ -305,16 +313,17 @@ export function SituationFlow({
               Explore another situation
             </button>
           </div>
-          <PilotInterestForm situationKey={situationKey} onEmit={emit} />
+          <div className={styles.pilotPanel}><PilotInterestForm situationKey={situationKey} onEmit={emit} /></div>
         </div>
         <div className={ui.colSide}>
-          <div className={ui.card}>
+          <div className={`${ui.card} ${styles.resultChart}`}>
             <h3 className={ui.cardHeading}>{result.title}</h3>
             {barRows.length ? <ValueBars summary={result.title} rows={barRows} /> : <p className={ui.disclaimer}>There is no trustworthy rupee chart without a value to compare.</p>}
             <p className={ui.disclaimer} style={{ marginTop: 12 }}>
               {result.note}
             </p>
           </div>
+          {provenance === "example" ? <SituationResultStory situationKey={situationKey} sparse={barRows.length === 0} /> : null}
         </div>
       </div>
     </div>

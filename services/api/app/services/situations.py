@@ -109,21 +109,21 @@ def calculate_rising_emis(*, income: float, essentials: float, emis: float, over
     room = income - essentials - emis
     cut = min(5000.0, emis)
     if overdue == "yes":
-        insight = "If a payment is already overdue, contact the lender promptly and review urgent expenses."
+        insight = "A payment is already late. Contact your lender soon and look at the bills due now."
     elif room < 0:
-        insight = "The amounts entered exceed income. Review immediate payments and essential costs."
+        insight = "Your costs and EMIs add up to more than your income. Check which payments are due first."
     else:
         share_pct = round(emis / income * 100)
         narrow = room < income * 0.15
         insight = f"Repayments use {share_pct}% of the income you entered. " + (
-            "The remaining buffer is narrow." if narrow else "Check whether irregular costs are included."
+            "That leaves little room for other costs." if narrow else "Remember costs that do not come every month."
         )
     return SituationResult(
-        title="Monthly room after current commitments",
+        title="Money left each month",
         headline=f"Short by {_fmt(-room)}" if room < 0 else _fmt(room),
         detail=f"{_fmt(income)} income − {_fmt(essentials)} essentials − {_fmt(emis)} EMIs",
         insight=insight,
-        scenario=f"If repayments fell by {_fmt(cut)}, monthly room would be {_fmt(room + cut)}. This is a scenario, not an available refinancing offer.",
+        scenario=f"If your EMIs were {_fmt(cut)} lower, you would have {_fmt(room + cut)} left. This is only an example; no new loan is offered here.",
         bars=[
             SituationBar("Essentials", essentials, "fee"),
             SituationBar("Current EMIs", emis, "emi"),
@@ -155,14 +155,14 @@ def calculate_new_purchase(*, price: float, down: float, emi: float, months: int
     finance = price - down
     room = income - costs - emi
     alt = max(0.0, emi - 5000)
-    insight = f"Amount to finance: {_fmt(finance)}. Your entered EMI over {months} months totals {_fmt(emi * months)} before fees. We do not derive the EMI from the price. "
-    insight += "The proposed payment exceeds the room in your figures." if room < 0 else "Add insurance, upkeep and other running costs before deciding."
+    insight = f"You would need to borrow {_fmt(finance)}. The EMI you entered adds up to {_fmt(emi * months)} over {months} months, before fees. "
+    insight += "This EMI is more than the room in your figures." if room < 0 else "Also think about insurance and running costs."
     return SituationResult(
-        title="Purchase and monthly room",
+        title="Money left after this EMI",
         headline=f"Short by {_fmt(-room)}" if room < 0 else _fmt(room),
         detail=f"{_fmt(income)} income − {_fmt(costs)} current costs − {_fmt(emi)} proposed EMI",
         insight=insight,
-        scenario=f"If the EMI were {_fmt(alt)}, room would be {_fmt(room + emi - alt)}. A lower EMI may change tenure and total cost.",
+        scenario=f"At an EMI of {_fmt(alt)}, you would have {_fmt(room + emi - alt)} left. A lower EMI may mean more months or a higher total cost.",
         bars=[
             SituationBar("Current costs", costs, "fee"),
             SituationBar("Proposed EMI", emi, "emi"),
@@ -198,16 +198,16 @@ def calculate_loan_offer(*, principal: float, emi: float, months: int, income: f
         rate_text = "No interest is implied by these entries, before fees."
     else:
         rate_text = (
-            f"Estimated implied annualised reducing-balance rate from these entries: about {rate:.1f}% p.a. "
-            "This is not the lender's disclosed APR or effective rate; fees, insurance and payment timing may change the actual cost."
+            f"The figures suggest a rate of about {rate:.1f}% a year. "
+            "This is an estimate, not the lender's stated APR. Fees, insurance and payment dates can change the real cost."
         )
     cut = min(5000.0, emi)
     return SituationResult(
         title="What sits behind the EMI",
         headline=f"{_fmt(interest)} estimated interest",
-        detail=f"{_fmt(total)} scheduled repayment over {months} months on {_fmt(principal)} principal",
-        insight=f"{rate_text} Monthly room after this EMI: {room_text}.",
-        scenario=f"An EMI {_fmt(cut)} lower would change monthly room to {_fmt(room + cut)}. It may also change the total interest or tenure; compare actual offer terms.",
+        detail=f"You would pay {_fmt(total)} over {months} months on a {_fmt(principal)} loan, before fees",
+        insight=f"{rate_text} Money left each month after this EMI: {room_text}.",
+        scenario=f"If the EMI were {_fmt(cut)} lower, you would have {_fmt(room + cut)} left each month. The number of months and total interest might also change.",
         bars=[SituationBar("Principal", principal, "net"), SituationBar("Estimated interest", interest, "interest")],
         note="Calculated from the amount, EMI and tenure entered. Fee, insurance and repayment timing can change the actual cost.",
     )
@@ -224,11 +224,11 @@ def calculate_rejected_shortfall(*, emi: float, income: float, costs: float) -> 
     room = income - costs - emi
     cut = min(5000.0, emi)
     return SituationResult(
-        title="Monthly scenario for the EMI you had in mind",
+        title="Money left after the EMI you wanted",
         headline=f"Short by {_fmt(-room)}" if room < 0 else f"{_fmt(room)} after the planned EMI",
         detail=f"{_fmt(income)} income − {_fmt(costs)} current costs − {_fmt(emi)} planned EMI",
-        insight="This monthly-room scenario cannot explain why the lender declined or offered less. It only tests the EMI you had in mind.",
-        scenario=f"If the planned EMI were {_fmt(max(0.0, emi - 5000))}, monthly room would be {_fmt(room + cut)}. This is a scenario, not an approval suggestion.",
+        insight="This check cannot tell you why the lender said no or offered less. It only shows how the EMI you wanted would fit your month.",
+        scenario=f"At an EMI of {_fmt(max(0.0, emi - 5000))}, you would have {_fmt(room + cut)} left each month. This does not mean a lender will approve it.",
         bars=[
             SituationBar("Current costs", costs, "fee"),
             SituationBar("Planned EMI", emi, "emi"),
@@ -256,11 +256,11 @@ def calculate_annual_fee(*, redeemed: float, fee: float, interest: float | None)
         insight = f"You also entered {_fmt(interest)} interest. Cancelling the card would not erase interest already charged."
     insight += " This is not a keep, cancel or upgrade recommendation."
     return SituationResult(
-        title="This year's redeemed value versus fee",
+        title="Rewards used versus annual fee",
         headline=f"Short by {_fmt(-net)}" if net < 0 else f"Ahead by {_fmt(net)}",
         detail=f"{_fmt(redeemed)} redeemed rewards − {_fmt(fee)} annual fee",
         insight=insight,
-        scenario=f"If the fee were waived, redeemed value minus fee would be {_fmt(redeemed)}.",
+        scenario=f"If the annual fee were waived, your rewards used would be {_fmt(redeemed)} above the fee.",
         bars=[SituationBar("Redeemed rewards", redeemed, "rewards"), SituationBar("Annual fee", fee, "fee")],
         note="Based on redeemed value you entered; unused points are excluded.",
     )
@@ -276,11 +276,11 @@ def calculate_card_fit(*, category: str, spend: float) -> SituationResult:
     at_1pct = spend * 0.01
     at_3pct = spend * 0.03
     return SituationResult(
-        title="Illustrative earning-rate difference",
+        title="Example reward rate difference",
         headline=f"{_fmt(at_3pct - at_1pct)} a month in this example",
         detail=f"On {_fmt(spend)} monthly {category.lower()} spend: 1% = {_fmt(at_1pct)}; 3% = {_fmt(at_3pct)}",
-        insight="The 1% and 3% rates are made-up examples. Your card might have caps, exclusions or a different redemption value.",
-        scenario="Find your issuer's earning rate and exclusions for this category. Then compare the actual terms with your spending.",
+        insight="The 1% and 3% rates are examples. Your card may have limits or may reward this spending differently.",
+        scenario="Check your card's reward rules for this spending. Then compare them with what you spend.",
         bars=[SituationBar("At example 1%", at_1pct, "fee"), SituationBar("At example 3%", at_3pct, "rewards")],
         note="Illustrative rates applied to the spending amount entered. This does not measure your card.",
     )
@@ -334,7 +334,7 @@ def calculate_multi_card(*, fee1: float, reward1: float, fee2: float, reward2: f
         title="What redeemed rewards covered",
         headline=(f"Card 1: {'short by ' + _fmt(-a) if a < 0 else 'ahead by ' + _fmt(a)} · " f"Card 2: {'short by ' + _fmt(-b) if b < 0 else 'ahead by ' + _fmt(b)}"),
         detail=f"Combined: {'short by ' + _fmt(-total) if total < 0 else 'ahead by ' + _fmt(total)} after the two fees",
-        insight="These totals cannot show category overlap or whether a different card would have earned more on your purchases.",
+        insight="These totals cannot show if your cards reward the same purchases or if another card would give you more.",
         scenario=f"If card 2's {_fmt(fee2)} fee were waived, the combined difference would be {_fmt(total + fee2)}. Check issuer terms before making a decision.",
         bars=[
             SituationBar("Card 1 rewards", reward1, "rewards"),
@@ -368,7 +368,7 @@ def calculate_unused_points(*, points: float, value: float | None, fee: float | 
     if value is None:
         headline = f"{_group_indian(str(round(points)))} points without a cash value"
         detail = "No rupee conversion made"
-        insight = "Check your issuer's redemption page for conversion and expiry. The points count alone cannot tell you their rupee value."
+        insight = "Check your card app for the cash value and expiry date. The points count alone cannot tell you their rupee value."
         scenario = "Enter the issuer's stated cash value to compare it with any annual fee."
         bars: list[SituationBar] = []
     else:

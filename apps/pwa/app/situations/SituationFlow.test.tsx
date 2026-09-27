@@ -52,6 +52,7 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     expect(await screen.findByText("₹2,56,000 estimated interest")).toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent("ILLUSTRATIVE EXAMPLE — NOT YOUR DATA");
     expect(screen.getByText(/not the lender's disclosed APR/)).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Fictional example: Meera" })).toHaveTextContent("₹10.56 lakh paid in total");
   });
 
   it("editing one field before submitting shows the mixed-provenance label, not the example or own-data one", async () => {
@@ -82,15 +83,16 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     for (const [label, value] of [
       ["Loan amount offered", "800000"],
       ["Monthly EMI offered", "22000"],
-      ["Tenure in months", "48"],
+      ["Number of monthly payments", "48"],
       ["Monthly take-home income", "95000"],
-      ["Current EMIs and essential spending", "60000"],
+      ["Current EMIs and monthly essentials", "60000"],
     ] as const) {
       await user.type(screen.getByLabelText(label), value);
     }
     await user.click(screen.getByRole("button", { name: "See the result →" }));
 
     expect(await screen.findByText("BASED ON WHAT YOU TOLD US — YOUR DECLARED FIGURES")).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Fictional example: Meera" })).not.toBeInTheDocument();
   });
 
   it("surfaces the backend's own validation message for an inconsistent entry, without submitting a second time silently", async () => {
@@ -137,12 +139,12 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     render(<SituationFlow situationKey="offer" onExit={vi.fn()} />);
     await goToInputs(user);
 
-    const tenureField = screen.getByLabelText("Tenure in months");
+    const tenureField = screen.getByLabelText("Number of monthly payments");
     await user.clear(tenureField);
     await user.type(tenureField, "48.5");
     await user.click(screen.getByRole("button", { name: "See the result →" }));
 
-    expect(await screen.findByText("Enter a whole number of months (no decimals).")).toBeInTheDocument();
+    expect(await screen.findByText("Enter whole months, such as 48. No decimals.")).toBeInTheDocument();
     // No network request was made at all — the value was never forwarded, rounded or not.
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -157,7 +159,7 @@ describe("SituationFlow — Loan offer (lead path)", () => {
     render(<SituationFlow situationKey="offer" onExit={vi.fn()} />);
     await goToInputs(user);
 
-    const tenureField = screen.getByLabelText("Tenure in months");
+    const tenureField = screen.getByLabelText("Number of monthly payments");
     await user.clear(tenureField);
     await user.type(tenureField, "48.0");
     await user.click(screen.getByRole("button", { name: "See the result →" }));
@@ -216,6 +218,29 @@ describe("SituationFlow — Annual fee (lead path)", () => {
 
     await user.click(screen.getByRole("button", { name: "Explore another situation" }));
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SituationFlow — example stories", () => {
+  it("the phone story matches the prefilled purchase figures and monthly room", async () => {
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="purchase" onExit={vi.fn()} />);
+    await goToInputs(user);
+
+    expect(screen.getByRole("complementary", { name: "Illustrative example: Arjun" })).toHaveTextContent("₹14,000 each month in this example");
+    const value = (label: string) => Number((screen.getByLabelText(label) as HTMLInputElement).value);
+    expect(value("Monthly take-home income") - value("Current EMIs and monthly essentials") - value("EMI quoted for this purchase")).toBe(14000);
+    expect(value("EMI quoted for this purchase") * value("Number of monthly payments quoted")).toBeGreaterThanOrEqual(value("Purchase price") - value("Amount you could pay upfront"));
+  });
+
+  it("the online-spend story matches the prefilled rate example", async () => {
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="fit" onExit={vi.fn()} />);
+    await goToInputs(user);
+
+    expect(screen.getByRole("complementary", { name: "Illustrative example: Dev" })).toHaveTextContent("₹160 difference per month in this example");
+    expect((screen.getByLabelText("Where do you spend most?") as HTMLSelectElement).value).toBe("online shopping");
+    expect(Number((screen.getByLabelText("How much do you spend here each month?") as HTMLInputElement).value) * (0.03 - 0.01)).toBeCloseTo(160);
   });
 });
 
