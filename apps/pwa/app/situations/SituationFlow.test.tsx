@@ -255,13 +255,15 @@ describe("SituationFlow — the post-result pilot-interest email handoff", () =>
     bars: [],
   };
 
-  it("does not appear before a result, and once shown has no checkbox, mobile field or OTP mention", async () => {
+  it("does not appear on the inputs screen, and once shown (arrival or result) has no checkbox, mobile field or OTP mention", async () => {
     mockFetchOnce(DEBT_RESULT);
     const user = userEvent.setup();
     render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
 
-    expect(screen.queryByRole("heading", { name: "Interested in the Sutriva pilot?" })).not.toBeInTheDocument();
-    await goToInputs(user);
+    // The arrival screen has its own copy of this same form now (see the "early" describe block below) —
+    // the inputs screen in between must still never show it.
+    await user.click(screen.getByRole("button", { name: "Try this check →" }));
+    await screen.findByRole("button", { name: "See the result →" });
     expect(screen.queryByRole("heading", { name: "Interested in the Sutriva pilot?" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
 
@@ -356,6 +358,158 @@ describe("SituationFlow — the post-result pilot-interest email handoff", () =>
     await screen.findByText("₹8,000");
 
     await user.type(screen.getByLabelText("Email address"), "visitor@example.com");
+    await user.click(screen.getByRole("button", { name: "Register my interest" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't save that just now. Please try again in a moment.");
+    expect(screen.queryByText(/we've registered your interest/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("SituationFlow — the early (arrival-screen) pilot-interest email handoff", () => {
+  const DEBT_RESULT = {
+    title: "Monthly room after current commitments",
+    headline: "₹8,000",
+    detail: "detail",
+    insight: "insight",
+    scenario: "scenario",
+    note: "note",
+    bars: [],
+  };
+
+  it("appears on the arrival screen, below Try this check, clearly optional and secondary to it", async () => {
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+
+    const tryThisCheck = screen.getByRole("button", { name: "Try this check →" });
+    expect(tryThisCheck).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Interested in the Sutriva pilot?" })).toBeInTheDocument();
+    expect(screen.getByText(/We're building a deeper version of this check/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Register my interest" })).toBeInTheDocument();
+
+    // Same restraint as the post-result copy requires: still no checkbox, mobile field or OTP anywhere.
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/mobile/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\bOTP\b/)).not.toBeInTheDocument();
+
+    // Document order: "Try this check" first (still primary), the email offer immediately after it, and
+    // "Choose another situation" last — the offer sits between the primary action and the exit link, not
+    // after it.
+    const bodyHTML = document.body.innerHTML;
+    const tryIdx = bodyHTML.indexOf("Try this check");
+    const pilotIdx = bodyHTML.indexOf("Interested in the Sutriva pilot?");
+    const chooseIdx = bodyHTML.indexOf("Choose another situation");
+    expect(tryIdx).toBeLessThan(pilotIdx);
+    expect(pilotIdx).toBeLessThan(chooseIdx);
+  });
+
+  it("does not fire the pilot screen's own step_viewed event on the arrival mount — only the existing arrival step_viewed does — while a submission from arrival still reports the dedicated submitted event", async () => {
+    let called = 0;
+    let body: unknown = null;
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      called += 1;
+      body = init?.body ? JSON.parse(String(init.body)) : null;
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: "registered" }) });
+    }) as unknown as typeof fetch;
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+
+    // Mount alone: the existing arrival step_viewed fires (unchanged), but the pilot form's own mount-time
+    // step_viewed must not — that screen name has always meant "the result-screen offer was seen", and the
+    // arrival "view" is already fully represented by the arrival step_viewed event above.
+    const screenNamesOnMount = trackEventMock.mock.calls.map((call) => (call[2] as { screenName?: string })?.screenName);
+    expect(screenNamesOnMount).toContain("borrow_debt_arrival");
+    expect(screenNamesOnMount).not.toContain("borrow_debt_pilot");
+
+    // Submitting from arrival still reports the real conversion signal, unchanged.
+    await user.type(screen.getByLabelText("Email address"), "arrival-analytics@example.com");
+    await user.click(screen.getByRole("button", { name: "Register my interest" }));
+    await screen.findByText(/we've registered your interest/i);
+
+    const submittedCalls = trackEventMock.mock.calls.filter((call) => call[0] === "situation_pilot_interest_submitted");
+    expect(submittedCalls).toHaveLength(1);
+    expect((submittedCalls[0][2] as { screenName?: string })?.screenName).toBe("borrow_debt_pilot");
+    expect(called).toBe(1);
+    expect(body).toEqual({ situation_key: "debt", email: "arrival-analytics@example.com" });
+  });
+
+  it("the result-screen mount still fires the pilot screen's step_viewed exactly as before", async () => {
+    mockFetchOnce(DEBT_RESULT);
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+    await goToInputs(user);
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    await screen.findByText("₹8,000");
+
+    const pilotViewCalls = trackEventMock.mock.calls.filter(
+      (call) => call[0] === "step_viewed" && (call[2] as { screenName?: string })?.screenName === "borrow_debt_pilot",
+    );
+    expect(pilotViewCalls).toHaveLength(1);
+  });
+
+  it("the primary check reaches the same result whether or not the arrival email form is touched", async () => {
+    mockFetchOnce(DEBT_RESULT);
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+
+    // Never interact with the arrival email form at all — just the primary flow.
+    await user.click(screen.getByRole("button", { name: "Try this check →" }));
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+
+    expect(await screen.findByText("₹8,000")).toBeInTheDocument();
+  });
+
+  it("a valid email on the arrival screen persists, shows the exact confirmation, and Try this check still works afterward", async () => {
+    let pilotInterestCalls = 0;
+    let lastPilotInterestBody: unknown = null;
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).includes("/v1/situation-pilot-interest")) {
+        pilotInterestCalls += 1;
+        lastPilotInterestBody = init?.body ? JSON.parse(String(init.body)) : null;
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: "registered" }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => DEBT_RESULT });
+    }) as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("Email address"), "arrival-visitor@example.com");
+    await user.click(screen.getByRole("button", { name: "Register my interest" }));
+
+    expect(await screen.findByText("Thanks — we've registered your interest. We'll email you when the Sutriva pilot is ready.")).toBeInTheDocument();
+    expect(pilotInterestCalls).toBe(1);
+    expect(lastPilotInterestBody).toEqual({ situation_key: "debt", email: "arrival-visitor@example.com" });
+
+    // The primary CTA is unaffected by having just registered interest.
+    await user.click(screen.getByRole("button", { name: "Try this check →" }));
+    await screen.findByRole("button", { name: "See the result →" });
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    expect(await screen.findByText("₹8,000")).toBeInTheDocument();
+  });
+
+  it("an invalid email on the arrival screen shows an inline error and never shows success", async () => {
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("Email address"), "not-an-email");
+    await user.click(screen.getByRole("button", { name: "Register my interest" }));
+
+    expect(await screen.findByText("Enter a valid email address.")).toBeInTheDocument();
+    expect(screen.queryByText(/we've registered your interest/i)).not.toBeInTheDocument();
+  });
+
+  it("a server failure on the arrival screen submit shows an error, not the success confirmation", async () => {
+    global.fetch = vi.fn((url: string) => {
+      if (String(url).includes("/v1/situation-pilot-interest")) {
+        return Promise.resolve({ ok: false, status: 503, json: async () => ({ detail: "service_unavailable" }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => DEBT_RESULT });
+    }) as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("Email address"), "arrival-visitor@example.com");
     await user.click(screen.getByRole("button", { name: "Register my interest" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't save that just now. Please try again in a moment.");
