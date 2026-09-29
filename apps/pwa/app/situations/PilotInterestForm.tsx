@@ -25,10 +25,12 @@ const FRIENDLY_ERROR: Record<string, string> = {
 type Status = "idle" | "submitting" | "success" | "error";
 
 /**
- * The optional, post-result pilot-interest handoff (consolidated product correction — Copilot review +
- * founder decisions, 2026-09-26). Rendered only from SituationFlow's result screen — never before a
- * result exists — and never required to finish a check or explore another situation: those actions live
- * outside this component and work regardless of whether this form has been touched.
+ * The optional pilot-interest handoff (consolidated product correction — Copilot review + founder
+ * decisions, 2026-09-26; extended to the arrival screen 2026-09-29). Rendered from two places in
+ * SituationFlow — the arrival screen, right after "Try this check", and the result screen, after the
+ * result — and never required to finish a check, see a result, or explore another situation: those
+ * actions live outside this component and work regardless of whether either copy of this form has been
+ * touched.
  *
  * Collects exactly one field (email). No name, phone number, or consent checkbox exists here — submitting
  * this form is registering interest in an invitation, not opting into promotional updates.
@@ -36,11 +38,15 @@ type Status = "idle" | "submitting" | "success" | "error";
 export function PilotInterestForm({
   situationKey,
   onEmit,
+  placement,
 }: {
   situationKey: SituationKey;
   /** Reports only a screen_name for a fixed-shape analytics event — see SituationFlow.tsx's `emit`. Never
    * called with the email itself. */
   onEmit: (eventType: "step_viewed" | "situation_pilot_interest_submitted", screenName: ScreenName) => void;
+  /** Which of the two mounts this is. Only affects whether the mount-time `step_viewed` fires (see below) —
+   * everything else about the form (copy, validation, submit behaviour) is identical regardless. */
+  placement: "arrival" | "result";
 }) {
   const screenBase = SITUATIONS[situationKey].screenBase;
   const [email, setEmail] = useState("");
@@ -48,9 +54,18 @@ export function PilotInterestForm({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    onEmit("step_viewed", `${screenBase}_pilot` as ScreenName);
+    // `step_viewed` for `{screenBase}_pilot` predates the arrival-screen mount and has always meant "the
+    // post-result pilot offer was seen" — dashboards built on it treat its count as roughly tracking
+    // `{screenBase}_result` (see SITUATIONS_REDESIGN.md). The arrival mount renders unconditionally for
+    // every visitor who lands on the situation, before any check runs, so firing this same event there too
+    // would silently double-count it against a screen name that never meant "landed on the situation" —
+    // that impression is already fully captured by the existing `{screenBase}_arrival` step_viewed event
+    // SituationFlow emits on arrival. So only the result-screen mount reports this view; the arrival mount
+    // stays silent on mount and only emits on an actual submission (below), which is the new signal this
+    // change is meant to add.
+    if (placement === "result") onEmit("step_viewed", `${screenBase}_pilot` as ScreenName);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screenBase]);
+  }, [screenBase, placement]);
 
   if (status === "success") {
     return (

@@ -171,6 +171,12 @@ export function SituationFlow({
             Try this check →
           </button>
         </div>
+        {/* Same component, endpoint, validation and copy as the result-screen form below — offered here too,
+         * for a visitor who already knows they're interested, entirely optional and secondary to "Try this
+         * check" above. Placed immediately after it and before "Choose another situation" so it reads as an
+         * aside to the primary action, not a step of its own. See docs/execution/SITUATIONS_REDESIGN.md for
+         * why this now appears in both places. */}
+        <div className={styles.pilotPanel}><PilotInterestForm situationKey={situationKey} onEmit={emit} placement="arrival" /></div>
         <div className={ui.actionsRow} style={{ marginTop: 20 }}>
           <button type="button" className={ui.secondaryButton} onClick={onExit}>
             Choose another situation
@@ -313,7 +319,7 @@ export function SituationFlow({
               Explore another situation
             </button>
           </div>
-          <div className={styles.pilotPanel}><PilotInterestForm situationKey={situationKey} onEmit={emit} /></div>
+          <div className={styles.pilotPanel}><PilotInterestForm situationKey={situationKey} onEmit={emit} placement="result" /></div>
         </div>
         <div className={ui.colSide}>
           <div className={`${ui.card} ${styles.resultChart}`}>

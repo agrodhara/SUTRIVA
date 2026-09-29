@@ -54,7 +54,8 @@ export async function checkSituation(key: SituationKey, values: Record<string, u
 
 export type PilotInterestStatus = "registered" | "already_registered";
 
-/** Submits the optional post-result pilot-interest email (see PilotInterestForm.tsx). Only ever sends
+/** Submits the optional pilot-interest email, from either its arrival-screen or result-screen mount (see
+ * PilotInterestForm.tsx) — identical request either way. Only ever sends
  * `situation_key` and `email` — never the situation's entered figures, never in a URL or query string.
  * `credentials: "include"` lets the backend best-effort-link the submission to an existing anonymous
  * session cookie if one is present; a missing or invalid cookie never blocks the submission. */

@@ -2,7 +2,8 @@
 
 This is the reference for the redesigned Phase 1.1A customer experience: the real, responsive web
 implementation that replaced the single, five-step Borrow Better / Money Value journeys with nine narrow,
-single-question "situation" checks, plus the post-result pilot-interest email handoff added afterward. It
+single-question "situation" checks, plus the optional pilot-interest email handoff (on the arrival screen
+and after the result) added afterward. It
 exists because `services/api/app/services/situations.py` and
 `apps/pwa/app/situations/situationsConfig.ts` both point here as their single source for the product
 rationale behind the calculations and copy they implement.
@@ -75,11 +76,16 @@ have no other data to pass) and unit-tested directly (`SituationFlow.test.tsx` a
 details object has exactly the keys `["journeyRunId","screenName"]` and that its JSON never matches any
 entered number).
 
-## The pilot-interest email handoff (added 2026-09-26)
+## The pilot-interest email handoff (added 2026-09-26; extended to the arrival screen 2026-09-29)
 
 A consolidated product correction (Copilot review + founder decisions) replaced each situation's original
-static, non-interactive "a future pilot may…" sentence with one real, optional, post-result handoff:
-`apps/pwa/app/situations/PilotInterestForm.tsx`, rendered only inside `SituationFlow`'s result step.
+static, non-interactive "a future pilot may…" sentence with one real, optional handoff:
+`apps/pwa/app/situations/PilotInterestForm.tsx`. It was originally rendered only inside `SituationFlow`'s
+result step. Since 2026-09-29 the identical component (same endpoint, validation, copy and success/error
+handling) is also rendered on the arrival screen, directly below the "Try this check" button, so a visitor
+who is already interested can leave an email without having to run the check first. Nothing about the
+component itself changed for this — it is the exact same `PilotInterestForm` mounted from a second call
+site in `SituationFlow.tsx`, wrapped in the same `styles.pilotPanel` treatment used after the result.
 
 **Copy is fixed and identical across every situation** (heading "Interested in the Sutriva pilot?", body
 "We're building a deeper version of this check. Leave your email if you'd like an invitation when it's
@@ -88,9 +94,11 @@ your interest. We'll email you when the Sutriva pilot is ready."). It collects e
 phone number or consent checkbox exists on the form — and submitting it is registering interest in an
 invitation, not opting into promotional updates; there is no consent column on its table at all.
 
-**Never before a result, never required.** The form only exists inside the result screen's render branch;
-finishing a check ("Adjust figures") or exploring another situation works identically whether or not the
-form was touched.
+**Never required, never blocking.** The form now exists in two render branches — the arrival screen (below
+"Try this check") and the result screen (below the result) — and "Try this check", "See the result",
+"Adjust figures" and exploring another situation all work identically whether or not either copy of the
+form was touched. The two mounts are independent instances of the same component; interacting with one has
+no effect on the other, and a submission on one screen does not suppress or pre-fill the other.
 
 **Server-side persistence, not a fake success screen.** `POST /v1/situation-pilot-interest`
 (`app/routers/situation_pilot_interest.py`) validates the email, derives the journey from `situation_key`
