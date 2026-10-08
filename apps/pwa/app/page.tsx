@@ -1,9 +1,22 @@
+"use client";
+
+import { useEffect } from "react";
 import { BackendStatus } from "../components/BackendStatus";
 import { DoorCard } from "../components/DoorCard";
 import { JourneyHeader } from "../components/journey-ui/JourneyHeader";
 import ui from "../components/journey-ui/journeyUi.module.css";
+import { ensureAnonymousSession } from "../lib/api";
 
 export default function Home() {
+  useEffect(() => {
+    // Bootstrapped here (not only on /borrow-better or /money-value) so a session — and its cookie —
+    // already exists by the time a visitor clicks a door card, giving trackEventOnNavigate's sendBeacon
+    // call the best chance of carrying a valid session instead of racing a fresh bootstrap. See
+    // components/DoorCard.tsx and lib/api.ts's trackEventOnNavigate.
+    void ensureAnonymousSession();
+  }, []);
+
+
   return (
     <main className={ui.root}>
       <JourneyHeader journeyName="Choose a journey" step={1} />

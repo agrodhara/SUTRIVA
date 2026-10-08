@@ -295,3 +295,91 @@ configuring `SITUATION_PILOT_INTEREST_ADMIN_TOKEN` out of band on the host (neve
 repository). Both are additive: neither changes the meaning of any existing table, route or flag, and
 deployment itself remains a separate, later gate from this document, following
 `docs/execution/UAT_DEPLOYMENT.md` exactly.
+
+## Campaign-window audit and tracking fixes (2026-10-08)
+
+A read-only audit of the paid Instagram campaign actually run **2026-10-01 to 2026-10-03** (not
+30 September–1 October as first assumed from a screenshot — verified instead from `campaign_attribution`
+timestamps, nginx access logs and the `anonymous_sessions` daily surge, which all agree on the later
+window) found two real measurement gaps, both now fixed here, plus a reconciliation step that remains
+manual.
+
+**Finding 1 — the group chooser page emitted no event of its own.** Both campaign destination URLs opened
+`/money-value` and `/borrow-better` directly, with no `?situation=` parameter, landing on
+`SituationLanding`'s choice grid. That screen bootstrapped an anonymous session on mount but reported
+nothing else — no view event existed until a visitor actively picked a card. Of 1,488 sessions created
+during the campaign window, only ~25 ever produced a single subsequent event. **Fix:** `SituationsApp.tsx`
+now reports the chooser's own view with the existing `step_viewed` event type and two new, additive screen
+names — `borrow_group_landing` and `rewards_group_landing` (migration `0008_group_landing_screen_name`,
+extending the existing bounded allowlist exactly as every prior screen addition has). It fires once per
+chooser display (on initial mount if no `?situation=` is present, and again each time "Choose another
+situation" returns to it, mirroring how `SituationFlow`'s own `key={active}` remount re-fires its arrival
+view on every fresh situation entry) and never fires when a campaign URL carries `?situation=`, since that
+visitor's own situation `_arrival` event already covers it. No existing event's meaning changes.
+
+**Finding 2 — `door_selected` (home page journey choice) is lost on a real click.** Previously documented
+as a known defect in `docs/execution/UAT_DEPLOYMENT.md` and reproduced fresh during this audit: the home
+page's door cards are real `<a href>` links, and the `trackEvent` call in their `onClick` is a fire-and-forget
+`fetch` that is not guaranteed to complete before the browser begins unloading the page for the navigation
+that same click triggers. **Fix:** a new `trackEventOnNavigate` (`apps/pwa/lib/api.ts`) builds the identical
+event body as `trackEvent` — same attribution handling, same shape, same backend route — but delivers it via
+`navigator.sendBeacon`, which queues the request with the browser's own network stack synchronously before
+the function returns, so it survives the navigation; it falls back to `trackEvent`'s own fetch path only
+when `sendBeacon` is unavailable or reports it could not queue the request. `DoorCard.tsx` uses it for
+`door_selected` only — no other event's delivery mechanism changed. The home page (`app/page.tsx`) now also
+bootstraps the anonymous session on mount (previously only `/borrow-better` and `/money-value` did this),
+so a session and its cookie have the best chance of already existing by the time a door card is clicked,
+since `sendBeacon` cannot await a 401-triggered bootstrap-and-retry the way the fetch fallback can.
+
+**Verification performed:** the full backend and frontend automated suites (742 backend tests including a
+dedicated attribution-capture test for the two new screen names; 156 frontend tests including new coverage
+for the chooser-view event, its absence on a `?situation=` bypass, `trackEventOnNavigate`'s beacon and
+fallback paths, and the home page's new bootstrap call), plus a full local stack run (this build, this
+migration, a real Chromium browser with a genuine captured Instagram in-app-browser user agent) that
+confirmed, by querying the database directly afterward: the new `rewards_group_landing` view persisted with
+correct attribution for a bare campaign URL; a `?situation=` URL skipped the chooser and persisted only the
+situation's own arrival view; and — the direct proof for Finding 2 — a `door_selected` event survived a
+real, immediate browser navigation to `/borrow-better` and persisted correctly. **This is a simulation**
+(a real browser, a spoofed user-agent string captured from actual campaign traffic, run against a local
+stack) **and is explicitly not a substitute for testing on a real phone inside the real Instagram app**,
+which has its own WebView cookie, memory and execution behavior this cannot reproduce. That device-level
+verification is still outstanding and needs someone with physical device access, ideally against a UAT or
+canary deployment of this change before the next campaign goes live.
+
+**Situation-specific campaign URLs for the next campaign.** Both destination URLs audited here pointed at a
+bare group page. Pointing a campaign at a specific situation instead skips the chooser entirely — the
+visitor lands straight on that situation's own arrival screen, "Try this check" is immediately visible, and
+the existing `_arrival` `step_viewed` event (not the new chooser one) is the funnel's first signal, exactly
+one screen closer to the ad's own promise. Recommended shape, keeping every other query parameter Meta
+already attaches unchanged:
+
+```
+https://sutriva.io/money-value?situation=fee&utm_source=ig&utm_medium=paid&utm_campaign=<id>&utm_content=<id>&utm_term=<id>
+https://sutriva.io/borrow-better?situation=debt&utm_source=ig&utm_medium=paid&utm_campaign=<id>&utm_content=<id>&utm_term=<id>
+```
+
+`situation` must be one of the nine short keys in `situationsConfig.ts` (`debt`, `purchase`, `offer`,
+`rejected` for Borrow Better; `fee`, `fit`, `balance`, `multi`, `unused` for Money Value) and must match the
+URL's own group — a mismatched pairing falls back to that group's chooser exactly as an unrecognized key
+already does (unchanged, existing behaviour). Which situation each ad creative should point at is a product/
+marketing decision this document does not make; `fee` and `debt` above are used only as examples, chosen
+because they are the two annual-fee/EMI situations closest to what the two audited ad creatives' copy
+referenced.
+
+**Reconcile nginx click-ID counts with the Meta export before publishing any acquisition metric.** nginx
+access logs for the audited window give an exact, independent count of distinct `fbclid` values on real
+landing requests, by campaign:
+
+| Meta `utm_campaign` id | Distinct `fbclid` (nginx) | Total landing requests (nginx) |
+|---|---|---|
+| `52517814153716` | 2,219 | 3,263 |
+| `52518055536916` | 1,469 | 2,097 |
+
+These are **our own server's count of distinct click-throughs that actually reached nginx**, not Meta's own
+reported click count, and the two can legitimately differ (ad-network click fraud filtering, pre-fetching,
+a click that never reaches our server at all). Before any CTR, CPA or acquisition-cost figure from this
+campaign is published, pull the matching per-campaign "Link Clicks" metric from Meta Ads Manager for the
+same date range and reconcile it against the table above; a large, unexplained gap in either direction is
+itself a finding worth investigating before trusting a derived cost-per-click or cost-per-registration
+number. This reconciliation was not completed as part of this change — it requires Meta Ads Manager access
+this environment does not have.

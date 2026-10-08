@@ -1,6 +1,6 @@
 "use client";
 
-import { Journey, trackEvent } from "../lib/api";
+import { Journey, trackEventOnNavigate } from "../lib/api";
 import { SituationIcon } from "../app/situations/SituationIcon";
 
 type DoorCardProps = {
@@ -41,7 +41,9 @@ export function DoorCard({
         className="doorCard__cta"
         href={href}
         aria-label={`Open ${title}`}
-        onClick={() => trackEvent("door_selected", journey)}
+        // A real link navigation follows this click immediately — trackEventOnNavigate uses
+        // navigator.sendBeacon so the event survives it. See lib/api.ts's own doc comment.
+        onClick={() => trackEventOnNavigate("door_selected", journey)}
       >
         {cta} →
       </a>

@@ -142,7 +142,15 @@ export type ScreenName =
   | "rewards_fit_pilot"
   | "rewards_balance_pilot"
   | "rewards_multi_pilot"
-  | "rewards_unused_pilot";
+  | "rewards_unused_pilot"
+  // The group chooser page at /borrow-better and /money-value, reported with the existing "step_viewed"
+  // event type — see app/situations/SituationsApp.tsx and migration 0008_group_landing_screen_name, the
+  // single source every one of these must match exactly. Added 2026-10-08 after an audit of the
+  // 2026-10-01–03 paid campaign found this screen emitted no event of its own: both campaign destination
+  // URLs opened it directly (no `?situation=`), so a visitor who left before picking a situation was
+  // recorded only as an anonymous session row.
+  | "borrow_group_landing"
+  | "rewards_group_landing";
 
 export type TrackEventDetails = {
   cardCheckNumber?: number;
@@ -195,21 +203,15 @@ async function postEvent(body: Record<string, unknown>, allowRetry: boolean): Pr
   }
 }
 
-/**
- * Minimal local product-event tracker.
- *
- * Only records event_type, journey and a decision_context label. Never send
- * name, contact details, account details or raw financial-check inputs here.
- */
-export function trackEvent(eventType: ProductEventType, journey: Journey, details: TrackEventDetails = {}): void {
-  if (!API_BASE_URL) return;
-
+/** Builds the exact wire body every event-sending path shares — trackEvent and trackEventOnNavigate below
+ * differ only in how they deliver this, never in what it contains. */
+function buildEventBody(eventType: ProductEventType, journey: Journey, details: TrackEventDetails): Record<string, unknown> {
   const touchedAttribution = syncAttributionTouches();
   const storedAttribution = getAttributionTouches();
   const firstTouchAttribution = details.firstTouchAttribution ?? touchedAttribution.firstTouch ?? storedAttribution.firstTouch;
   const latestTouchAttribution = details.latestTouchAttribution ?? touchedAttribution.latestTouch ?? storedAttribution.latestTouch;
 
-  const body = {
+  return {
     event_id: createEventId(),
     event_type: eventType,
     journey_run_id: details.journeyRunId ?? createJourneyRunId(),
@@ -224,6 +226,53 @@ export function trackEvent(eventType: ProductEventType, journey: Journey, detail
     reason: details.reason,
     screen_name: details.screenName,
   };
+}
+
+/**
+ * Minimal local product-event tracker.
+ *
+ * Only records event_type, journey and a decision_context label. Never send
+ * name, contact details, account details or raw financial-check inputs here.
+ */
+export function trackEvent(eventType: ProductEventType, journey: Journey, details: TrackEventDetails = {}): void {
+  if (!API_BASE_URL) return;
+
+  const body = buildEventBody(eventType, journey, details);
+
+  void (
+    ensureAnonymousSession()
+      .then(() => postEvent(body, true))
+      .catch(() => {
+        // Alpha note: event tracking is best-effort and must never block the user journey.
+      })
+  );
+}
+
+/**
+ * Identical event shape and attribution handling to trackEvent — the only difference is delivery. Use this
+ * instead of trackEvent for a click handler on a real `<a href>` (or anything else that triggers an
+ * immediate same-tab navigation): a `fetch()` started inside that handler is not guaranteed to complete
+ * before the browser begins unloading the page for the new navigation, and auditing the 2026-10-01–03 paid
+ * campaign found exactly this losing almost every "door_selected" click on the home page in practice (see
+ * docs/execution/SITUATIONS_REDESIGN.md's "campaign-window audit" section). `navigator.sendBeacon` queues
+ * the request with the browser's own network stack synchronously, before this function returns, so it
+ * survives the navigation. It still depends on an anonymous-session cookie already existing (sendBeacon
+ * cannot await a 401-triggered bootstrap-and-retry the way trackEvent's fallback below can) — callers on a
+ * page that bootstraps the session on mount (as the home page now does) give it the best chance to exist
+ * by click time. Falls back to trackEvent's own fetch-based delivery when sendBeacon is unavailable or the
+ * browser reports it could not queue the request — strictly a transport fallback, never a second send.
+ */
+export function trackEventOnNavigate(eventType: ProductEventType, journey: Journey, details: TrackEventDetails = {}): void {
+  if (!API_BASE_URL) return;
+
+  const body = buildEventBody(eventType, journey, details);
+
+  const canUseBeacon = typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function";
+  if (canUseBeacon) {
+    const blob = new Blob([JSON.stringify(body)], { type: "application/json" });
+    const queued = navigator.sendBeacon(`${API_BASE_URL}/v1/events`, blob);
+    if (queued) return;
+  }
 
   void (
     ensureAnonymousSession()
