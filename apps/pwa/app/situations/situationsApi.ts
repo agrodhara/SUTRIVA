@@ -1,4 +1,5 @@
 import { requireApiBaseUrl } from "../../lib/api";
+import type { Provenance } from "./ProvenanceBadge";
 import type { SituationKey } from "./situationsConfig";
 
 export class SituationApiError extends Error {
@@ -78,4 +79,93 @@ export async function registerPilotInterest(situationKey: SituationKey, email: s
   }
   const parsed = (await response.json()) as { status: PilotInterestStatus };
   return parsed.status;
+}
+
+// --- Milestone 2C: save/reopen a B1 check -------------------------------------------------------
+// v1 is email-only and B1-scoped (debt/purchase/offer/rejected) — see
+// docs/product/journeys/B1_SAVED_CHECK_SPEC.md. Gated server-side by `savedCheckEnabled`
+// (shared/track11_config.json); these calls simply 404 while that flag is off.
+
+export type { Provenance };
+
+export type SavedBorrowCheck = {
+  situation_key: SituationKey;
+  input_values: Record<string, number | string | null>;
+  provenance: Provenance;
+  result_title: string;
+  result_headline: string;
+  result_detail: string;
+  result_insight: string;
+  result_scenario: string;
+  result_note: string;
+  result_bars: SituationBar[];
+  created_at: string;
+};
+
+async function parseErrorDetail(response: Response, fallback: string): Promise<string> {
+  try {
+    const parsed = await response.json();
+    if (typeof parsed?.detail === "string") return parsed.detail;
+  } catch {
+    // response body wasn't JSON; keep the fallback
+  }
+  return fallback;
+}
+
+/** Saves a completed check and emails the visitor a private retrieval link. Sends exactly the inputs and
+ * result currently on screen — nothing is recalculated server-side (see
+ * app/services/saved_borrow_checks.py's docstring) — plus the one email address, and best-effort links
+ * to the visitor's anonymous session cookie the same way registerPilotInterest does. */
+export async function saveBorrowCheck(
+  situationKey: SituationKey,
+  values: Record<string, unknown>,
+  provenance: Provenance,
+  result: SituationResult,
+  email: string,
+): Promise<void> {
+  const response = await fetch(`${requireApiBaseUrl()}/v1/saved-borrow-checks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      situation_key: situationKey,
+      input_values: values,
+      provenance,
+      result_title: result.title,
+      result_headline: result.headline,
+      result_detail: result.detail,
+      result_insight: result.insight,
+      result_scenario: result.scenario,
+      result_note: result.note,
+      result_bars: result.bars,
+      email,
+    }),
+  });
+  if (!response.ok) {
+    throw new SituationApiError(response.status, await parseErrorDetail(response, "Something went wrong. Please try again."));
+  }
+}
+
+/** Retrieves a saved check by its raw retrieval token (the `{token}` in the emailed `/saved/{token}`
+ * link) — see app/saved/[token]/page.tsx. */
+export async function retrieveSavedBorrowCheck(token: string): Promise<SavedBorrowCheck> {
+  const response = await fetch(`${requireApiBaseUrl()}/v1/saved-borrow-checks/${encodeURIComponent(token)}`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new SituationApiError(response.status, await parseErrorDetail(response, "We couldn't find that saved check."));
+  }
+  return (await response.json()) as SavedBorrowCheck;
+}
+
+/** Visitor-initiated withdrawal — idempotent; the backend reports success whether or not the token still
+ * matched anything (see app/services/saved_borrow_checks.py::delete_saved_borrow_check). */
+export async function deleteSavedBorrowCheck(token: string): Promise<void> {
+  const response = await fetch(`${requireApiBaseUrl()}/v1/saved-borrow-checks/${encodeURIComponent(token)}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new SituationApiError(response.status, await parseErrorDetail(response, "Something went wrong. Please try again."));
+  }
 }

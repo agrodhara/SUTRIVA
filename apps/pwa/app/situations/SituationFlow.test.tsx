@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -18,6 +18,16 @@ function mockFetchOnce(body: unknown, ok = true) {
 async function goToInputs(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Try this check →" }));
   await screen.findByRole("button", { name: "See the result →" });
+}
+
+// On a B1 (Borrow Better) result screen, Milestone 2C's SaveCheckForm now renders alongside
+// PilotInterestForm, so both forms have their own "Email address" field and "Email address" alone is no
+// longer unique. This scopes a query to PilotInterestForm's own card specifically, by walking up from its
+// heading — PilotInterestForm.tsx renders <div className={ui.card}><h3>…</h3>…<form>…</form></div>, so the
+// heading's immediate parent is exactly that card, containing that form and no other.
+function pilotInterestFormContainer(): HTMLElement {
+  const heading = screen.getByRole("heading", { name: "Interested in the Sutriva pilot?" });
+  return heading.parentElement as HTMLElement;
 }
 
 afterEach(() => {
@@ -275,7 +285,7 @@ describe("SituationFlow — the post-result pilot-interest email handoff", () =>
     expect(screen.queryByText(/\bOTP\b/)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Interested in the Sutriva pilot?" })).toBeInTheDocument();
     expect(screen.getByText(/We're building a deeper version of this check/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+    expect(within(pilotInterestFormContainer()).getByLabelText("Email address")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Register my interest" })).toBeInTheDocument();
   });
 
@@ -288,7 +298,7 @@ describe("SituationFlow — the post-result pilot-interest email handoff", () =>
     await user.click(screen.getByRole("button", { name: "See the result →" }));
     await screen.findByText("₹8,000");
 
-    expect(screen.getByLabelText("Email address") as HTMLInputElement).toHaveValue("");
+    expect(within(pilotInterestFormContainer()).getByLabelText("Email address") as HTMLInputElement).toHaveValue("");
     await user.click(screen.getByRole("button", { name: "Explore another situation" }));
     expect(onExit).toHaveBeenCalledTimes(1);
   });
@@ -336,7 +346,7 @@ describe("SituationFlow — the post-result pilot-interest email handoff", () =>
     await user.click(screen.getByRole("button", { name: "See the result →" }));
     await screen.findByText("₹8,000");
 
-    await user.type(screen.getByLabelText("Email address"), "not-an-email");
+    await user.type(within(pilotInterestFormContainer()).getByLabelText("Email address"), "not-an-email");
     await user.click(screen.getByRole("button", { name: "Register my interest" }));
 
     expect(await screen.findByText("Enter a valid email address.")).toBeInTheDocument();
@@ -357,7 +367,7 @@ describe("SituationFlow — the post-result pilot-interest email handoff", () =>
     await user.click(screen.getByRole("button", { name: "See the result →" }));
     await screen.findByText("₹8,000");
 
-    await user.type(screen.getByLabelText("Email address"), "visitor@example.com");
+    await user.type(within(pilotInterestFormContainer()).getByLabelText("Email address"), "visitor@example.com");
     await user.click(screen.getByRole("button", { name: "Register my interest" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't save that just now. Please try again in a moment.");
@@ -514,5 +524,149 @@ describe("SituationFlow — the early (arrival-screen) pilot-interest email hand
 
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't save that just now. Please try again in a moment.");
     expect(screen.queryByText(/we've registered your interest/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("SituationFlow — the Milestone 2C save-check form (B1 result screen only)", () => {
+  const DEBT_RESULT = {
+    title: "Monthly room after current commitments",
+    headline: "₹8,000",
+    detail: "detail",
+    insight: "insight",
+    scenario: "scenario",
+    note: "note",
+    bars: [],
+  };
+
+  function saveCheckFormContainer(): HTMLElement {
+    const heading = screen.getByRole("heading", { name: "Save this check to look at again later?" });
+    return heading.parentElement as HTMLElement;
+  }
+
+  it("appears on a B1 result screen, below the pilot-interest form, as a separate action", async () => {
+    mockFetchOnce(DEBT_RESULT);
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+    await goToInputs(user);
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    await screen.findByText("₹8,000");
+
+    expect(screen.getByRole("heading", { name: "Save this check to look at again later?" })).toBeInTheDocument();
+    expect(within(saveCheckFormContainer()).getByLabelText("Email address")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Email me this result" })).toBeInTheDocument();
+
+    const bodyHTML = document.body.innerHTML;
+    const pilotIdx = bodyHTML.indexOf("Interested in the Sutriva pilot?");
+    const saveIdx = bodyHTML.indexOf("Save this check to look at again later?");
+    expect(pilotIdx).toBeGreaterThan(-1);
+    expect(saveIdx).toBeGreaterThan(pilotIdx);
+  });
+
+  it("does not appear on a rewards (R1) result screen — B1-only for v1", async () => {
+    const FEE_RESULT = {
+      title: "This year's redeemed value versus fee",
+      headline: "Ahead by ₹1,200",
+      detail: "detail",
+      insight: "insight",
+      scenario: "scenario",
+      note: "note",
+      bars: [],
+    };
+    mockFetchOnce(FEE_RESULT);
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="fee" onExit={vi.fn()} />);
+    await goToInputs(user);
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    await screen.findByText("Ahead by ₹1,200");
+
+    expect(screen.queryByRole("heading", { name: "Save this check to look at again later?" })).not.toBeInTheDocument();
+  });
+
+  it("a valid save sends exactly the inputs and result on screen, plus the one email, and shows the agreed confirmation", async () => {
+    let saveCalls = 0;
+    let lastSaveBody: Record<string, unknown> | null = null;
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).includes("/v1/saved-borrow-checks")) {
+        saveCalls += 1;
+        lastSaveBody = init?.body ? JSON.parse(String(init.body)) : null;
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: "saved" }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => DEBT_RESULT });
+    }) as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+    await goToInputs(user);
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    await screen.findByText("₹8,000");
+
+    await user.type(within(saveCheckFormContainer()).getByLabelText("Email address"), "saver@example.com");
+    await user.click(screen.getByRole("button", { name: "Email me this result" }));
+
+    expect(await screen.findByText("Sent — check your email for a link back to this result.")).toBeInTheDocument();
+    expect(saveCalls).toBe(1);
+    expect(lastSaveBody).toEqual({
+      situation_key: "debt",
+      input_values: { income: 75000, essentials: 35000, emis: 32000, overdue: "no" },
+      provenance: "example",
+      result_title: DEBT_RESULT.title,
+      result_headline: DEBT_RESULT.headline,
+      result_detail: DEBT_RESULT.detail,
+      result_insight: DEBT_RESULT.insight,
+      result_scenario: DEBT_RESULT.scenario,
+      result_note: DEBT_RESULT.note,
+      result_bars: DEBT_RESULT.bars,
+      email: "saver@example.com",
+    });
+  });
+
+  it("an invalid email shows an inline error and never shows success", async () => {
+    mockFetchOnce(DEBT_RESULT);
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+    await goToInputs(user);
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    await screen.findByText("₹8,000");
+
+    await user.type(within(saveCheckFormContainer()).getByLabelText("Email address"), "not-an-email");
+    await user.click(screen.getByRole("button", { name: "Email me this result" }));
+
+    expect(await screen.findByText("Enter a valid email address.")).toBeInTheDocument();
+    expect(screen.queryByText(/sent — check your email/i)).not.toBeInTheDocument();
+  });
+
+  it("a rejected save (e.g. email send failed) shows a friendly error, not the success confirmation", async () => {
+    global.fetch = vi.fn((url: string) => {
+      if (String(url).includes("/v1/saved-borrow-checks")) {
+        return Promise.resolve({ ok: false, status: 503, json: async () => ({ detail: "email_send_failed" }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => DEBT_RESULT });
+    }) as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+    await goToInputs(user);
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    await screen.findByText("₹8,000");
+
+    await user.type(within(saveCheckFormContainer()).getByLabelText("Email address"), "saver@example.com");
+    await user.click(screen.getByRole("button", { name: "Email me this result" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't email that link just now. Please try again in a moment.");
+    expect(screen.queryByText(/sent — check your email/i)).not.toBeInTheDocument();
+  });
+
+  it("finishing without saving works — the save-check form is entirely optional", async () => {
+    mockFetchOnce(DEBT_RESULT);
+    const onExit = vi.fn();
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={onExit} />);
+    await goToInputs(user);
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    await screen.findByText("₹8,000");
+
+    expect(within(saveCheckFormContainer()).getByLabelText("Email address") as HTMLInputElement).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Explore another situation" }));
+    expect(onExit).toHaveBeenCalledTimes(1);
   });
 });
