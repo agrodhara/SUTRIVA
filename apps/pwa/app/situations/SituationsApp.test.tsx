@@ -79,4 +79,17 @@ describe("SituationsApp — group chooser view tracking", () => {
     render(<SituationsApp group="borrow" />);
     expect(ensureAnonymousSessionMock).toHaveBeenCalledTimes(1);
   });
+
+  it("an unrecognised ?situation= value is not a trust signal — it is bounded to the fixed 9-key allowlist and falls back to the chooser exactly like no value at all", () => {
+    for (const bogus of ["<script>alert(1)</script>", "../../etc/passwd", "DROP TABLE product_events", "nonexistent_situation", ""]) {
+      searchParamsMock.set("situation", bogus);
+      const { unmount } = render(<SituationsApp group="borrow" />);
+      // Falls back to the chooser: the group-landing view fires, no situation's arrival does.
+      expect(screenNamesOf(trackEventMock.mock.calls)).toContain("borrow_group_landing");
+      expect(screen.queryByRole("heading", { name: "What does this offer really cost?" })).not.toBeInTheDocument();
+      unmount();
+      trackEventMock.mockReset();
+      searchParamsMock.delete("situation");
+    }
+  });
 });

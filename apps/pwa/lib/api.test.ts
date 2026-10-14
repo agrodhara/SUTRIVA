@@ -194,4 +194,36 @@ describe("trackEventOnNavigate (reliable delivery across an immediate navigation
 
     vi.unstubAllGlobals();
   });
+
+  it("queues the beacon synchronously, before the function returns — a reload or tab close in the very next tick cannot interrupt it, unlike the fetch fallback's awaited chain", async () => {
+    const sendBeacon = vi.fn().mockReturnValue(true);
+    vi.stubGlobal("navigator", { ...navigator, sendBeacon });
+
+    const { trackEventOnNavigate } = await import("./api");
+    // No `await` anywhere here on purpose: this asserts the call already happened by the time
+    // trackEventOnNavigate itself returns, not merely "eventually" — exactly the property a one-tick
+    // setTimeout-based check would not establish. Contrast with the fetch fallback path, which is a promise
+    // chain (ensureAnonymousSession().then(...)) still pending when this line runs.
+    trackEventOnNavigate("door_selected", "money_value");
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("rapid repeated navigation attempts (e.g. a double-tap) each queue their own beacon independently — no dedup, no dropped send", async () => {
+    const sendBeacon = vi.fn().mockReturnValue(true);
+    vi.stubGlobal("navigator", { ...navigator, sendBeacon });
+
+    const { trackEventOnNavigate } = await import("./api");
+    trackEventOnNavigate("door_selected", "money_value");
+    trackEventOnNavigate("door_selected", "money_value");
+    trackEventOnNavigate("door_selected", "comfortable_borrowing");
+
+    expect(sendBeacon).toHaveBeenCalledTimes(3);
+    const bodies = await Promise.all(sendBeacon.mock.calls.map(([, blob]) => readBlobAsText(blob)));
+    const journeys = bodies.map((b) => JSON.parse(b).journey);
+    expect(journeys).toEqual(["money_value", "money_value", "comfortable_borrowing"]);
+
+    vi.unstubAllGlobals();
+  });
 });
