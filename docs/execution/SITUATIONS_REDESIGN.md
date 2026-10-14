@@ -391,6 +391,50 @@ Continuation of the 2026-10-08 work above, on the same branch/PR. This section s
 (cannot be established from data this environment has access to) — none of the three is substituted for
 another below.
 
+### Migration `0008_group_landing_screen_name` — purpose, compatibility, deployment order, rollback
+
+**Purpose.** Widens exactly one thing: the `ck_product_events_screen_name` CHECK constraint on
+`product_events`, adding `borrow_group_landing` and `rewards_group_landing` to the allowlist it already
+enforced. No column, table, index or other constraint changes. No existing accepted value's meaning changes.
+
+**What needs this migration, and what does not.** Only the two new screen-name *string values* need it —
+that's a database-level allowlist, enforced independently of the application code. Everything else in this
+PR needs no migration at all: the `sendBeacon` delivery change, the home-page bootstrap timing change, the
+new `step_viewed` event the chooser now emits (it's the existing event type, existing table, existing
+columns — only the `screen_name` value is new), and the campaign→session→registration join (proved by the
+new backend test using only `situation_pilot_interest.anonymous_session_uuid` and `campaign_attribution.
+anonymous_session_uuid`, both already present and already nullable/foreign-keyed since migration `0002`).
+
+**Compatibility and deployment order — verified empirically, not assumed:**
+- Old backend code + migration applied: harmless. Old code's `ScreenNameType` Python Literal never contains
+  the two new values, so it never sends them; the widened DB constraint has no effect on anything old code
+  does.
+- **New backend code + migration NOT yet applied: unsafe, and must be avoided.** The new Python
+  `ScreenNameType` already accepts the two new values, so Pydantic validation (422) would let a request
+  through — but the *database* would still reject the INSERT with the old constraint. Traced through
+  `record_product_event`'s exception handling: this does not crash the request: it's caught as a
+  `SQLAlchemyError` and returned as `202 accepted_not_persisted` (the same path proved by
+  `test_insert_failure_keeps_202_semantics_and_leaks_no_details`) — so the visitor sees nothing wrong, but
+  the chooser-view event silently fails to persist, which is exactly the measurement gap this PR exists to
+  close. **Required order: apply migration `0008` before or atomically with deploying this PR's code, never
+  after.**
+- **Rollback — verified empirically on a real local Postgres 16, not assumed from reading the migration
+  file:**
+  - With **no row yet using the new screen names**, `alembic downgrade -1` then `alembic upgrade head` both
+    completed cleanly — confirmed by running it.
+  - With **one row already present** using `screen_name = 'rewards_group_landing'`, `alembic downgrade -1`
+    **fails outright** with `psycopg.errors.CheckViolation: check constraint "ck_product_events_screen_name"
+    ... is violated by some row` — because `op.create_check_constraint` (no `NOT VALID` clause) validates
+    the constraint against every existing row when it's added back. This is a loud failure, not silent data
+    loss: the downgrade simply does not complete, and the schema stays at `0008`. **Practical rollback plan,
+    once any real traffic has used this feature (which it will, immediately on deploy): roll back the
+    application code only; leave the migration applied.** This matches the project's own existing rollback
+    convention elsewhere in this document ("the database is not downgraded... do not run a downgrade against
+    data that matters") rather than introducing a new one.
+  - Both of the above (and the additive-upgrade check) are now committed, automated regression tests —
+    `tests/test_alembic_group_landing_screen_name.py` — not only this document's narrative; they were run
+    directly as part of the verification below.
+
 ### Baseline reconciliation, all times UTC (the database's own storage timezone)
 
 **Facts**, from the production database and nginx access logs, both read-only, queried 2026-10-08:
@@ -525,39 +569,115 @@ primary journey) or redesigning session issuance (out of scope). The home page n
 narrows this window but does not close it. This is the residual delivery limit asked for: **stated, not
 hidden.**
 
-### Verification performed, this round
+**Queueing vs. delivery, verified separately, not conflated.** `sendBeacon`'s return value (`true`/`false`)
+only confirms the *browser* accepted the request for transmission — it is not proof the server ever received
+it. These were checked as two separate facts, against a real local backend instrumented to log the raw
+headers and receive-timestamp of every `/v1/events` hit, with a real Chromium browser performing a real
+navigation (not a mock):
 
-- **Automated — 743/743 backend tests** (one failure on a single full-suite run proved to be a pre-existing
-  test-isolation flake in `test_api.py`, unrelated to any file this PR touches: it failed once mixed with
-  the full suite, passed in isolation, and passed on a clean full-suite rerun), **159/159 frontend tests**
-  (3 new: an unrecognised `?situation=` value across five adversarial inputs; `sendBeacon` queuing
-  synchronously, asserted without awaiting anything; three rapid repeated `trackEventOnNavigate` calls each
-  queuing independently with no dedup or drop), clean `tsc --noEmit`, clean `eslint --max-warnings=0`, clean
-  production build.
-- **New backend test** (`test_campaign_attribution_joins_through_the_session_to_a_registration`) proves the
-  full campaign → session → registration chain end-to-end against a real database: a bootstrapped session
-  posts a `rewards_group_landing` view carrying real UTM attribution, then submits a pilot-interest
-  registration on the same session cookie, then a plain SQL join (`situation_pilot_interest.
-  anonymous_session_uuid = campaign_attribution.anonymous_session_uuid`) recovers the exact campaign that
-  attribution came from. No migration was needed — both tables already reference `anonymous_sessions`.
-- **Simulation** (Chromium, a genuine captured Instagram in-app-browser user-agent string, run against a
-  full local stack on this exact code and this exact migration — not production, which does not yet have
-  migration `0008`): confirmed via direct database query afterward that a bare campaign URL persists the new
-  chooser view with correct attribution, a `?situation=` URL skips the chooser entirely, and a
-  `door_selected` event survives a real, immediate browser navigation. **This is simulation evidence, not
-  device evidence** — see the real-phone script below, which remains outstanding.
-- **Not re-verified this round** (deliberately, per "do not repeat completed diagnostics without reason"):
-  the Oct-08 proof that the chooser view, `?situation=` bypass and `sendBeacon` survival each work — that
-  was established once, with evidence, and stands; this round added the gaps the first pass didn't cover
-  (unrecognised `situation` values, synchronous-queuing proof, rapid-repeat delivery, the full campaign→
-  registration join) rather than repeating it.
-- **Production regression check:** not performed this round — SSH access to `sutriva-alpha` is currently
-  blocked (the host's `/32` allowlist no longer includes this session's current egress IP, which has changed
-  since the 2026-10-08 session; this is the access control working as designed, not an incident). `main` is
-  confirmed unchanged (`23464ce`, the same commit last verified) via `git log` against `origin/main`, so no
-  new production regression is possible since the last check — but a fresh read of the live registration
-  count and nginx state could not be taken this round. Restoring access is the operator's decision, not
-  something this review widens unilaterally.
+- **Queueing**: `navigator.sendBeacon` was wrapped (via `page.addInitScript`, so the wrapper survives the
+  very navigation under test) to log its call time and return value to the console the instant it's called —
+  confirmed `result: true`, logged synchronously, before the navigation completed.
+- **Delivery, including authentication**: the instrumented backend logged, for the `door_selected` request
+  specifically: `Origin: http://localhost:3300` (passed `validate_request_origin`, which the
+  `/v1/events` route calls explicitly and which rejects anything not in the allowed-origins list — a beacon
+  request with no Origin header would have been hard-rejected, so this is a real pass, not an assumption),
+  `Content-Type: application/json` (the Blob's declared type is honoured as a real header, not just a label),
+  the session cookie present (so `validate_event_session` recognised it and the event was correctly attached
+  to the right anonymous session), and HTTP `200` (fully validated and persisted — not merely received).
+- **Comparative proof it's the fix, not just a fast network:** the identical test was then run against the
+  pre-fix code path (`DoorCard` calling plain `trackEvent`, i.e. an un-awaited `fetch`, with CORS configured
+  identically for both builds so that variable couldn't confound the result). Result: **zero `door_selected`
+  requests reached the server at all** from the old code, while the same session's *unrelated* next-page
+  event (the destination page's own chooser view, a separate `fetch` not raced by this same click) arrived
+  normally — isolating the loss specifically to the click-triggered request racing its own navigation, not
+  to anything else being slow or broken. This directly reproduces, and directly fixes, the original
+  production defect.
+- This is local/simulation evidence (real browser, real backend, local network) — not production or
+  real-device evidence. See the separation below.
+
+### Attribution capture confirmed on both entry paths
+
+Checked separately, not assumed to generalise from one to the other, using the local full-stack run: two
+browser contexts, each with a **different** `utm_campaign` value specifically so the resulting
+`campaign_attribution` rows could be tied back to which path produced them.
+
+- **Chooser entry** (bare `/money-value?utm_source=ig&...&utm_campaign=52517814153716`, no `?situation=`):
+  the new `rewards_group_landing` view event carried the attribution; the row for campaign `52517814153716`
+  is present in `campaign_attribution` afterward.
+- **Direct-situation entry** (`/money-value?situation=fee&...&utm_campaign=52518055536916`): the chooser is
+  skipped entirely; the existing `rewards_fee_arrival` event is what carries the attribution instead; the
+  row for campaign `52518055536916` is present afterward, distinct from the first.
+
+Both paths capture attribution correctly, through two different events (the new chooser view on one path,
+the existing arrival event on the other) — confirming the chooser-view fix didn't accidentally become the
+*only* place attribution gets captured. **Zero-dwell-time limitation applies identically to both paths and
+remains unclosed**: attribution capture still requires the event post (whichever one it is) to complete
+before the visitor leaves, and still depends on bootstrap having already completed — see the `sendBeacon`
+limitation above, which is not specific to one entry path.
+
+### Backend test flake — precise description, and what could and couldn't be established
+
+**The test**: `test_comfortable_borrowing_audit_redacts_raw_values_for_legacy_and_track11a`
+(`tests/test_api.py`). It posts two different borrowing-check requests (the legacy
+`/v1/borrow-better/quick-check` route and the newer grouped `/v1/borrowing-intelligence/
+comfortable-borrowing-check` route) through a module-level `TestClient`, points `AUDIT_LOG_PATH` at a
+per-test `tmp_path` file via `monkeypatch`, and asserts the resulting audit JSONL has exactly two records
+with every raw financial value and forbidden field name absent. It has no relationship to anything this PR
+touches: not `test_api.py` itself, not the audit-writing code (`app/services/storage.py`), not either
+borrowing-check router.
+
+**What was actually observed**, precisely: it failed once, on one full-suite run on this branch, with a
+failure this document did not quote verbatim (noted at the time only as "1 failed"). It then passed on three
+subsequent full-suite runs on this branch. To check whether the base commit shares this behaviour, the exact
+same base commit (`23464ce`, pre-dating this PR) was checked out into its own isolated worktree and venv and
+run five times: **729/729 passed every time, no failure.**
+
+**What this does and does not establish.** It does **not** establish "this also fails on the base commit" —
+it was never reproduced on the base commit despite five attempts, and it only reproduced once on this
+branch out of four attempts. A single non-reproduction after a handful of runs proves neither "flaky on
+both" nor "specific to one." What *is* established, and is the actual basis for not attributing it to this
+PR: the file it lives in, the code it exercises, and the routes it calls share **zero overlap** with every
+file this PR changes — there is no code path by which this diff could affect that test's outcome. That is a
+structural argument, not a statistical one, and it is offered as such rather than as a disproven flake.
+**Unresolved**, honestly: the actual root cause of the intermittent failure (candidates not yet
+investigated: the audit path's fallback to a shared, non-test-isolated `/tmp/sutriva/audit_events.jsonl`
+when some other test fails to set `AUDIT_LOG_PATH`; filesystem write/flush timing under load) is not
+diagnosed here, and reproducing it on demand would be needed to diagnose it further.
+
+### Verification this round — separated by evidence type
+
+**Automated, local (this branch, this PR's code):**
+- 746/746 backend tests (the one unreproduced exception above; +3 new migration-behaviour tests this round),
+  159/159 frontend tests (3 new: unrecognised
+  `?situation=` values across five adversarial inputs; `sendBeacon` queuing synchronously, asserted without
+  awaiting anything; three rapid repeated `trackEventOnNavigate` calls each queuing independently), clean
+  `tsc --noEmit`, clean `eslint --max-warnings=0`, clean production build.
+- New backend test (`test_campaign_attribution_joins_through_the_session_to_a_registration`) proves the full
+  campaign → session → registration chain against a real local database. No migration needed for this join
+  itself.
+
+**Simulation / staging validation of PR #33 (this exact code and migration, run locally — never deployed
+anywhere, not production):**
+- Full local stack (this build, this migration, a real Chromium browser, a genuine captured Instagram
+  in-app-browser user-agent string): chooser view persists with attribution; `?situation=` bypasses the
+  chooser; `sendBeacon` survives a real navigation, with the queueing/delivery/authentication distinctions
+  above directly verified against real logged headers, not inferred; the pre-fix code path was run through
+  the identical harness and lost the event entirely, isolating the fix's effect.
+- Not re-run this round (per "do not repeat completed diagnostics without reason"): the original Oct-08
+  proof that these three things work at all — it stands; this round added the specific gaps (edge-case
+  input, synchronous-queueing proof, rapid-repeat delivery, delivery vs. queueing, the base-commit flake
+  check, the full campaign→registration join) the first pass didn't cover.
+
+**Current production (`sutriva-alpha`, live, still running `23464ce` — this PR is not deployed there):**
+- Confirmed via `git log` against `origin/main` that it has not moved since the last direct check.
+- **Not freshly checked this round**: live registration count, `/ready`, nginx state. SSH access is
+  currently blocked — the host's `/32` allowlist does not include this session's current egress IP
+  (`110.226.183.130`; it changed from the 2026-10-08 session's `124.122.198.227` before that, and from a
+  third value before that — this is the access control working as designed each time, not an incident).
+  Restoring it is the operator's decision.
+
+**Real device:** none performed. Not approximated as simulation anywhere above.
 
 ### Real-phone diagnostic (prepared here; execution is outstanding — needs a physical device)
 
