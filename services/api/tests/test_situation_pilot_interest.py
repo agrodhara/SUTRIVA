@@ -300,6 +300,66 @@ def test_a_valid_session_cookie_links_the_registration(phaseb_client: TestClient
     assert anonymous_session_uuid is not None
 
 
+def test_campaign_attribution_joins_through_the_session_to_a_registration(
+    phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch, postgres_test_url: str
+) -> None:
+    # Demonstrates the full chain the 2026-10-01-03 campaign audit needed: a campaign touch (UTM
+    # attribution, captured on the first event a session successfully posts) joins, via that one shared
+    # anonymous_session_uuid, through to a later pilot-interest registration from the same visitor — using
+    # only the existing schema (situation_pilot_interest.anonymous_session_uuid and
+    # campaign_attribution.anonymous_session_uuid both already reference anonymous_sessions; no migration).
+    _enable_track11a(monkeypatch)
+    bootstrap = phaseb_client.post("/v1/anonymous-sessions/bootstrap", headers={"Origin": phaseb_origin()})
+    assert bootstrap.status_code == 200
+
+    # The chooser-view event (this PR) is the earliest point attribution is actually captured — bootstrap
+    # itself carries none. See the "attribution capture timing" note in SITUATIONS_REDESIGN.md.
+    view = phaseb_client.post(
+        "/v1/events",
+        headers={"Origin": phaseb_origin()},
+        cookies=bootstrap.cookies,
+        json={
+            "event_id": "evt-group-landing-1",
+            "event_type": "step_viewed",
+            "journey_run_id": "run-group-landing-1",
+            "journey": "money_value",
+            "version": "test",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "screen_name": "rewards_group_landing",
+            "first_touch_attribution": {
+                "utm_source": "ig",
+                "utm_medium": "paid",
+                "utm_campaign": "52517814153716",
+                "landing_path": "/money-value",
+            },
+        },
+    )
+    assert view.status_code == 200, view.text
+
+    registration = phaseb_client.post(
+        "/v1/situation-pilot-interest",
+        json={"situation_key": "fee", "email": "campaign-linked@example.com"},
+        headers={"Origin": phaseb_origin()},
+        cookies=bootstrap.cookies,
+    )
+    assert registration.status_code == 200
+
+    engine = create_engine(postgres_test_url, future=True)
+    with engine.connect() as conn:
+        joined = conn.execute(
+            text(
+                """
+                SELECT ca.utm_source, ca.utm_campaign
+                FROM situation_pilot_interest spi
+                JOIN campaign_attribution ca ON ca.anonymous_session_uuid = spi.anonymous_session_uuid
+                WHERE spi.email = 'campaign-linked@example.com' AND ca.touch_kind = 'first_touch'
+                """
+            )
+        ).mappings().one()
+    assert joined["utm_source"] == "ig"
+    assert joined["utm_campaign"] == "52517814153716"
+
+
 def test_no_cookie_at_all_still_succeeds_with_no_link(phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch, postgres_test_url: str) -> None:
     _enable_track11a(monkeypatch)
     response = _submit(phaseb_client, email="unlinked@example.com")
@@ -446,4 +506,4 @@ def test_alembic_head_is_0007(postgres_test_url: str, alembic_ini_path, clean_da
     engine = create_engine(postgres_test_url, future=True)
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == "0007_situation_pilot_interest"
+    assert revision == "0008_group_landing_screen_name"

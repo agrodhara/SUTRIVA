@@ -126,6 +126,13 @@ ScreenNameType = Literal[
     "rewards_balance_pilot",
     "rewards_multi_pilot",
     "rewards_unused_pilot",
+    # The group chooser page at /borrow-better and /money-value (see
+    # apps/pwa/app/situations/SituationsApp.tsx and migration 0008_group_landing_screen_name). Reported
+    # with the existing "step_viewed" event type — the same mechanism every other screen already uses —
+    # only when a visitor actually sees the chooser; a campaign URL carrying `?situation=` bypasses it
+    # entirely and never emits this, since that visitor goes straight to that situation's own "_arrival".
+    "borrow_group_landing",
+    "rewards_group_landing",
 ]
 
 JourneyType = Literal["money_value", "comfortable_borrowing"]
@@ -210,6 +217,8 @@ SCREEN_NAME_JOURNEY: dict[str, str] = {
     "borrow_plan": "comfortable_borrowing",
     "borrow_check": "comfortable_borrowing",
     "borrow_connected_example": "comfortable_borrowing",
+    "borrow_group_landing": "comfortable_borrowing",
+    "rewards_group_landing": "money_value",
     **{
         f"{key}_{suffix}": journey
         for journey, keys in _SITUATION_KEYS_BY_JOURNEY.items()
@@ -233,6 +242,11 @@ STEP_SCREEN_NAMES = {
     # The pilot-interest form appearing after a result is reported with "step_viewed", the same event
     # type its arrival/inputs screens use — see app/situations/PilotInterestForm.tsx.
     *_SITUATION_PILOT_SCREEN_NAMES,
+    # The group chooser page itself, before any situation is picked — see
+    # apps/pwa/app/situations/SituationsApp.tsx. Added 2026-10-08 to close a real measurement gap (a
+    # campaign URL with no `?situation=` landed here and emitted nothing at all until this).
+    "borrow_group_landing",
+    "rewards_group_landing",
 }
 
 # Event types that may carry a Step 2/3 screen_name (optional, legacy compatible).

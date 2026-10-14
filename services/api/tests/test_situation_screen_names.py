@@ -20,7 +20,7 @@ def test_alembic_head_is_0007(postgres_test_url: str, alembic_ini_path, clean_da
     engine = create_engine(postgres_test_url, future=True)
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == "0007_situation_pilot_interest"
+    assert revision == "0008_group_landing_screen_name"
 
 
 def _bootstrap_and_post(client: TestClient, **overrides) -> "object":

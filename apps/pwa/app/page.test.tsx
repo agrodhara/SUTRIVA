@@ -1,6 +1,22 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { ensureAnonymousSessionMock, trackEventOnNavigateMock } = vi.hoisted(() => ({
+  ensureAnonymousSessionMock: vi.fn(),
+  trackEventOnNavigateMock: vi.fn(),
+}));
+
+vi.mock("../lib/api", () => ({
+  ensureAnonymousSession: ensureAnonymousSessionMock,
+  trackEventOnNavigate: trackEventOnNavigateMock,
+}));
+
 import Home from "./page";
+
+beforeEach(() => {
+  ensureAnonymousSessionMock.mockReset();
+  trackEventOnNavigateMock.mockReset();
+});
 
 describe("Home page", () => {
   it("shows both journeys with clear mobile-first copy and calls to action", () => {
@@ -21,5 +37,13 @@ describe("Home page", () => {
       "/borrow-better",
     );
     expect(screen.getByLabelText(/product journeys/i)).toBeInTheDocument();
+  });
+
+  it("bootstraps an anonymous session on mount, before any door is clicked", () => {
+    render(<Home />);
+    expect(ensureAnonymousSessionMock).toHaveBeenCalledTimes(1);
+    // Giving the session a head start is the whole point — clicking a door must not be what first
+    // establishes it, or trackEventOnNavigate's beacon has nothing to carry.
+    expect(trackEventOnNavigateMock).not.toHaveBeenCalled();
   });
 });

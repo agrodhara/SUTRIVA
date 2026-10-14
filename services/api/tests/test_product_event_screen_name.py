@@ -31,11 +31,16 @@ APPROVED_SCREEN_NAMES = {
     "borrow_plan": BORROW,
     "borrow_check": BORROW,
     "borrow_connected_example": BORROW,
+    # The group chooser page itself, before any situation is picked (migration
+    # 0008_group_landing_screen_name; see apps/pwa/app/situations/SituationsApp.tsx).
+    "borrow_group_landing": BORROW,
+    "rewards_group_landing": REWARDS,
     **{f"{key}_{suffix}": BORROW for key in _BORROW_SITUATIONS for suffix in ("arrival", "inputs", "result", "pilot")},
     **{f"{key}_{suffix}": REWARDS for key in _REWARDS_SITUATIONS for suffix in ("arrival", "inputs", "result", "pilot")},
 }
 STEP_NAMES = {
     "rewards_card_behaviour", "rewards_priorities_inputs", "borrow_monthly_position", "borrow_plan",
+    "borrow_group_landing", "rewards_group_landing",
     *(f"{key}_{suffix}" for key in (*_BORROW_SITUATIONS, *_REWARDS_SITUATIONS) for suffix in ("arrival", "inputs")),
     # The pilot-interest form appearing after a result also reports "step_viewed" (see
     # apps/pwa/app/situations/PilotInterestForm.tsx), so its screen names are step names too.
@@ -352,6 +357,60 @@ def test_insert_failure_keeps_202_semantics_and_leaks_no_details(monkeypatch, ph
     assert "raw sql message" not in response.text
     # The categorical value is never written to logs.
     assert "rewards_check" not in caplog.text
+
+
+def test_group_landing_view_persists_and_captures_attribution(
+    phaseb_client, phaseb_upgraded_database: str
+) -> None:
+    # Direct, explicit proof for the new screen names (not just inferred from the generic attribution
+    # mechanism tested elsewhere): a real campaign landing on the group chooser — no `?situation=` — must
+    # both persist its own view and capture first/latest-touch attribution exactly like every other event
+    # already does, since this goes through the identical, unmodified /v1/events -> upsert_campaign_attribution
+    # pipeline.
+    cookies = _bootstrap(phaseb_client)
+    response = _post(
+        phaseb_client,
+        cookies,
+        event_id="group-landing-1",
+        event_type="step_viewed",
+        journey=REWARDS,
+        journey_run_id="run-group-landing",
+        screen_name="rewards_group_landing",
+        first_touch_attribution={
+            "utm_source": "ig",
+            "utm_medium": "paid",
+            "utm_campaign": "52517814153716",
+            "landing_path": "/money-value",
+        },
+        latest_touch_attribution={
+            "utm_source": "ig",
+            "utm_medium": "paid",
+            "utm_campaign": "52517814153716",
+            "landing_path": "/money-value",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["screen_name"] == "rewards_group_landing"
+
+    engine = create_engine(phaseb_upgraded_database, future=True)
+    try:
+        with engine.connect() as conn:
+            stored_event = conn.execute(
+                text("SELECT screen_name, event_type FROM product_events WHERE event_id = 'group-landing-1'")
+            ).mappings().one()
+            assert stored_event["screen_name"] == "rewards_group_landing"
+            assert stored_event["event_type"] == "step_viewed"
+
+            attribution_rows = conn.execute(
+                text("SELECT touch_kind, utm_source, utm_campaign, landing_path FROM campaign_attribution")
+            ).mappings().all()
+            assert {row["touch_kind"] for row in attribution_rows} == {"first_touch", "latest_touch"}
+            for row in attribution_rows:
+                assert row["utm_source"] == "ig"
+                assert row["utm_campaign"] == "52517814153716"
+                assert row["landing_path"] == "/money-value"
+    finally:
+        engine.dispose()
 
 
 def test_database_rejects_unapproved_screen_name_even_if_application_validation_is_bypassed(

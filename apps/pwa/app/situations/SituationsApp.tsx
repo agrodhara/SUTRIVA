@@ -4,13 +4,19 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { JourneyHeader } from "../../components/journey-ui/JourneyHeader";
 import ui from "../../components/journey-ui/journeyUi.module.css";
-import { ensureAnonymousSession } from "../../lib/api";
+import { ensureAnonymousSession, trackEvent, type ScreenName } from "../../lib/api";
+import { createJourneyRunId } from "../../lib/journeySession";
 import { SituationFlow, type Step } from "./SituationFlow";
 import { SituationLanding } from "./SituationLanding";
 import { GROUP_COPY, isSituationKeyInGroup, type SituationGroup, type SituationKey } from "./situationsConfig";
 
 const STEP_NUMBER: Record<Step, number> = { arrival: 1, inputs: 2, result: 3 };
 const SITUATION_FLOW_TOTAL_STEPS = 3;
+
+const GROUP_LANDING_SCREEN_NAME: Record<SituationGroup, ScreenName> = {
+  borrow: "borrow_group_landing",
+  rewards: "rewards_group_landing",
+};
 
 /**
  * The group entry point mounted at /borrow-better and /money-value. A visitor can reach any situation in
@@ -31,6 +37,22 @@ export function SituationsApp({ group }: { group: SituationGroup }) {
   useEffect(() => {
     void ensureAnonymousSession();
   }, []);
+
+  useEffect(() => {
+    // The chooser screen's own view — distinct from any situation's "_arrival", which SituationFlow
+    // already reports. Fires only when the chooser is actually shown: a campaign URL carrying
+    // `?situation=` sets `active` on first render and bypasses this entirely, exactly as "Choose another
+    // situation" returning here (active -> null) fires it again, mirroring how SituationFlow's own key={active}
+    // remount re-fires its arrival step_viewed on every fresh situation entry. See
+    // docs/execution/SITUATIONS_REDESIGN.md's "campaign-window audit" section for why this was added.
+    if (active === null) {
+      trackEvent("step_viewed", GROUP_COPY[group].journey, {
+        journeyRunId: createJourneyRunId(),
+        screenName: GROUP_LANDING_SCREEN_NAME[group],
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   const copy = GROUP_COPY[group];
 
