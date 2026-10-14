@@ -427,6 +427,13 @@ memory, not fabricated, with the source linked.
 **Not performed, explicitly**: any real network call to Twilio (no credentials), any real SMS send or
 receipt (no credentials, no designated number), any device-side verification of a received code.
 
+## Permission records (Milestone 2D)
+
+`pilot_registrations.optional_updates_opted_in` is the only consent-adjacent field in this codebase —
+assessed, and a smallest-appropriate extension proposed, in
+`docs/execution/PERMISSION_RECORDS_ASSESSMENT.md`. Not implemented; doesn't block or get blocked by
+anything else in this document.
+
 ## Before any real send or activation (unchanged from the original scope of this document)
 
 Migrations 0004/0005, 1.1B enablement, consent wording, provider credentials, and any live SMS remain
