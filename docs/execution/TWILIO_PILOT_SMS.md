@@ -21,6 +21,14 @@ bundle, never in Git, never in chat, never in a log line):
 | `TWILIO_MESSAGING_SERVICE_SID` | The Messaging Service to send through | **Missing** | **Not checked** |
 | `PILOT_OTP_HMAC_KEYS` | Signs/verifies OTP codes at rest — **required independently of Twilio**; without it the service fails closed regardless of SMS provider | **Missing** | **Not checked** |
 
+An empty configuration template listing these same names (no values) has been added to the repo's
+existing root `.env.example` (matching this project's one-file convention — a separate
+`services/api/.env.twilio.example` was tried first and dropped: it isn't covered by the `.gitignore`'s
+`!.env.example` exception and so would never actually be committed, and it would have duplicated an
+existing pattern rather than extended it). Whoever holds the Twilio account copies those names into the
+real secret environment and fills them in privately on the host — never in this repository, never in
+chat.
+
 No value is printed anywhere in this document or was requested in chat. "**Not checked**" for
 `sutriva-alpha` is precise, not a rounding of "probably missing": SSH access to that host is
 currently blocked (unrelated allowlist issue, documented in `SITUATIONS_REDESIGN.md`'s PR #33
@@ -196,6 +204,45 @@ the *application's* failure handling, not Twilio's actual behavior under a real 
 invalid number, a carrier block) in isolation. Confirmed by running the full suite on this branch
 and, separately, on the base commit before this fix — see below.
 
+## Failure-path coverage, mapped item-by-item against the explicit test list
+
+Checked the existing suite (`tests/test_pilot_registration.py`, re-run this round) against each item
+named, rather than assuming the general "Failure paths — tested" section above already covers all of
+them precisely:
+
+| Required case | Covered? | Evidence |
+|---|---|---|
+| Wrong code | Yes | `test_wrong_code_is_rejected_and_counted_as_an_attempt` |
+| Expired code | Yes | `test_expired_code_is_rejected_even_if_correct` |
+| Reused code (already-verified) | Yes | `test_verifying_an_already_verified_registration_is_rejected` — the only "reuse" a verified code could attempt is re-submitting after success, which is rejected (409) |
+| Resend cooldown | Yes | `test_resend_too_soon_is_rejected_and_a_later_resend_works_with_a_fresh_code` |
+| Attempt limits | Yes | `test_too_many_wrong_attempts_locks_the_code_out`, and `test_a_resend_does_not_reset_the_attempt_count_so_it_cannot_grant_unlimited_fresh_guesses` (closes the obvious bypass of resending to reset attempts) |
+| Invalid/unsupported numbers | Yes | `test_mobile_submit_rejects_a_non_e164_phone_number` — format-level only; no test exists for a syntactically valid E.164 number from an unsupported country/carrier, since that is a Twilio-side rejection, not an application-level branch (see gap below) |
+| Provider timeout/error | Yes | `tests/test_twilio_sms.py::test_twilio_timeout_fails_closed_without_logging_code` — a transport that raises `httpx.ReadTimeout` results in `SmsSendRejectedError`, not a false success, and the code is confirmed absent from logs. (Initially logged here as a gap in this round's first pass — that was wrong; corrected after actually reading `tests/test_twilio_sms.py`, which this session had not yet opened before making the claim. No new test needed.) |
+| Bypass prevention | Yes (composite) | Covered across several tests rather than one: `test_per_registration_send_cap_cannot_be_bypassed_by_changing_the_number_repeatedly`, `test_per_phone_send_cap_cannot_be_bypassed_by_starting_a_new_registration`, `test_per_phone_quota_is_not_erased_when_a_registration_changes_its_number`, `test_bypassing_the_trusted_proxy_cannot_evade_the_otp_limit_via_the_header`, `test_concurrent_sends_to_the_same_phone_cannot_both_pass_a_nearly_exhausted_quota` |
+
+**No genuine test-coverage gap found** against this explicit list, once `tests/test_twilio_sms.py` is
+included alongside `tests/test_pilot_registration.py` — every named case has a passing, discriminating
+test. (`tests/test_twilio_sms.py` additionally covers unsupported/malformed provider responses — a
+non-201 status, a `failed`/`undelivered` status, and a response missing a valid message `sid` — all
+correctly treated as rejections, not successes.)
+
+## Secure local code entry (for the one controlled real-send test, once unblocked)
+
+The task asks for "secure local code entry" to verify a real OTP once received. Proposed mechanism,
+not yet usable (blocked on the same three items as the real send itself):
+
+- The designated recipient reads the code **off their own phone** and types it directly into the
+  existing `/v1/pilot/verify` flow (the same form real visitors would use) — there is no separate
+  "admin" code-entry path to build or maintain, and none should be, since adding one would be a new,
+  unaudited bypass of the normal verification route.
+- This session (or any operator) **never reads, requests, or logs the code value** at any point — not
+  from the recipient, not from Twilio's API response (which never contains the code — only delivery
+  status), not from any application log (confirmed above the code is never logged).
+- The only values this session will report after the real-send test are pass/fail outcomes (did the
+  known-correct code verify; was a known-wrong code rejected) — never the code itself, matching the
+  existing "credentials as present/missing, not values" discipline applied throughout this document.
+
 ## Existing Twilio correspondence/account — checked before drafting anything new
 
 Searched this repository for any record of prior Twilio correspondence (support tickets, case numbers,
@@ -234,6 +281,111 @@ question, that supersedes sending this.
 > (not a loan offer, not promotional) is permitted on this account, and whether any additional account
 > registration or category declaration is required on our side before sending. Account: [SID once an
 > account exists]. Intended route: international (no domestic/DLT registration in place).
+
+## Verify vs. Programmable Messaging — does the India requirement differ by product?
+
+Checked directly, per instruction not to assume one product's requirements carry over to another.
+Twilio's **Verify** product (a separate, managed OTP API — not what this codebase uses) and
+**Programmable Messaging** (what `TwilioSmsSender` actually uses) are different APIs with different
+billing and a different delivery abstraction, so the question is real, not rhetorical.
+
+**Finding, with its limits stated plainly**: every India-specific source found — Twilio's
+country-specific legal terms page and the India SMS guidelines page cited above — frames DLT/route
+approval as a property of **the Twilio account and the phone number/sender ID sending the traffic**,
+not of which Twilio API product originated the send. Verify sends its messages through the same
+underlying India carrier connections (domestic vs. international route) as Programmable Messaging;
+Twilio's own Verify pricing/country-support pages list India with the same route-dependent delivery
+caveats, not a separate exemption. **I did not find a single Twilio-authored page that states this
+equivalence explicitly for Verify** (several searches returned only general Verify documentation, not
+an India-specific carve-out or confirmation either way) — so this is a **reasoned conclusion from how
+Twilio's routing model is documented to work, not a directly confirmed fact**. It does not change
+anything operationally here, since **this codebase does not use Verify** and has no plan to adopt it;
+it is recorded only because the task explicitly asked the question. If a future decision to switch to
+Verify is ever considered, this equivalence should be re-confirmed with Twilio directly rather than
+relied on from this note.
+
+## Cost monitoring — what exists today vs. what a real hard cap requires
+
+Distinguishing, per instruction, an alert from a cap:
+
+**What a Twilio Usage Trigger actually does (existing control, once configured — not yet configured
+here)**: it watches a usage/spend metric and fires a **webhook call and/or email** when a threshold is
+crossed. That is the entire native behavior. **It does not, by itself, stop further sends.** A Usage
+Trigger is a notification mechanism, not an enforcement mechanism — calling it a "hard cap" would
+overstate what it does. This document's own setup steps above said a trigger can "alert or (preferably)
+disable further sends" — the "disable" half is **not automatic**; it requires one of the two concrete
+mechanisms below to actually be built, which has not been done:
+
+- **Build it**: a webhook receiver that, on receiving the trigger's callback, calls Twilio's own API to
+  suspend the specific **subaccount** this integration sends from (requires isolating this feature's
+  sends under a dedicated Twilio subaccount first, specifically so suspending it cannot affect
+  anything else on the parent account). This is a real hard stop, but it is **proposed, not built** —
+  no such webhook receiver exists in this codebase today.
+- **Configure it**: fund a dedicated subaccount with a small, fixed prepaid balance and leave
+  auto-recharge **off**. Once the balance is exhausted, sends fail at Twilio's end with no code to
+  write. This is the simpler of the two and needs no new service, only Twilio Console configuration —
+  also **proposed, not yet done**, since no dedicated subaccount or credentials exist yet.
+
+**Existing control, already real and already covered above**: this codebase's own per-registration,
+per-phone-number, and per-IP send caps (`app/pilot_config.py`, enforced in `app/services/pilot.py`)
+bound *this application's* ability to trigger sends, independent of anything Twilio does — these are
+genuine hard limits already in the code, not alerts, and they remain the primary control regardless of
+which Twilio-side option is configured later.
+
+**Conclusion**: as configured today, **no hard spend cap exists on the Twilio side** — only the
+proposed options above would create one. The application-side caps are real and already enforced, but
+they limit *attempts*, not *Twilio account spend* directly (a visitor could still be sent the maximum
+allowed number of messages within the app's own limits; the Twilio-side cap is a second, independent
+layer against a different failure mode — e.g. a bug or a credential leak causing far more sends than
+the app's logic intends).
+
+## Destination restrictions — Messaging Service Geo Permissions (proposed, not configured)
+
+Twilio Messaging Services support **Geo Permissions**, a per-Messaging-Service setting that restricts
+which destination countries/regions it will send to at all, independent of this codebase's own logic.
+**Not configured today** — no Messaging Service exists yet. Proposed: once created, restrict Geo
+Permissions to India only (the only destination this pilot is designed for). This is a Twilio-side
+allowlist, not a replacement for this codebase's own E.164 validation
+(`ck_pilot_registrations_phone_e164`, already enforced at the database level) — the two are
+complementary: the database constraint rejects malformed input before it ever reaches Twilio; Geo
+Permissions would reject a well-formed but out-of-scope destination (e.g. a validly-formatted non-India
+number) at the Twilio layer even if application logic had a bug that let one through.
+
+## Phone number storage, access, encryption, retention, and deletion — checked, not assumed
+
+Read directly from `alembic/versions/0004_pilot_registration.py` and
+`app/repositories/pilot.py`, reporting exactly what exists and naming what does not, per instruction
+not to claim an absent control:
+
+- **Storage**: `pilot_registrations.phone_number` is `sa.Text()` — **plain text, no application-level
+  encryption or hashing**. A CHECK constraint (`ck_pilot_registrations_phone_e164`) validates E.164
+  format but provides no confidentiality. A partial index
+  (`idx_pilot_registrations_phone_number`, `WHERE phone_number IS NOT NULL`) makes it efficiently
+  queryable in plain text.
+- **Access**: no access path exists beyond direct database query today. Unlike
+  `situation_pilot_interest`, which has an admin-token-gated export route
+  (`GET /v1/situation-pilot-interest/admin/export`), **`app/routers/pilot.py` has no admin or export
+  route at all** for registrations, phone numbers, or OTP records — there is no formal, audited
+  retrieval path, only whoever has database credentials.
+- **Encryption at rest**: none at the application/column level (confirmed above). Disk/volume-level
+  encryption, if any, would be a Postgres-host/infrastructure property, not something this codebase
+  configures or can attest to from here.
+- **Retention**: **no retention or purge job exists** for `pilot_registrations`, `otp_challenges`, or
+  `otp_sends` — confirmed by grep across the migrations and service code. This is unlike
+  `anonymous_sessions`/`product_events`, which do have a documented purge pattern elsewhere in this
+  codebase. A phone number submitted today would persist indefinitely with no code-enforced expiry.
+- **Deletion/withdrawal**: **no deletion or withdrawal endpoint exists** anywhere in
+  `app/routers/pilot.py`, `app/services/pilot.py`, or `app/repositories/pilot.py`. A visitor who
+  submits a number today has no self-service or support-assisted way to have it removed through this
+  system.
+
+**Stated plainly, not softened**: these are real, currently-absent controls, not minor gaps. They are
+pre-existing conditions of the already-merged 1.1B pilot code (not introduced by this review or by
+PR #34), but they are material to any decision to enable real phone capture — including the Milestone 2
+Part B/C question of whether to add a *new* phone-collecting feature before these are addressed. This
+review proposes no fix to them here (out of scope for a credential/delivery assessment), but any phone
+capture put in front of real users should not proceed without a retention policy and a working deletion
+path, at minimum.
 
 ## Minimal connectivity and controlled real-send procedure (not yet performed — blocked)
 
