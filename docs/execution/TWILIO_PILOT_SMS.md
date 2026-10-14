@@ -12,20 +12,21 @@ Set these only in the API service's secret environment (e.g. `/etc/sutriva/api.e
 matching every other secret this project already keeps host-only — never in the PWA
 bundle, never in Git, never in chat, never in a log line):
 
-| Variable | Purpose | Status (checked 2026-10) |
-|---|---|---|
-| `PILOT_SMS_PROVIDER` | Must equal `twilio` to select this adapter at all; any other/unset value means no SMS provider is selected | **Not set anywhere this review has access to** |
-| `TWILIO_ACCOUNT_SID` | Owning Twilio account SID | **Not set** |
-| `TWILIO_API_KEY_SID` | A server-side API Key's SID (see Authentication below) | **Not set** |
-| `TWILIO_API_KEY_SECRET` | That API Key's secret | **Not set** |
-| `TWILIO_MESSAGING_SERVICE_SID` | The Messaging Service to send through | **Not set** |
-| `PILOT_OTP_HMAC_KEYS` | Signs/verifies OTP codes at rest (comma-separated, newest first) — **required independently of Twilio**; without it the service fails closed (`otp_signing_key_not_configured`), it is not specific to any SMS provider | **Not set** |
+| Variable | Purpose | Local/review environment | `sutriva-alpha` (production host) |
+|---|---|---|---|
+| `PILOT_SMS_PROVIDER` | Must equal `twilio` to select this adapter at all | **Missing** (confirmed by inspecting this environment directly) | **Not checked** |
+| `TWILIO_ACCOUNT_SID` | Owning Twilio account SID | **Missing** | **Not checked** |
+| `TWILIO_API_KEY_SID` | A server-side API Key's SID (see Authentication below) | **Missing** | **Not checked** |
+| `TWILIO_API_KEY_SECRET` | That API Key's secret | **Missing** | **Not checked** |
+| `TWILIO_MESSAGING_SERVICE_SID` | The Messaging Service to send through | **Missing** | **Not checked** |
+| `PILOT_OTP_HMAC_KEYS` | Signs/verifies OTP codes at rest — **required independently of Twilio**; without it the service fails closed regardless of SMS provider | **Missing** | **Not checked** |
 
-No value is printed anywhere in this document or was requested in chat. "Status" above reflects
-this local/review environment and `sutriva-alpha`'s last-known state before SSH access was lost
-(2026-10-08) — **not rechecked this round**; see the PR #33 follow-up section of
-`SITUATIONS_REDESIGN.md` for why a fresh host check needs restored access, and the same applies
-here.
+No value is printed anywhere in this document or was requested in chat. "**Not checked**" for
+`sutriva-alpha` is precise, not a rounding of "probably missing": SSH access to that host is
+currently blocked (unrelated allowlist issue, documented in `SITUATIONS_REDESIGN.md`'s PR #33
+section), and — distinct from that — **this review has no record of ever having specifically
+queried these six variables on that host**, even during earlier sessions when SSH access was
+available. Do not infer either "present" or "missing" there from anything in this document.
 
 Optional, all with safe defaults (`app/pilot_config.py`), only worth setting deliberately:
 `PILOT_OTP_CODE_LENGTH`, `PILOT_OTP_TTL_SECONDS`, `PILOT_OTP_RESEND_COOLDOWN_SECONDS`,
@@ -67,40 +68,53 @@ every log line in the send path, including the failure branches.
 5. Tell me only: that it's done, and the **designated test phone number** (a number you own and can
    personally receive the test code on) — not the credential values themselves.
 
-## India delivery requirements — researched, not assumed (checked 2026-10, via Twilio's own published guidelines)
+## India delivery requirements — two separate questions, corrected this round
 
-Two separate, both unresolved, both **real blockers for anything beyond a single controlled test**:
+An earlier version of this section treated DLT provisioning (~10 business days) as a universal
+prerequisite for any India delivery at all. **That was wrong, and is corrected here**: Twilio
+distinguishes a **route** question (international vs. domestic — resolved below, not a blocker) from
+a **use-case/content approval** question (not resolved, and not route-dependent). Conflating them
+overstated the blocker. Sourced directly from Twilio's own published pages, not inferred.
 
-**1. DLT registration (regulatory, not a Twilio preference).** India's TRAI mandates DLT
-(Distributed Ledger Technology) registration for commercial SMS — this covers transactional and OTP
-messages, not only promotional ones. Per Twilio's own guidelines
-([twilio.com/en-us/guidelines/in/sms](https://www.twilio.com/en-us/guidelines/in/sms)):
-completing entity and Sender ID registration on a mobile operator's DLT portal is required *before*
-registering with Twilio; an **alphanumeric Sender ID takes about 10 business days** to provision
-once submitted; **long codes (ordinary phone numbers) are not supported for domestic India SMS at
-all**; and unregistered domestic messages **are blocked by operators**, not merely degraded.
-**This has not been started.** It is a multi-day, external, business-entity-level compliance
-process — not something achievable in this session, and not something I can do on your behalf.
-There is also a documented **international routing pathway** that bypasses DLT (random
-international short codes, no DNC-list interaction) — this is likely what lets a single test
-message go through *before* DLT is in place, but it is not a compliant or reliable basis for any
-ongoing or production delivery to Indian numbers.
+### Route: the account defaults to international, automatically, no DLT required
 
-**2. Content restriction — this resolves the "assess" item this document already flagged.** Twilio's
-same India guidelines page states, verbatim: *"Sending firearms, gambling, adult content,
+Per Twilio's own legal terms
+([twilio.com/en-us/legal/service-country-specific-terms/outbound-sms](https://www.twilio.com/en-us/legal/service-country-specific-terms/outbound-sms)),
+verbatim on how routing is assigned: *"If Customer is approved for a domestic route for outbound
+SMS, Twilio will automatically send such outbound SMS using a domestic route."* Domestic approval
+requires three things, none of which Sutriva has done: provider approval of a domestic Sender ID
+(this is the DLT-gated step), written notice of that approval to Twilio, and Twilio configuring it.
+**Until and unless those three happen, the account is not "blocked" — it is on the international
+route by default, automatically, today, with no DLT prerequisite.** The India guidelines page
+([twilio.com/en-us/guidelines/in/sms](https://www.twilio.com/en-us/guidelines/in/sms)) describes
+what that route looks like in practice: messages transmit via mobile operators' International Long
+Distance Operator (ILDO) connections, using a random ILDO-approved short code (any alphanumeric
+sender name is overwritten with that random number) — meaning the controlled test this task
+authorizes **can proceed on route grounds alone**, without waiting on DLT. What DLT/domestic
+registration actually buys, if pursued later, is a stable, recognizable sender ID and the
+reliability profile carriers give registered domestic traffic — a quality/branding upgrade for
+sustained use, not a connectivity prerequisite for one test. **Twilio's own documentation does not
+fully specify the inverse case** (an account that previously had domestic approval sending
+international traffic, or edge-case automatic migration back to international) — stated as a gap in
+their public docs, not resolved by reading further.
+
+### Use-case/content approval — still open, not resolved by the route being fine
+
+Twilio's India guidelines page states, verbatim: *"Sending firearms, gambling, adult content,
 **money/loan**, political, religious, controlled substance, cannabis, and alcohol related content is
-strictly prohibited."* Sutriva's product is a money/loan-comparison service. **Fact**: this
-restriction is published and applies to India SMS sent via Twilio. **Inference, not confirmed**:
-read in context with Twilio's broader messaging-category guidance, this almost certainly targets
-message *content* — promotional loan offers, gambling-adjacent solicitation — not the *existence* of
-a neutral OTP verification message from a company that happens to operate in financial services
-(banks and lenders routinely send Twilio-delivered OTPs in India; the current message body contains
-no loan terms, amounts, or promotional language at all). **Unknown, and the actual risk**: whether
-Twilio's own account-compliance review would classify this *account's declared use case* under the
-restriction regardless of the neutral wording of any one message. **This should be resolved by
-asking Twilio directly** (via their compliance/support channel, stating the exact OTP-only use case
-and the exact message body) **before** relying on the account for anything beyond the one controlled
-test this task authorizes — not inferred silently, and not treated as cleared by my reading alone.
+strictly prohibited."* Separately, Twilio's enforcement model has two distinct mechanisms (per their
+Acceptable Use Policy and campaign-vetting error documentation): **account-level suspension** for an
+Acceptable-Use-Policy violation (not specific to a route — this is the one that matters here), and
+**template/campaign rejection** (specific to domestic registration vetting, not the international
+route Sutriva's account currently uses). **This means the content restriction is not avoided by
+using the international route** — it's a separate, account-wide compliance question. Fact: the
+restriction is published and names Sutriva's category. Inference, not confirmed: it most plausibly
+targets promotional/solicitation content rather than a neutral, user-requested OTP (banks and
+lenders routinely send Twilio OTPs in India; Sutriva's message body carries no loan terms, amounts,
+or promotional language). Unknown, and the actual risk this task's item 2 asks to close: whether
+Twilio's account-level compliance review would still flag the account's *declared use case*
+(financial-wellness comparison tool) regardless of that neutral wording. **Not resolved by my
+reading — resolved only by Twilio's own written answer.** See the prepared (not sent) request below.
 
 ## Abuse/cost controls — assessed
 
@@ -145,6 +159,26 @@ IPs is bounded only by the per-registration and per-phone caps (which hold regar
 not by the per-IP ceiling. This is the same residual every per-IP control in this codebase has and is
 not a new or 1.1B-specific gap.
 
+**Mapped explicitly to the three things this review was asked to verify** (re-run fresh this round,
+732/732, on this branch's own base commit, `23464ce`):
+- **Trusted-proxy handling**: `test_with_trusted_proxy_configured_each_real_visitor_gets_an_
+  independent_otp_budget` — with `TRUSTED_PROXY_IPS` naming the proxy's real peer address,
+  `X-Forwarded-For` is correctly read and two different real visitors behind it get two independent
+  budgets. The test that actually proves this discriminates old from new code (see above).
+- **Independent legitimate-client limits**: the same test's second half — the *first* visitor's own
+  budget is still correctly exhausted on a repeat attempt, so "independent" means genuinely per-visitor,
+  not "unlimited."
+- **Resistance to forged forwarding headers**: `test_bypassing_the_trusted_proxy_cannot_evade_the_
+  otp_limit_via_the_header` — a caller connecting directly (not from the configured trusted proxy) that
+  sets its own `X-Forwarded-For` to two different fabricated values still shares one bucket; the header
+  is only ever honoured once the connection itself originates from a named trusted address, so a remote
+  caller can never grant itself a fresh identity by setting it.
+
+**Public OTP confirmed disabled**: `shared/track11_config.json`'s committed `track11bEnabled` is
+`false` (untouched by this diff — not a file this PR changes at all), and `_require_track11b()`
+returns `404` for every `/v1/pilot/*` route while it is. Re-confirmed by re-reading the committed file
+this round, not assumed from memory.
+
 ## Failure paths — tested
 
 Existing suite already covers: wrong/missing Origin (403 on every route, not just verify), flag-off
@@ -157,22 +191,45 @@ the *application's* failure handling, not Twilio's actual behavior under a real 
 invalid number, a carrier block) in isolation. Confirmed by running the full suite on this branch
 and, separately, on the base commit before this fix — see below.
 
+## Prepared, not sent: written-confirmation request to Twilio
+
+Drafted below so it's ready the moment you instruct me to send it (or you send it yourself, or route
+it through your own Twilio account contact) — **not sent as part of this task**, per explicit
+instruction.
+
+> Subject: Use-case confirmation — OTP-only transactional SMS for a financial-wellness comparison tool (India)
+>
+> We operate Sutriva, an anonymous-first financial-wellness web tool (loan-offer comparison and
+> card-fee review). We plan to use Twilio Programmable Messaging to send a single type of message to
+> India: a user-requested, one-time authentication code, sent only after a visitor explicitly submits
+> their own mobile number to verify it. Each message reads exactly: "Your Sutriva verification code is
+> {code}. It expires in {N} minutes. Do not share it." No promotional, loan-offer, rate, or marketing
+> content is ever included in any message from this account; no message is sent unsolicited. Given your
+> published India guidelines list money/loan-related content as prohibited, we'd like written
+> confirmation that a user-requested authentication OTP for a disclosed financial-wellness use case
+> (not a loan offer, not promotional) is permitted on this account, and whether any additional account
+> registration or category declaration is required on our side before sending. Account: [SID once an
+> account exists]. Intended route: international (no domestic/DLT registration in place).
+
 ## Minimal connectivity and controlled real-send procedure (not yet performed — blocked)
 
-**Blocked on**: Twilio credentials (private setup above) and a designated test phone number — neither
-has been provided to this session. Keeping `PILOT_SMS_PROVIDER` unset (or `logging-dev-only`) in every
+**Blocked on**: Twilio credentials (private setup above), a designated test phone number, and (per
+item 2 above) Twilio's written answer on the use-case question — none have been provided to or
+obtained by this session. Keeping `PILOT_SMS_PROVIDER` unset (or `logging-dev-only`) in every
 environment reachable by real visitors; nothing here changes that.
 
-Once both are available, the planned sequence, smallest step first:
-1. **Connectivity only, no real send, no cost**: Twilio publishes "magic" test credentials and test
-   phone numbers specifically for this (e.g. a documented test Account SID/API Key pair that always
-   returns a simulated success/failure without touching a real network or a real number) — worth using
-   first to prove the adapter's request shape, auth, and response parsing are all correct, with zero
-   cost and zero regulatory exposure, before touching the real account at all.
+Once all three are available, the planned sequence, smallest step first:
+1. **Connectivity only — simulation evidence, not handset-delivery evidence.** Twilio publishes test
+   credentials and test phone numbers specifically for this (a documented test Account SID/API Key
+   pair that always returns a simulated success/failure without touching a real network or a real
+   number). Worth using first to prove the adapter's request shape, auth, and response parsing are
+   correct, with zero cost and zero regulatory exposure. **Explicitly not proof a real handset would
+   receive anything** — it never leaves Twilio's test harness. Route-wise this is now unblocked (no
+   DLT needed for the international route); it is still blocked on not having credentials.
 2. **One real, controlled send** to the designated number only, with real (but newly created,
-   spend-capped) credentials — explicitly the "one controlled real OTP delivery/verification" this
-   task authorizes, nothing beyond it, and only after the content-restriction question above has an
-   answer from Twilio, not just my reading of their published guideline.
+   spend-capped) credentials — the "one controlled real OTP delivery/verification" this task
+   authorizes, nothing beyond it, and only after Twilio's written use-case answer is in hand, not just
+   my reading of their published guideline.
 3. Verify: the code is actually received, matches what the service generated (compared by the
    designated recipient reading their own phone — never by me reading or logging the code), and
    verifies successfully through `/v1/pilot/verify`. Then verify the **negative** case too: a wrong
