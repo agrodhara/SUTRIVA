@@ -52,10 +52,15 @@ every log line in the send path, including the failure branches.
 
 ## Private credential setup (for whoever holds the Twilio account — not for this session)
 
-1. In the Twilio Console, under the account that will own this: **Account → API keys & tokens →
-   Create API key** (Standard type). This produces the SID and secret pair — **the secret is shown
-   once**; store it immediately in the host's secret manager or `/etc/sutriva/api.env` (mode
-   `0600`), never in a message to me, a commit, or a shell history.
+**Using the existing account, not creating a new one** — see "Existing Twilio correspondence/account"
+below for why. These steps create a dedicated API Key and Messaging Service under that account for
+this specific use case, not a new account.
+
+1. In the Twilio Console, under the **existing** account: **Account → API keys & tokens →
+   Create API key** (Standard type) — a fresh key dedicated to this integration, separate from
+   whatever the already-rotated credentials were for. This produces the SID and secret pair — **the
+   secret is shown once**; store it immediately in the host's secret manager or `/etc/sutriva/api.env`
+   (mode `0600`), never in a message to me, a commit, or a shell history.
 2. Create a **Messaging Service** (Messaging → Services → Create). Note its SID
    (`MGxxxxxxxx...`) — this is `TWILIO_MESSAGING_SERVICE_SID`.
 3. Set a **spending/usage trigger** in the Twilio Console (Usage → Triggers) at a small ceiling
@@ -191,11 +196,30 @@ the *application's* failure handling, not Twilio's actual behavior under a real 
 invalid number, a carrier block) in isolation. Confirmed by running the full suite on this branch
 and, separately, on the base commit before this fix — see below.
 
+## Existing Twilio correspondence/account — checked before drafting anything new
+
+Searched this repository for any record of prior Twilio correspondence (support tickets, case numbers,
+email threads) before drafting a new request. **Found: none** — no ticket number, no quoted reply, no
+reference to any prior exchange with Twilio support or compliance about this or any use case.
+
+**Found instead, and more significant: a Twilio account already exists.** `docs/decision_log.md`'s
+2026-09-25 entry records that, during an unrelated credential-exposure incident, "*unrelated Twilio
+credentials that happened to be stored in the same file were rotated separately by the account owner
+directly in the Twilio Console*" — meaning the account owner already holds and actively manages a real
+Twilio account, independent of this engagement's own work. This changes what "credential setup" means
+here: **not** creating a new account from zero, but creating (or confirming) a dedicated API Key and
+Messaging Service *under that existing account*, scoped to this specific OTP use case, rather than
+reusing whatever those rotated credentials were originally issued for (which this document has no
+visibility into and does not assume). The setup steps below are written for that case. Whether the
+account owner has separately been in touch with Twilio about anything relevant to this use case is not
+visible from this repository and was not assumed either way.
+
 ## Prepared, not sent: written-confirmation request to Twilio
 
 Drafted below so it's ready the moment you instruct me to send it (or you send it yourself, or route
 it through your own Twilio account contact) — **not sent as part of this task**, per explicit
-instruction.
+instruction. If correspondence with Twilio already exists outside this repository that answers this
+question, that supersedes sending this.
 
 > Subject: Use-case confirmation — OTP-only transactional SMS for a financial-wellness comparison tool (India)
 >
