@@ -636,14 +636,21 @@ run five times: **729/729 passed every time, no failure.**
 **What this does and does not establish.** It does **not** establish "this also fails on the base commit" —
 it was never reproduced on the base commit despite five attempts, and it only reproduced once on this
 branch out of four attempts. A single non-reproduction after a handful of runs proves neither "flaky on
-both" nor "specific to one." What *is* established, and is the actual basis for not attributing it to this
-PR: the file it lives in, the code it exercises, and the routes it calls share **zero overlap** with every
-file this PR changes — there is no code path by which this diff could affect that test's outcome. That is a
-structural argument, not a statistical one, and it is offered as such rather than as a disproven flake.
-**Unresolved**, honestly: the actual root cause of the intermittent failure (candidates not yet
-investigated: the audit path's fallback to a shared, non-test-isolated `/tmp/sutriva/audit_events.jsonl`
-when some other test fails to set `AUDIT_LOG_PATH`; filesystem write/flush timing under load) is not
-diagnosed here, and reproducing it on demand would be needed to diagnose it further.
+both" nor "specific to one." This status is carried forward as **unresolved and intermittent**, not as a
+disproven or dismissed flake.
+
+**Correction to an earlier overstatement in this document**: an earlier version of this section argued that
+zero file-level overlap between this PR's diff and the failing test's own file/code/routes meant "there is
+no code path by which this diff could affect that test's outcome." That claim is too strong and is withdrawn
+as stated. File separation rules out a *direct* code dependency — it does not rule out *indirect*
+interaction through shared test-process state: a module-level `TestClient`/FastAPI `app` instance reused
+across the whole file, the audit path's fallback to a shared, non-test-isolated
+`/tmp/sutriva/audit_events.jsonl` when some other test in the same process fails to set `AUDIT_LOG_PATH`,
+process-level rate-limiter or cache singletons, or simply a changed pytest collection order and count (this
+PR adds new test files, which shifts what runs immediately before or after this test in the same process).
+Any of those could connect this PR to the failure without touching the same file. **None of these candidate
+mechanisms has been tested or ruled out.** The honest position is: root cause undiagnosed, reproduction
+inconsistent in both directions, and this PR's connection to it neither established nor excluded.
 
 ### Verification this round — separated by evidence type
 
@@ -679,48 +686,81 @@ anywhere, not production):**
 
 **Real device:** none performed. Not approximated as simulation anywhere above.
 
-### Real-phone diagnostic (prepared here; execution is outstanding — needs a physical device)
+### Current-production phone diagnostic — baseline/routing validation ONLY
 
-**Exact URL (Campaign 1, money-value, `utm_campaign=52517814153716`'s real shape, reused for a repeat
-check):**
+**This tests what is live today (`23464ce`), not this PR.** `sutriva.io` does not yet have migration
+`0008` or any of this PR's code — a device test against it today cannot and does not validate the
+chooser-view event, the `sendBeacon` fix, or anything else in this PR. Its only legitimate purpose is
+a **baseline**: confirming routing (chooser vs. direct-situation), page load, and ordinary journey
+completion behave as expected on the currently-deployed code, so there's a known-good reference point
+to compare against *after* a real deployment. A separate, genuinely PR-validating device test is
+listed below, for after deployment is authorized.
+
+**Diagnostic URLs use clearly test-marked UTM values, not the real historical campaign IDs** — reusing
+the actual Meta campaign IDs (`52517814153716`/`52518055536916`) in a manual diagnostic would mix
+untraceable manual-test rows into what should stay a clean record of real ad-driven traffic, and would
+be indistinguishable from real campaign data in any later Meta-export reconciliation.
+
 ```
-https://sutriva.io/money-value?utm_source=ig&utm_medium=paid&utm_campaign=52517814153716&utm_content=52517814153316&utm_term=52517814153516
-```
-**Exact URL (Campaign 2, borrow-better):**
-```
-https://sutriva.io/borrow-better?utm_source=ig&utm_medium=paid&utm_campaign=52518055536916&utm_content=52518055536716&utm_term=52518055537116
-```
-**For testing the fix specifically (situation-specific, skips the chooser):**
-```
-https://sutriva.io/money-value?situation=fee&utm_source=ig&utm_medium=paid&utm_campaign=52517814153716
+Chooser routing, money-value: https://sutriva.io/money-value?utm_source=diagnostic&utm_medium=manual_test&utm_campaign=sutriva_diag_2026_10_14
+Chooser routing, borrow-better: https://sutriva.io/borrow-better?utm_source=diagnostic&utm_medium=manual_test&utm_campaign=sutriva_diag_2026_10_14
+Direct-situation routing (bypasses the chooser on current production too — this routing is not new): https://sutriva.io/money-value?situation=fee&utm_source=diagnostic&utm_medium=manual_test&utm_campaign=sutriva_diag_2026_10_14
 ```
 
-**Script, inside Instagram's own in-app browser (tap the link from a DM or post, do not open in Chrome/Safari):**
+**Script, inside Instagram's own in-app browser (tap the link from a DM or post, do not open in
+Chrome/Safari):**
 1. Note the wall-clock time and your phone's OS version before tapping.
 2. Tap the link. Observe: does the page load, how long does it take, is there any visible error.
-3. If it opens on the chooser (first two URLs above): pick any situation card. Note which one and the time.
-4. If it opens directly on a situation (third URL): confirm "Try this check →" is visible immediately.
+3. If it opens on the chooser (first two URLs): pick any situation card. Note which one and the time.
+4. If it opens directly on a situation (third URL): confirm the arrival screen and "Try this check →"
+   render (today's code only shows the situation's own arrival here — it will not show the new
+   chooser-view instrumentation, since that doesn't exist on production yet).
 5. Tap "Try this check →", then "See the result →". Confirm a result renders.
-6. Separately, from the site's home page (`https://sutriva.io/`), tap one of the two door cards and confirm
-   it navigates immediately (this exercises the `sendBeacon` fix) — do not submit the email form during this
-   diagnostic; this is a navigation/tracking check, not a registration test.
-7. Report back: device model and OS, exact tap timestamps for steps 2–6, and anything that looked wrong
-   (slow load, console-visible-to-you errors, a blank screen, the wrong group's header).
+6. Separately, from `https://sutriva.io/`, tap one of the two door cards and confirm it navigates —
+   **this exercises production's current (pre-fix) delivery, which this audit already showed loses the
+   event; a successful navigation here says nothing about whether the click was tracked.** Do not submit
+   the email form during this diagnostic.
+7. Report back: device model and OS, exact tap timestamps for steps 2–6, anything that looked wrong.
 
-**Matching this to backend data** afterward uses timestamps (±1 minute) and, if device access allows reading
-it, the `sutriva_anon_session` cookie value — not a name, email or phone number. **Test one available phone
-first; record the second OS as pending if a second device isn't available** — do not block this diagnostic
-on having both. This has not been performed as part of this round; it requires physical device access this
-environment does not have.
+**Matching this to backend data** uses timestamps (±1 minute) and, if device access allows reading it,
+the `sutriva_anon_session` cookie value — not a name, email or phone number. **Test one available phone
+first; record the second OS as pending if unavailable.** Not performed this round — needs physical
+device access this environment does not have.
+
+### Production smoke test for the new tracking and attribution — prepared now, run only after deployment is separately authorized
+
+Not executed. Written now so it's ready the moment deployment is approved, using the same
+clearly-test-marked UTM convention as above (never the real campaign IDs):
+
+```
+Chooser view (new instrumentation): https://sutriva.io/money-value?utm_source=diagnostic&utm_medium=manual_test&utm_campaign=sutriva_smoke_<deploy-date>
+Situation-specific bypass: https://sutriva.io/money-value?situation=fee&utm_source=diagnostic&utm_medium=manual_test&utm_campaign=sutriva_smoke_<deploy-date>
+```
+
+1. Confirm `/ready` reports `migration: current` at `0008_group_landing_screen_name` — not just that the
+   app responds.
+2. Load the first URL; confirm (via the protected admin surface or a direct, read-only DB check — not by
+   trusting the page alone) that a `step_viewed`/`rewards_group_landing` row was persisted with
+   `utm_campaign = sutriva_smoke_<deploy-date>` in `campaign_attribution`.
+3. Load the second URL; confirm it skips the chooser and persists `rewards_fee_arrival` instead, with the
+   same UTM value, distinguishing it from the first row.
+4. From `https://sutriva.io/`, tap a door card; confirm `door_selected` is persisted (this is the actual
+   proof the `sendBeacon` fix works in production — device simulation and local proof are not a
+   substitute for this one).
+5. Delete the smoke-test rows afterward (same pattern as every prior deployment's test-data cleanup),
+   tagged clearly enough to find by the `sutriva_smoke_` prefix.
 
 ### Gate A — requirements before relaunching this campaign
 
-1. SSH/production access restored and a fresh registration-count and `/ready` check confirms no regression
-   since this PR's baseline (23464ce / this PR's head once merged).
+1. SSH/production access restored and a fresh check confirms no regression, using **host/release
+   evidence** — `readlink /opt/sutriva/current` (or equivalent) plus service status on the host itself,
+   and `/ready` — not git history alone. `git log` against `origin/main` only proves what commit *could*
+   be deployed; it is not evidence of what is actually running, which can only come from the host.
 2. Meta Ads Manager export obtained and reconciled against the nginx table above (see "Unknowns").
 3. This PR reviewed, merged and deployed (migration `0008` applied) — not done as part of this task.
-4. At least the first real-phone diagnostic above completed, with evidence (timestamps + what rendered),
-   even if the second OS remains pending.
+4. The current-production baseline/routing diagnostic above completed (confirms today's routing and
+   journey behavior as a reference point — it does not and cannot validate this PR), **and** the separate
+   post-deployment smoke test completed once deployed, with evidence for both.
 5. Situation-specific campaign URLs (not bare group URLs) agreed with whoever manages the Meta campaign,
    using the verified shape above.
 6. **Historical comparability note, stated explicitly so it isn't lost:** "sessions with events" before this
