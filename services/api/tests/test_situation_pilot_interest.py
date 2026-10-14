@@ -435,7 +435,7 @@ def test_every_situation_gets_a_pilot_screen_name_usable_by_step_viewed(phaseb_c
     assert response.status_code == 200, (screen_name, response.text)
 
 
-def test_alembic_head_is_0007(postgres_test_url: str, alembic_ini_path, clean_database: None) -> None:
+def test_alembic_head_is_0008(postgres_test_url: str, alembic_ini_path, clean_database: None) -> None:
     from alembic import command
 
     from conftest import mapped_runtime_database_url, phaseb_alembic_cfg
@@ -446,4 +446,4 @@ def test_alembic_head_is_0007(postgres_test_url: str, alembic_ini_path, clean_da
     engine = create_engine(postgres_test_url, future=True)
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == "0007_situation_pilot_interest"
+    assert revision == "0008_saved_borrow_checks"

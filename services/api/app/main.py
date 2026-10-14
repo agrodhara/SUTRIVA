@@ -14,6 +14,7 @@ from app.routers import (
     money_value,
     pilot,
     product_events,
+    saved_borrow_checks,
     situation_pilot_interest,
     situations,
 )
@@ -29,7 +30,10 @@ allowed_origins = list(get_anonymous_session_settings().allowed_origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    # DELETE added for the Milestone 2C saved-check withdrawal route
+    # (app/routers/saved_borrow_checks.py) — every other route here still only ever uses GET/POST, so
+    # this is purely additive, not a widening of what any existing route accepts.
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     allow_credentials=True,
 )
@@ -57,3 +61,4 @@ app.include_router(pilot.router)
 app.include_router(situations.borrow_router)
 app.include_router(situations.rewards_router)
 app.include_router(situation_pilot_interest.router)
+app.include_router(saved_borrow_checks.router)
