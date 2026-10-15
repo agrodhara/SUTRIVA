@@ -24,6 +24,9 @@ files, and that gap is stated here rather than silently skipped. What **was** te
   under `/etc/sutriva/` at mode `0600` — see `docs/execution/UAT_DEPLOYMENT.md`. The exact venv path
   (`/opt/sutriva/venv`) is a documented assumption to confirm against the real host before installing this,
   not independently re-verified this round (this session has no SSH access to check it directly).
+- Both files parse as well-formed INI section structure (`python3 -c "import configparser; ...".read(...)`
+  confirms `[Unit]`/`[Service]`/`[Install]` and `[Unit]`/`[Timer]`/`[Install]` each parse cleanly) — a weak
+  but real, independently-run check, not a substitute for `systemd-analyze verify` on real systemd.
 
 ## Install steps (prepared — not performed)
 
