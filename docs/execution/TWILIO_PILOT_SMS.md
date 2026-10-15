@@ -310,30 +310,40 @@ one-time authentication OTP for Sutriva's disclosed financial-wellness compariso
 under Twilio's published India guidelines, which list "money/loan" content as "strictly prohibited" — this
 email does not answer that question, confirm an exception, or reference Sutriva's use case at all.
 
-## One short follow-up, prepared — not sent
+## One short follow-up, prepared — not sent (revised this round)
 
-Per instruction: do not restart onboarding, do not repeat already-answered questions (account-upgrade
-status is not in question), and reference the existing correspondence rather than opening a new thread.
-**This document has no specific ticket/case number to cite** — the account-upgrade email itself carries no
-visible case reference — so the draft below references the correspondence by its actual subject and date
-rather than a fabricated ticket number. If an actual ticket/case number exists (from the Twilio Console's
-support history), insert it before sending.
+Per instruction: specify Programmable Messaging explicitly (not left implicit — Twilio support could
+otherwise default to assuming Verify, the more common OTP product, which this account does not use),
+reference the existing ticket, and still do not restart onboarding or repeat the now-answered
+account-status question.
 
-> Subject: Re: Account upgrade approved — two open questions on an existing disclosed use case
+**No ticket/case number is visible to this session anywhere** — not in the account-upgrade email, not in
+this repository, not in any PR or correspondence this session has access to. The placeholder
+`[TICKET/CASE NUMBER]` below is left for you to fill in from the Twilio Console's own support-case history
+if one exists; if none does, replying directly in the same email thread as the account-upgrade message
+(keeping its subject line intact with "Re:") is the closest available substitute for "referencing the
+existing ticket" and is what the draft assumes by default.
+
+> Subject: Re: Account upgrade approved — two open questions on an existing disclosed use case [TICKET/CASE NUMBER]
 >
 > Thank you for confirming the account upgrade. Separately, and not related to account standing: we
-> previously described our use case as sending a single message type to India — a user-requested,
-> one-time authentication code for Sutriva, a financial-wellness comparison tool (loan-offer comparison
-> and card-fee review). Each message reads exactly: "Your Sutriva verification code is {code}. It expires
-> in {N} minutes. Do not share it." No promotional, loan-offer, rate, or marketing content is ever
-> included. Two specific questions remain open: (1) Given your India guidelines list money/loan-related
-> content as prohibited, could you confirm in writing whether this specific, disclosed use case is
+> previously described our use case as sending a single message type to India using **Twilio Programmable
+> Messaging** (not Twilio Verify) — a user-requested, one-time authentication code for Sutriva, a
+> financial-wellness comparison tool (loan-offer comparison and card-fee review). Each message reads
+> exactly: "Your Sutriva verification code is {code}. It expires in {N} minutes. Do not share it." No
+> promotional, loan-offer, rate, or marketing content is ever included. Two specific questions remain open
+> for this Programmable Messaging use case specifically: (1) Given your India guidelines list money/loan-
+> related content as prohibited, could you confirm in writing whether this specific, disclosed use case is
 > permitted on this account, and whether any additional registration or category declaration is needed on
 > our side first? (2) Your Messaging Policy requires opt-out language ("Reply STOP to unsubscribe") in the
-> initial message, while your Verify Consent and Opt-in Policy presents that same language as a
-> pre-opt-in Terms & Conditions disclosure rather than in-message text — for a one-time authentication
-> code like ours, is opt-out language required inside the SMS itself, or is the pre-opt-in disclosure
-> sufficient? Account: [SID]. Intended route: international (no domestic/DLT registration in place).
+> initial message, while your Verify Consent and Opt-in Policy presents that same language as a pre-opt-in
+> Terms & Conditions disclosure rather than in-message text — for a one-time authentication code sent via
+> Programmable Messaging like ours, is opt-out language required inside the SMS itself, or is the
+> pre-opt-in disclosure sufficient? Account: [SID]. Intended route: international (no domestic/DLT
+> registration in place).
+
+**Not sent.** Pasted here for your review per explicit instruction, and reproduced directly in this
+session's reply to you as well.
 
 **Not sent, per standing instruction.** Independent setup/testing work continues regardless of when or
 whether this is sent.
