@@ -36,9 +36,14 @@ afterEach(() => {
 });
 
 it("reads the token from the URL fragment, not a path or query parameter, and requests it as a header", async () => {
-  let requestHeaders: Headers | null = null;
+  // A plain `let ... = null` reassigned only inside the vi.fn() callback below hits a real TypeScript
+  // narrowing quirk (reproduced in isolation, unrelated to Headers/RequestInit specifically — a trivial
+  // `let x: T | null = null` reassigned inside *any* callback and read via `x?.foo` afterward narrows to
+  // `never` under this project's tsconfig, caught by CI's dedicated `tsc --noEmit` step, which `next
+  // build`'s own type-check didn't catch). A mutable ref object sidesteps it cleanly.
+  const requestHeadersRef: { current: Headers | null } = { current: null };
   global.fetch = vi.fn((url: string, init?: RequestInit) => {
-    requestHeaders = init?.headers ? new Headers(init.headers) : null;
+    requestHeadersRef.current = init?.headers ? new Headers(init.headers) : null;
     // The fetch target itself must never contain the token — confirms it never becomes a path/query value.
     expect(String(url)).not.toContain("test-token");
     return Promise.resolve({ ok: true, status: 200, json: async () => SAVED_CHECK });
@@ -47,7 +52,7 @@ it("reads the token from the URL fragment, not a path or query parameter, and re
   render(<SavedCheckPage />);
 
   await screen.findByText("This looks manageable");
-  expect(requestHeaders?.get("X-Saved-Check-Token")).toBe("test-token");
+  expect(requestHeadersRef.current?.get("X-Saved-Check-Token")).toBe("test-token");
 });
 
 it("renders the saved result once loaded", async () => {
@@ -83,10 +88,12 @@ it("shows the same 'no longer valid' state with no fragment at all, rather than 
 });
 
 it("deleting the saved check sends the token as a header, shows a deleted confirmation, and the result is no longer shown", async () => {
-  let deleteHeaders: Headers | null = null;
+  // See the identical note on the retrieval test above — a ref object, not a plain `let`, sidesteps a
+  // real TypeScript narrowing quirk caught by CI's `tsc --noEmit` step.
+  const deleteHeadersRef: { current: Headers | null } = { current: null };
   global.fetch = vi.fn((url: string, init?: RequestInit) => {
     if (init?.method === "DELETE") {
-      deleteHeaders = init?.headers ? new Headers(init.headers) : null;
+      deleteHeadersRef.current = init?.headers ? new Headers(init.headers) : null;
       expect(String(url)).not.toContain("test-token");
       return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: "deleted" }) });
     }
@@ -101,7 +108,7 @@ it("deleting the saved check sends the token as a header, shows a deleted confir
 
   expect(await screen.findByText("Saved check deleted")).toBeInTheDocument();
   expect(screen.queryByText("This looks manageable")).not.toBeInTheDocument();
-  expect(deleteHeaders?.get("X-Saved-Check-Token")).toBe("test-token");
+  expect(deleteHeadersRef.current?.get("X-Saved-Check-Token")).toBe("test-token");
 });
 
 it("a failed delete shows an error and keeps the result visible, not a false deleted state", async () => {
