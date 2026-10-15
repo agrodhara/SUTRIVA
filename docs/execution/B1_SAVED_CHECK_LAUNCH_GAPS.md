@@ -5,15 +5,96 @@ named items below is marked **closed** (fixed and tested this round), **partiall
 **open — reported** (not fixed, with the exact reason and what's needed). This document is itself
 evidence, not a release decision — `savedCheckEnabled` stays `false`; nothing here authorizes activation.
 
-## 1. Real email provider and designated-inbox delivery — **open, reported**
+## 1. Real email provider and designated-inbox delivery — **open; recommendation + exact steps below**
 
-Unchanged from the original assessment: `app/services/email.py` has `LoggingEmailSender` only.
+Unchanged technically: `app/services/email.py` has `LoggingEmailSender` only.
 `SAVED_CHECK_EMAIL_PROVIDER=logging-dev-only` is the only working value; any other value fails closed
-with `EmailProviderNotConfiguredError`. No real provider (AWS SES or otherwise) has been built or
-configured, and no email has ever been sent to a real inbox. Blocked on the same kind of input the Twilio
-assessment is blocked on: a provider decision, credentials, and domain verification (SPF/DKIM) — none of
-which exist yet. See `B1_SAVED_CHECK_SPEC.md`'s "Implementation estimate" for the scope of this remaining
-work.
+with `EmailProviderNotConfiguredError`. No real provider has been built or configured, and no email has
+ever been sent to a real inbox. **Nothing in this section opens an account or creates a credential — it is
+a recommendation and a precise procedure for the account owner to follow.**
+
+### Recommendation: AWS SES
+
+Given AWS/Lightsail is already this project's hosting platform (see `docs/execution/UAT_DEPLOYMENT.md`),
+SES avoids a new vendor relationship entirely — the same account, billing, and IAM surface already in use.
+Checked directly against AWS's own current documentation this round (not carried over from general
+knowledge, which would risk being stale — AWS restructured SES pricing on **2026-07-21**):
+
+- **Cost**: at this feature's volume (low hundreds to low thousands of emails/month), negligible either
+  way — roughly **$0.10–0.16 per 1,000 emails** depending on which pricing plan the account is on
+  (`aws.amazon.com/ses/pricing/`), i.e. a few tens of cents per month. No SES-specific free tier exists
+  for AWS accounts created on or after 2025-07-15 (an older "first 3,000 free" tier was retired); new
+  accounts instead get the **general $200 AWS Free Tier credit**, usable against SES among other services,
+  not restricted to EC2/Lightsail specifically.
+- **Domain verification is free and sendless**: publishing the DKIM/SPF DNS records and getting SES to
+  report a domain "Verified" costs nothing and sends nothing — this can be done immediately after account
+  creation, before any real send or any charge, and before deciding whether to request production access
+  at all.
+- **"Sandbox mode"** (the default for every new SES identity, per-region) restricts sending to only
+  verified recipient addresses, 200 messages/24h, 1/second — which is actually sufficient for the
+  designated-inbox test procedure below without ever requesting production access first.
+
+**Compared briefly, not deeply researched**: Postmark (100 free/month, then $15/mo for 10,000) and Resend
+(3,000 free/month, capped 100/day) are both reasonable alternatives with simpler onboarding than AWS's
+IAM/DNS model — worth a second look if the AWS-account-reuse argument doesn't carry as much weight as
+assumed here. This document still recommends SES primarily for the single-vendor-surface reason above, not
+because it is cheaper (at this volume, the difference is immaterial).
+
+### Exact setup steps (for the account owner — not performed by this session)
+
+1. In the SES console (the **existing** AWS account — matching this project's own "reuse the existing
+   account" discipline already applied to Twilio): **Identities → Create identity → Domain**, enter the
+   sending domain, choose **Easy DKIM**.
+2. Publish the DNS records SES shows under that identity's **Authentication** tab: three DKIM CNAME
+   records (keep the leading underscore in `_domainkey`), and, for SPF/DMARC alignment, set up a **custom
+   MAIL FROM domain** (a subdomain, e.g. `mail.sutriva.io`) for the MX + SPF TXT record SES provides, plus
+   a self-authored `_dmarc.<domain>` TXT record (start with `p=none` and tighten later, per DMARC's own
+   phased-rollout convention). DNS propagation can take up to 72 hours; SES auto-detects verification.
+3. **Nothing above requires leaving sandbox mode or any real send.** Once "Verified" appears, proceed to
+   the designated-inbox test below while still in sandbox — sandbox explicitly allows sending to a
+   *verified* recipient address, which the test procedure uses anyway.
+4. Create a dedicated IAM user (or role) scoped to exactly this use, not a broad admin credential:
+   attach a policy granting only `ses:SendEmail` and `ses:SendRawEmail` (scopable further to this
+   specific identity's ARN). Generate SES **SMTP credentials** for it (SES console → SMTP Settings →
+   Create SMTP credentials) if sending via SMTP, or a standard IAM access key pair if sending via the SES
+   API directly — these are two different credential *shapes* for the same underlying IAM user; an IAM
+   access key does not work as SMTP credentials directly.
+5. **Only request production access** (Account dashboard → "Request production access") once the
+   designated-inbox test below has passed and real, un-capped sending is actually wanted — this step is
+   what actually commits to real-world sending volume and should be a deliberate, separate decision, not
+   bundled into initial setup.
+
+### Credential names (empty template — matching this project's existing `.env.example` convention)
+
+```
+SAVED_CHECK_EMAIL_PROVIDER=aws-ses          # selects the (not-yet-built) SES adapter
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_REGION=                                  # e.g. ap-south-1
+SES_CONFIGURATION_SET=                       # optional, for bounce/complaint tracking
+```
+
+No value for any of these has been requested, generated, or exposed in this session.
+
+### Designated-inbox test procedure (once the above is in place — not yet performed)
+
+1. In SES (still in sandbox — no production access needed for this step), **verify the designated test
+   inbox itself** as a recipient identity (Identities → Create identity → Email address → the actual
+   inbox you'll check) — sandbox mode requires the *recipient* to be verified too, not only the sender
+   domain.
+2. Send one real email via the (not-yet-built) `AwsSesEmailSender` adapter to that verified address,
+   reusing the exact same `send_or_raise` discipline `app/services/email.py` already has for the logging
+   stub — a rejected send must still roll back the save, never show a false "sent" confirmation.
+3. Confirm receipt by reading the actual inbox (never by this session reading or logging the email body
+   or the link/token it contains — same discipline already applied to the Twilio OTP test plan).
+4. Confirm the negative case too: an intentionally invalid/unverified recipient address is rejected by
+   SES and surfaces as `email_send_failed`, not a false success — mirroring the existing
+   `test_a_rejected_email_send_never_produces_a_saved_row` test, now exercised against the real provider
+   instead of only the test double.
+
+Blocked on the account owner's action (account/IAM access this session doesn't have) for steps 1–2 above;
+everything else (the adapter code itself, following `TwilioSmsSender`'s exact pattern) remains independent
+work this session can do once a provider decision is confirmed.
 
 ## 2. Token/access security, expiry, revocation, leakage prevention — **closed this round**, one residual noted
 
