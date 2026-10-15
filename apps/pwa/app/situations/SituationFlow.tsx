@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ValueBars, type ValueBarRow } from "../../components/journey-ui/ValueBars";
 import ui from "../../components/journey-ui/journeyUi.module.css";
 import { trackEvent, type ScreenName } from "../../lib/api";
-import { createJourneyRunId } from "../../lib/journeySession";
+import { createJourneyRunId, savedCheckEnabled } from "../../lib/journeySession";
 import { PilotInterestForm } from "./PilotInterestForm";
 import { ProvenanceBadge, type Provenance } from "./ProvenanceBadge";
 import { SaveCheckForm } from "./SaveCheckForm";
@@ -329,8 +329,11 @@ export function SituationFlow({
            * v1, per the spec's explicit scope; email-only (mobile verification is deferred — see
            * docs/product/journeys/B1_SAVED_CHECK_SPEC.md). `toRequestBody` is the exact same function the
            * live calculation above already used, so a save can never diverge from what's actually on
-           * screen. */}
-          {situation.group === "borrow" ? (
+           * screen. Gated on savedCheckEnabled(), mirroring track11aEnabled()/track11bEnabled()'s own
+           * pattern — without this, the form would render for every visitor regardless of the backend
+           * flag, and submitting it would 404 with a misleading generic error. Caught and fixed before
+           * this was ever presented for review, not left as a silent bug. */}
+          {situation.group === "borrow" && savedCheckEnabled() ? (
             <SaveCheckForm situationKey={situationKey} values={toRequestBody(situationKey, values)} provenance={provenance} result={result} />
           ) : null}
         </div>

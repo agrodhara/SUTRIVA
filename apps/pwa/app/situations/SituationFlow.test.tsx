@@ -2,12 +2,23 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { trackEventMock } = vi.hoisted(() => ({ trackEventMock: vi.fn() }));
+const { trackEventMock, savedCheckEnabledMock } = vi.hoisted(() => ({
+  trackEventMock: vi.fn(),
+  // Defaults to true for this file's existing tests, which were written when SaveCheckForm had no flag
+  // gate at all — mirrors that same effective behavior while still being a real, overridable mock (see
+  // the dedicated flag-off test below, which overrides this per-test).
+  savedCheckEnabledMock: vi.fn(() => true),
+}));
 
 vi.mock("../../lib/api", () => ({
   requireApiBaseUrl: () => "http://127.0.0.1:8010",
   trackEvent: trackEventMock,
 }));
+
+vi.mock("../../lib/journeySession", async () => {
+  const actual = await vi.importActual<typeof import("../../lib/journeySession")>("../../lib/journeySession");
+  return { ...actual, savedCheckEnabled: savedCheckEnabledMock };
+});
 
 import { SituationFlow } from "./SituationFlow";
 
@@ -34,6 +45,8 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   trackEventMock.mockReset();
+  savedCheckEnabledMock.mockReset();
+  savedCheckEnabledMock.mockReturnValue(true);
 });
 
 describe("SituationFlow — Loan offer (lead path)", () => {
@@ -578,6 +591,31 @@ describe("SituationFlow — the Milestone 2C save-check form (B1 result screen o
     await goToInputs(user);
     await user.click(screen.getByRole("button", { name: "See the result →" }));
     await screen.findByText("Ahead by ₹1,200");
+
+    expect(screen.queryByRole("heading", { name: "Save this check to look at again later?" })).not.toBeInTheDocument();
+  });
+
+  it("does not appear on a B1 result screen either, while savedCheckEnabled is false", async () => {
+    // Regression test for a real bug caught before this shipped: the form originally had no frontend
+    // flag check at all, so it would render for every visitor regardless of the backend's
+    // savedCheckEnabled flag — submitting it would then 404 with a misleading generic error. Fixed by
+    // gating on savedCheckEnabled(), mirroring track11aEnabled()/track11bEnabled()'s existing pattern.
+    savedCheckEnabledMock.mockReturnValue(false);
+    const DEBT_RESULT = {
+      title: "Monthly room after current commitments",
+      headline: "₹8,000",
+      detail: "detail",
+      insight: "insight",
+      scenario: "scenario",
+      note: "note",
+      bars: [],
+    };
+    mockFetchOnce(DEBT_RESULT);
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+    await goToInputs(user);
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    await screen.findByText("₹8,000");
 
     expect(screen.queryByRole("heading", { name: "Save this check to look at again later?" })).not.toBeInTheDocument();
   });
