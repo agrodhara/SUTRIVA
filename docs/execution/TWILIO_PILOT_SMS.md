@@ -261,6 +261,24 @@ visibility into and does not assume). The setup steps below are written for that
 account owner has separately been in touch with Twilio about anything relevant to this use case is not
 visible from this repository and was not assumed either way.
 
+## Twilio's actual reply — searched again this round, still not found anywhere I have access to
+
+This round's instruction asked to "inspect the actual existing reply" and "identify only precise
+unanswered requirements" — implying a reply may exist. **Searched exhaustively and found none**, so this
+is reported honestly rather than fabricated or assumed: re-checked `docs/decision_log.md` in full (no new
+entries beyond the existing-account finding above), searched every PR's description and comments on
+GitHub for PRs #33, #34, and #35 (`gh pr view --json comments` — all empty), ran `gh search prs`/
+`gh search issues` across this repository for "twilio" (only this engagement's own PR descriptions
+matched, not a Twilio-authored reply), fetched all remote branches and searched their content, and looked
+for any file resembling correspondence (`*reply*`, `*.eml`, `*.txt` naming) — none found.
+
+**This document cannot "identify only precise unanswered requirements" from a reply that isn't visible
+to this session.** If a reply exists, it is either outside this repository (an inbox, a support portal, a
+conversation held directly by the account owner) or not yet shared with this session — either way, the
+exact next input needed is: paste the reply's content, or its location, so it can be checked against the
+one open question this document has repeatedly named (the money/loan content-restriction wording, see
+above) rather than re-stating that question as still fully open by default.
+
 ## Prepared, not sent: written-confirmation request to Twilio
 
 Drafted below so it's ready the moment you instruct me to send it (or you send it yourself, or route

@@ -32,17 +32,42 @@ No other table in this codebase records any kind of consent, permission, or noti
 `B1_SAVED_CHECK_SPEC.md`) both deliberately have **no** consent-shaped column at all — checked, not
 assumed, by reading both migrations directly.
 
-## Does the new saved-check feature (Milestone 2C) need a permission record?
+## Does the new saved-check feature (Milestone 2C) need a permission record? — corrected this round
 
-**No, by the same reasoning this codebase already applies elsewhere.** Requesting an emailed link to
-*your own* saved calculation is a service action a visitor directly asked for, not a separate
-promotional or third-party use of their email address — the same reasoning that already governs
-`situation_pilot_interest` (its own migration states "submitting this form is registering interest in an
-invitation, not opting into promotional updates," and the table has no opt-in column at all). Adding a
-consent checkbox to the save-check flow would misrepresent what's actually happening (a transactional
-email the visitor requested) as if it were a marketing choice, which is the inverse of the naming
-discipline this project already holds itself to elsewhere. **No permission record is added or proposed
-for the save-check feature itself.**
+**An earlier version of this section concluded, categorically, "No ... no permission record is added or
+proposed for the save-check feature itself." That conclusion is withdrawn here as overstated.** It
+conflated four distinct things that need to be looked at separately, and it stated a legal-sounding
+conclusion ("this needs no consent") that this document is not positioned to make. Each is addressed on
+its own below, rather than collapsed into one yes/no:
+
+**1. The requested service action itself.** A visitor asking to be emailed a link to their own saved
+result is, as an engineering/product judgment, not an action that resembles marketing or third-party
+sharing — this part of the original reasoning is unchanged, and matches the precedent
+`situation_pilot_interest` already sets. This is a judgment about what *kind* of action it is, not a
+legal determination that no consent mechanism is required under any specific law — see point 5.
+
+**2. Notice/request evidence.** **Now implemented**, not merely proposed: `saved_borrow_checks.notice_version`
+(migration `0009_saved_check_notice_version`, added this round — see
+`docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md`) records which exact notice-copy version was shown at the
+moment of each save request. This is evidence of *what was requested and under what stated terms*, kept
+distinct from a consent record (point 3) precisely because a requested service action still deserves a
+record of what the visitor was told, even where no separate consent mechanism applies.
+
+**3. Marketing permission.** Does not apply to this feature at all — the save-check flow has no marketing
+content, no opt-in checkbox, and sends exactly one transactional email per save. Stated as "not
+applicable here," not folded into point 1's reasoning.
+
+**4. Any future named-partner-sharing permission.** Also does not apply — this feature shares data with no
+third party, named or otherwise. Not addressed further here; see the proposed `permission_records` table
+below, which is where a future feature that *does* need this would record it, with no blanket consent row
+ever implied by this feature's existence.
+
+**5. The unresolved legal-basis decision — flagged, not resolved.** Whether a requested service action
+like this one needs an explicit consent mechanism, or can instead rely on another legal basis (e.g.
+something like contract-necessity or legitimate-interest reasoning, depending on which jurisdiction's law
+actually applies), **is a legal question this document does not and cannot answer**. Point 1's engineering
+judgment is not a substitute for that determination, and should not be read as one. This is added to the
+"flagged for counsel" list below, not resolved by inference here.
 
 ## Where a real permission record is actually needed
 
@@ -78,6 +103,11 @@ permission requires its own `permission_type = 'named_partner_sharing'` row with
 
 Per explicit instruction not to guess at these:
 
+- **Legal basis for the save-check service action** (new this round): whether requesting an emailed link
+  to one's own saved result needs an explicit consent mechanism under whichever law actually applies, or
+  can rely on a different legal basis — this document's "it's a requested service action" framing is a
+  product/engineering judgment about what kind of action this is, not a legal conclusion, and is not
+  sufficient on its own to settle this question. Flagged for counsel, not decided here.
 - **Notice wording**: what the actual notice text should say for each `permission_type`, and whether a
   single shared notice can cover `service` + `marketing` or whether they need visually and legally
   distinct presentation — a legal/product wording question, not an engineering one.
@@ -97,7 +127,12 @@ Per explicit instruction not to guess at these:
 
 ## Status
 
-**Proposed only.** No migration, no code, no new consent UI. `optional_updates_opted_in` continues to
-function exactly as it does today; nothing in this document changes its behavior. This is scoped as a
-design proposal for whoever owns the next phone-capture or named-partner-sharing decision, not as
-something this Milestone's other work (Parts A–C) depends on or is blocked by.
+**Mostly proposed, one piece now implemented.** The `permission_records` table above remains proposed
+only — no migration, no code, no new consent UI, and `optional_updates_opted_in` continues to function
+exactly as it does today. The one exception: `saved_borrow_checks.notice_version` (point 2 above) is real,
+shipped, and tested this round — request evidence, not a consent record. The categorical "no permission
+record needed" conclusion this document previously stated has been withdrawn and replaced with the
+four-way separation above, and the legal-basis question is now explicitly flagged for counsel rather than
+answered by engineering judgment. This remains a design proposal for whoever owns the next phone-capture
+or named-partner-sharing decision; it is not something this Milestone's other work depends on or is
+blocked by.
