@@ -142,6 +142,29 @@ def test_a_valid_save_persists_and_can_be_retrieved_byte_identical(
     assert body["result_bars"] == _RESULT_FIELDS["result_bars"]
 
 
+def test_responses_carrying_a_stored_result_are_never_cacheable(
+    phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A URL fragment and a header keep the token out of access logs (see the router's own docstring) —
+    # that says nothing about HTTP caching, a separate control. Without an explicit Cache-Control header,
+    # a browser's own heuristics or a shared intermediate cache could otherwise retain a GET response
+    # carrying stored financial figures, e.g. on a shared device. Checked on the actual save (POST) and
+    # retrieve (GET) success responses, where the sensitive content actually lives.
+    _enable_saved_check(monkeypatch)
+    _configure_email(monkeypatch)
+    _fix_generated_token(monkeypatch)
+
+    save_response = _save(phaseb_client)
+    assert save_response.status_code == 200
+    assert save_response.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
+    assert save_response.headers["pragma"] == "no-cache"
+
+    retrieve_response = _retrieve(phaseb_client, "test-fixed-token")
+    assert retrieve_response.status_code == 200
+    assert retrieve_response.headers["cache-control"] == "no-store, no-cache, must-revalidate, private"
+    assert retrieve_response.headers["pragma"] == "no-cache"
+
+
 def test_a_save_records_the_current_notice_version_as_request_evidence(
     phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch, phaseb_upgraded_database: str
 ) -> None:

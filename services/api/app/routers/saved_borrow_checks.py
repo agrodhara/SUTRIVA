@@ -23,7 +23,7 @@ See `docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md` for what this does and does n
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 
 from app.config import saved_check_enabled
 from app.models.saved_borrow_check import (
@@ -71,8 +71,21 @@ def _enforce_rate_limit(limiter: FixedWindowRateLimiter, request: Request, *, ma
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="rate_limited") from exc
 
 
+def _no_store(response: Response) -> None:
+    # Checked directly rather than assumed: no middleware anywhere in this codebase sets a Cache-Control
+    # header by default (confirmed by a direct curl against a running instance), meaning a GET response
+    # carrying a stored financial result could otherwise be cached by a browser's own heuristics or an
+    # intermediate shared cache, on a shared device, for longer than intended. Applied on every route here
+    # — including POST/DELETE, for defense-in-depth, not only the GET most browsers would actually try to
+    # cache. A URL fragment keeps the token out of access logs (see this module's own docstring); it says
+    # nothing about HTTP caching, which is a separate control.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
+
+
 @router.post("", response_model=SaveBorrowCheckResponse)
-def post_save_borrow_check(payload: SaveBorrowCheckRequest, request: Request) -> SaveBorrowCheckResponse:
+def post_save_borrow_check(payload: SaveBorrowCheckRequest, request: Request, response: Response) -> SaveBorrowCheckResponse:
+    _no_store(response)
     _require_saved_check_enabled()
     validate_request_origin(request.headers.get("origin"))
     _enforce_rate_limit(_save_limiter, request, max_events=get_saved_borrow_check_rate_limit_settings().save_per_ip_per_hour)
@@ -118,8 +131,9 @@ def post_save_borrow_check(payload: SaveBorrowCheckRequest, request: Request) ->
 
 @router.get("", response_model=SavedBorrowCheckOut)
 def get_saved_borrow_check(
-    request: Request, x_saved_check_token: str | None = Header(None, alias="X-Saved-Check-Token"),
+    request: Request, response: Response, x_saved_check_token: str | None = Header(None, alias="X-Saved-Check-Token"),
 ) -> SavedBorrowCheckOut:
+    _no_store(response)
     # The header is declared optional here, deliberately, and checked only below — a *required* FastAPI
     # header parameter is validated before this function body ever runs, which would 422 a request missing
     # it even while the feature is disabled, leaking that this route exists through the one path that's
@@ -157,8 +171,9 @@ def get_saved_borrow_check(
 
 @router.delete("", response_model=DeleteSavedBorrowCheckResponse)
 def delete_saved_borrow_check_route(
-    request: Request, x_saved_check_token: str | None = Header(None, alias="X-Saved-Check-Token"),
+    request: Request, response: Response, x_saved_check_token: str | None = Header(None, alias="X-Saved-Check-Token"),
 ) -> DeleteSavedBorrowCheckResponse:
+    _no_store(response)
     # See the identical comment on get_saved_borrow_check above — optional-then-checked, not required, for
     # the same route-existence-leak reason.
     _require_saved_check_enabled()

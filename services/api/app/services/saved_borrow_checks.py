@@ -18,17 +18,24 @@ from app.repositories.saved_borrow_checks import (
     soft_delete_saved_borrow_check,
 )
 from app.saved_borrow_check_config import get_saved_borrow_check_settings, get_saved_check_frontend_base_url
+from app.saved_check_notice_versions import NOTICE_VERSIONS
 from app.services.email import EmailProviderNotConfiguredError, EmailSendRejectedError, get_email_sender
 from app.services.email import send_or_raise as send_email_or_raise
 
 LOGGER = logging.getLogger(__name__)
 
 # A short, bounded identifier for the exact notice text SaveCheckForm.tsx shows at the moment a save is
-# requested — not the text itself (see alembic/versions/0009_saved_check_notice_version.py). Bump this
-# whenever that notice copy changes, so a past row stays attributable to what it actually agreed to, not
-# silently reinterpreted under later wording. This is request evidence for a requested service action, not
-# a consent record — see docs/execution/PERMISSION_RECORDS_ASSESSMENT.md for why those are kept distinct.
+# requested — not the text itself, which lives in app/saved_check_notice_versions.py's NOTICE_VERSIONS,
+# an append-only, immutable registry (see that module's docstring for the rules this is held to). Bump
+# this, AND add a new entry there, whenever the notice copy changes — never edit an existing entry, so a
+# past row stays attributable to what it actually agreed to, not silently reinterpreted under later
+# wording. This is request evidence for a requested service action, not a consent record — see
+# docs/execution/PERMISSION_RECORDS_ASSESSMENT.md for why those are kept distinct.
 SAVE_CHECK_NOTICE_VERSION = "save-check-notice-v1-2026-10-15"
+assert SAVE_CHECK_NOTICE_VERSION in NOTICE_VERSIONS, (
+    "SAVE_CHECK_NOTICE_VERSION must have a matching, immutable entry in NOTICE_VERSIONS — "
+    "a save must never be stamped with a version this registry doesn't recognize."
+)
 
 # How many raw bytes of randomness the retrieval token carries before URL-safe encoding — 256 bits, the
 # same order of magnitude Python's own secrets module docs recommend for a security token, and large
