@@ -246,8 +246,12 @@ not yet usable (blocked on the same three items as the real send itself):
 ## Existing Twilio correspondence/account — checked before drafting anything new
 
 Searched this repository for any record of prior Twilio correspondence (support tickets, case numbers,
-email threads) before drafting a new request. **Found: none** — no ticket number, no quoted reply, no
-reference to any prior exchange with Twilio support or compliance about this or any use case.
+email threads) before drafting a new request. **Found in this repository: none** — no ticket number, no
+quoted reply, no reference to any prior exchange with Twilio support or compliance about this or any use
+case, from any search this session could run. **Since superseded**: the account owner has since provided
+an actual Twilio email directly (an account-upgrade approval notification, not found by searching this
+repository because it lived outside it) — see "Twilio's actual reply — received and assessed this round"
+below for what it does and does not confirm.
 
 **Found instead, and more significant: a Twilio account already exists.** `docs/decision_log.md`'s
 2026-09-25 entry records that, during an unrelated credential-exposure incident, "*unrelated Twilio
@@ -261,44 +265,111 @@ visibility into and does not assume). The setup steps below are written for that
 account owner has separately been in touch with Twilio about anything relevant to this use case is not
 visible from this repository and was not assumed either way.
 
-## Twilio's actual reply — searched again this round, still not found anywhere I have access to
+## Twilio's actual reply — received and assessed this round
 
-This round's instruction asked to "inspect the actual existing reply" and "identify only precise
-unanswered requirements" — implying a reply may exist. **Searched exhaustively and found none**, so this
-is reported honestly rather than fabricated or assumed: re-checked `docs/decision_log.md` in full (no new
-entries beyond the existing-account finding above), searched every PR's description and comments on
-GitHub for PRs #33, #34, and #35 (`gh pr view --json comments` — all empty), ran `gh search prs`/
-`gh search issues` across this repository for "twilio" (only this engagement's own PR descriptions
-matched, not a Twilio-authored reply), fetched all remote branches and searched their content, and looked
-for any file resembling correspondence (`*reply*`, `*.eml`, `*.txt` naming) — none found.
+Provided directly by the account owner (not found in this repository by searching — the exhaustive
+search described in the previous round's history found nothing, and this is why: the email lived outside
+anything this session had access to). Assessed precisely, per explicit instruction not to overstate it.
 
-**This document cannot "identify only precise unanswered requirements" from a reply that isn't visible
-to this session.** If a reply exists, it is either outside this repository (an inbox, a support portal, a
-conversation held directly by the account owner) or not yet shared with this session — either way, the
-exact next input needed is: paste the reply's content, or its location, so it can be checked against the
-one open question this document has repeatedly named (the money/loan content-restriction wording, see
-above) rather than re-stating that question as still fully open by default.
+**What the email is**: an automated "Fraud Operations – Onboarding & Compliance" notification stating the
+account's **upgrade has been approved**, followed by generic onboarding links (Messaging Policy, Product
+Overview, Developer Community) sent to every account reaching this status. It does not name Sutriva's use
+case, does not mention India, does not mention a route (domestic/international), does not mention OTP or
+2FA, and does not mention the money/loan content restriction this document has repeatedly flagged as the
+open question. **Recorded as account-upgrade approval only** — per explicit instruction, this is not
+described as approval of an India messaging route or as an exception to the content-restriction policy,
+because the email contains nothing that addresses either.
 
-## Prepared, not sent: written-confirmation request to Twilio
+**Separated into the three distinct things this confirms or doesn't, per instruction**:
 
-Drafted below so it's ready the moment you instruct me to send it (or you send it yourself, or route
-it through your own Twilio account contact) — **not sent as part of this task**, per explicit
-instruction. If correspondence with Twilio already exists outside this repository that answers this
-question, that supersedes sending this.
+1. **Account access/authentication**: the account itself is now in an "upgraded"/approved standing with
+   Twilio generally. This is a real, positive account-level fact — but it is about the account's overall
+   status, not a credential. No API Key, Messaging Service, or other credential has been created from
+   this; that step (see "Private credential setup" above) remains to be done in the Console, still
+   requiring the account owner's action, not resolved by this email.
+2. **Permission/configuration for the selected delivery route**: **not addressed at all**. The email's
+   Messaging Policy link covers generic requirements (opt-in/consent, opt-out language, sender
+   identification) that apply to every Twilio messaging customer — it is not a use-case-specific ruling,
+   and does not confirm whether a disclosed financial-wellness OTP use case is permitted despite the
+   published money/loan content prohibition. This is still the one precise unanswered question.
+3. **Real OTP delivery and verification**: unaffected by this email either way — still blocked on actual
+   credentials (not yet created) and the designated test phone number (not yet provided), independent of
+   account standing.
 
-> Subject: Use-case confirmation — OTP-only transactional SMS for a financial-wellness comparison tool (India)
+**One new, concrete item surfaced by the email itself, checked this round**: the Messaging Policy link
+specifically calls out "opt-out language" and "clearly identifying yourself as the sender" as compliance
+requirements. The current message body
+(`"Your Sutriva verification code is {code}. It expires in {N} minutes. Do not share it."`) identifies
+the sender ("Sutriva") but carries no opt-out instruction (e.g. "Reply STOP to unsubscribe"). Whether
+opt-out language is actually required for a one-time, user-requested authentication code (as opposed to
+recurring/marketing messages, where it unambiguously is) was checked directly against Twilio's own
+documentation rather than assumed either way — see the dedicated section below.
+
+**Precise unanswered requirement, unchanged in substance, restated precisely**: whether a user-requested,
+one-time authentication OTP for Sutriva's disclosed financial-wellness comparison use case is permitted
+under Twilio's published India guidelines, which list "money/loan" content as "strictly prohibited" — this
+email does not answer that question, confirm an exception, or reference Sutriva's use case at all.
+
+## One short follow-up, prepared — not sent
+
+Per instruction: do not restart onboarding, do not repeat already-answered questions (account-upgrade
+status is not in question), and reference the existing correspondence rather than opening a new thread.
+**This document has no specific ticket/case number to cite** — the account-upgrade email itself carries no
+visible case reference — so the draft below references the correspondence by its actual subject and date
+rather than a fabricated ticket number. If an actual ticket/case number exists (from the Twilio Console's
+support history), insert it before sending.
+
+> Subject: Re: Account upgrade approved — two open questions on an existing disclosed use case
 >
-> We operate Sutriva, an anonymous-first financial-wellness web tool (loan-offer comparison and
-> card-fee review). We plan to use Twilio Programmable Messaging to send a single type of message to
-> India: a user-requested, one-time authentication code, sent only after a visitor explicitly submits
-> their own mobile number to verify it. Each message reads exactly: "Your Sutriva verification code is
-> {code}. It expires in {N} minutes. Do not share it." No promotional, loan-offer, rate, or marketing
-> content is ever included in any message from this account; no message is sent unsolicited. Given your
-> published India guidelines list money/loan-related content as prohibited, we'd like written
-> confirmation that a user-requested authentication OTP for a disclosed financial-wellness use case
-> (not a loan offer, not promotional) is permitted on this account, and whether any additional account
-> registration or category declaration is required on our side before sending. Account: [SID once an
-> account exists]. Intended route: international (no domestic/DLT registration in place).
+> Thank you for confirming the account upgrade. Separately, and not related to account standing: we
+> previously described our use case as sending a single message type to India — a user-requested,
+> one-time authentication code for Sutriva, a financial-wellness comparison tool (loan-offer comparison
+> and card-fee review). Each message reads exactly: "Your Sutriva verification code is {code}. It expires
+> in {N} minutes. Do not share it." No promotional, loan-offer, rate, or marketing content is ever
+> included. Two specific questions remain open: (1) Given your India guidelines list money/loan-related
+> content as prohibited, could you confirm in writing whether this specific, disclosed use case is
+> permitted on this account, and whether any additional registration or category declaration is needed on
+> our side first? (2) Your Messaging Policy requires opt-out language ("Reply STOP to unsubscribe") in the
+> initial message, while your Verify Consent and Opt-in Policy presents that same language as a
+> pre-opt-in Terms & Conditions disclosure rather than in-message text — for a one-time authentication
+> code like ours, is opt-out language required inside the SMS itself, or is the pre-opt-in disclosure
+> sufficient? Account: [SID]. Intended route: international (no domestic/DLT registration in place).
+
+**Not sent, per standing instruction.** Independent setup/testing work continues regardless of when or
+whether this is sent.
+
+*(The original draft confirmation request from before Twilio's account-upgrade email arrived has been
+superseded by the "One short follow-up, prepared — not sent" section above, which references the actual
+correspondence now in hand instead of assuming a cold open.)*
+
+## Opt-out language in the OTP message body — checked, genuinely split across Twilio's own pages
+
+Surfaced by the account-upgrade email's link to Twilio's Messaging Policy, which names "opt-out language"
+as a compliance requirement — checked directly against Twilio's own documentation rather than assumed
+either way for a one-time authentication message.
+
+**Twilio's general Messaging Policy**
+([twilio.com/en-us/legal/messaging-policy](https://www.twilio.com/en-us/legal/messaging-policy)), under
+"Revocation of Consent ('opt-out')", states plainly and with no stated carve-out: *"The initial message
+that you send to a recipient needs to include the following language: 'Reply STOP to unsubscribe,' or the
+equivalent using another standard opt-out keyword."* The same page separately distinguishes "informational"
+messages (explicitly naming "one-time verification code notifications" as an example) from "promotional"
+ones — but only for which *consent standard* applies (express consent vs. express **written** consent),
+not for whether opt-out language is required in the message body itself.
+
+**Twilio's Verify-specific Consent and Opt-in Policy**
+([twilio.com/docs/verify/consent-opt-in](https://www.twilio.com/docs/verify/consent-opt-in)) instead
+presents "Reply STOP" as sample disclosure language shown once, up front, in the **Terms & Conditions a
+user sees before opting in** to receive OTPs at all — not as text required inside every individual OTP
+message sent afterward.
+
+**Conclusion, stated as what it is**: Twilio's own published guidance is **genuinely split, not a clean
+exemption and not a clean requirement** — the general Messaging Policy's opt-out-language rule has no
+stated OTP carve-out, while the Verify-specific policy treats the same "Reply STOP" language as a
+pre-opt-in disclosure rather than per-message content. Both pages were read directly; this is not an
+inference papering over a gap in what was checked. **Resolved only by Twilio's own written answer** —
+folded into the one short follow-up below rather than treated as settled either way, and not something
+this document decides unilaterally by picking the more convenient reading.
 
 ## Verify vs. Programmable Messaging — does the India requirement differ by product?
 
