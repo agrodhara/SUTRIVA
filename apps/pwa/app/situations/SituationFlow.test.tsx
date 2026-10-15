@@ -556,7 +556,9 @@ describe("SituationFlow — the Milestone 2C save-check form (B1 result screen o
     return heading.parentElement as HTMLElement;
   }
 
-  it("appears on a B1 result screen, below the pilot-interest form, as a separate action", async () => {
+  it("appears on a B1 result screen, above the pilot-interest form, as the primary post-result action", async () => {
+    // Milestone 2, round 3 product direction: save-check is primary, pilot-interest secondary beneath
+    // it — the reverse of this form's original ordering.
     mockFetchOnce(DEBT_RESULT);
     const user = userEvent.setup();
     render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
@@ -571,8 +573,23 @@ describe("SituationFlow — the Milestone 2C save-check form (B1 result screen o
     const bodyHTML = document.body.innerHTML;
     const pilotIdx = bodyHTML.indexOf("Interested in the Sutriva pilot?");
     const saveIdx = bodyHTML.indexOf("Save this check to look at again later?");
-    expect(pilotIdx).toBeGreaterThan(-1);
-    expect(saveIdx).toBeGreaterThan(pilotIdx);
+    expect(saveIdx).toBeGreaterThan(-1);
+    expect(pilotIdx).toBeGreaterThan(saveIdx);
+  });
+
+  it("uses the primary button style, reflecting that it is now the primary post-result contact action", async () => {
+    mockFetchOnce(DEBT_RESULT);
+    const user = userEvent.setup();
+    render(<SituationFlow situationKey="debt" onExit={vi.fn()} />);
+    await goToInputs(user);
+    await user.click(screen.getByRole("button", { name: "See the result →" }));
+    await screen.findByText("₹8,000");
+
+    const saveButton = screen.getByRole("button", { name: "Email me this result" });
+    const pilotButton = screen.getByRole("button", { name: "Register my interest" });
+    // Distinct classes (primaryButton vs. secondaryButton) — confirms the visual-weight distinction
+    // exists, without asserting on exact class name strings that CSS Modules hash at build time.
+    expect(saveButton.className).not.toBe(pilotButton.className);
   });
 
   it("does not appear on a rewards (R1) result screen — B1-only for v1", async () => {

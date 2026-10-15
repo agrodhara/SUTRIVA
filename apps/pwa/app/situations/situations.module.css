@@ -184,12 +184,14 @@
   .resultWhatIf { order: 5; }
   .resultLimit { order: 6; }
   .resultActions { order: 7; }
-  .pilotPanel { order: 8; }
-  /* Without an explicit order, this would default to 0 and render before .resultPanel (order: 1) — a
-     real layout bug caught via a screenshot before this was presented for review: the save-check form
-     appeared above the actual result, not below the pilot-interest form as intended. order: 9 keeps it
-     last, after .pilotPanel. */
-  .saveCheckPanel { order: 9; }
+  /* Milestone 2, round 3: save-check is now the primary post-result contact action, pilot-interest
+     secondary beneath it — .saveCheckPanel sorts before .pilotPanel (was the reverse). On a rewards (R1)
+     result screen, where .saveCheckPanel doesn't exist, .pilotPanel's order value just means "last", same
+     as always — nothing changes there. Without an explicit order at all, an element defaults to 0 and
+     renders before .resultPanel (order: 1) — a real layout bug caught once already via a screenshot
+     before this was presented for review; keeping both values explicit here avoids repeating it. */
+  .saveCheckPanel { order: 8; }
+  .pilotPanel { order: 9; }
 }
 
 @media (max-width: 800px) {

@@ -26,12 +26,15 @@ type Status = "idle" | "submitting" | "success" | "error";
 /**
  * Milestone 2C: the optional "save this check" prompt — email-only for v1 (see
  * docs/product/journeys/B1_SAVED_CHECK_SPEC.md; mobile verification is explicitly deferred, not built
- * here). Rendered only on the result screen of the four B1 (Borrow Better) situations, below the
- * existing PilotInterestForm — a distinct, separate action from it, never merged with it: this is "save
- * my own result to look at again," not "register interest in an invitation." Entirely optional; every
- * other action on the result screen (adjusting figures, exploring another situation) works identically
- * whether or not this form is ever touched, and anonymous completion of the check itself needs none of
- * this.
+ * here). Rendered only on the result screen of the four B1 (Borrow Better) situations.
+ *
+ * As of Milestone 2, round 3, this is the **primary** post-result contact action — rendered above the
+ * pilot-interest form (see SituationFlow.tsx) and using the primary button style, reflecting that
+ * decision. It remains a distinct, separate action from pilot interest, never merged with it: this is
+ * "save my own result to look at again," not "register interest in an invitation." Entirely optional;
+ * every other action on the result screen (adjusting figures, exploring another situation) works
+ * identically whether or not this form is ever touched, and anonymous completion of the check itself
+ * needs none of this.
  */
 export function SaveCheckForm({
   situationKey,
@@ -108,7 +111,7 @@ export function SaveCheckForm({
           </p>
         ) : null}
         <div className={ui.actionsRow} style={{ marginTop: 12 }}>
-          <button type="submit" className={ui.secondaryButton} disabled={status === "submitting"}>
+          <button type="submit" className={ui.primaryButton} disabled={status === "submitting"}>
             {status === "submitting" ? "Sending…" : "Email me this result"}
           </button>
         </div>

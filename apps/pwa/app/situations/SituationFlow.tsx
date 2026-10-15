@@ -323,21 +323,22 @@ export function SituationFlow({
               Explore another situation
             </button>
           </div>
-          <div className={styles.pilotPanel}><PilotInterestForm situationKey={situationKey} onEmit={emit} placement="result" /></div>
-          {/* Milestone 2C: the new "save this check" step, offered after the result — a separate, optional
-           * action from the pilot-interest form above, never merged with it. B1 (Borrow Better) only for
-           * v1, per the spec's explicit scope; email-only (mobile verification is deferred — see
-           * docs/product/journeys/B1_SAVED_CHECK_SPEC.md). `toRequestBody` is the exact same function the
-           * live calculation above already used, so a save can never diverge from what's actually on
-           * screen. Gated on savedCheckEnabled(), mirroring track11aEnabled()/track11bEnabled()'s own
-           * pattern — without this, the form would render for every visitor regardless of the backend
-           * flag, and submitting it would 404 with a misleading generic error. Caught and fixed before
-           * this was ever presented for review, not left as a silent bug. */}
+          {/* Milestone 2, round 3 — product direction: on B1 (Borrow Better), "Save this check" is now the
+           * primary post-result contact action, with the pilot-interest form secondary beneath it. This is
+           * purely an ordering/prominence change in THIS file and its CSS — PilotInterestForm.tsx itself is
+           * untouched (same copy, same validation, same submit logic, same analytics events), and its
+           * arrival-screen mount above is completely unaffected (unchanged position, unchanged prominence).
+           * On rewards (R1) result screens, where SaveCheckForm doesn't exist at all, the pilot-interest
+           * form's position is exactly what it always was — nothing changes there. "Primary" is expressed
+           * by SaveCheckForm's button now using ui.primaryButton (previously ui.secondaryButton, matching
+           * the pilot form's own button weight) and by rendering first; "secondary" is PilotInterestForm
+           * keeping its own existing ui.secondaryButton unchanged. */}
           {situation.group === "borrow" && savedCheckEnabled() ? (
             <div className={styles.saveCheckPanel}>
               <SaveCheckForm situationKey={situationKey} values={toRequestBody(situationKey, values)} provenance={provenance} result={result} />
             </div>
           ) : null}
+          <div className={styles.pilotPanel}><PilotInterestForm situationKey={situationKey} onEmit={emit} placement="result" /></div>
         </div>
         <div className={ui.colSide}>
           <div className={`${ui.card} ${styles.resultChart}`}>
