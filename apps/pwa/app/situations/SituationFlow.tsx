@@ -334,7 +334,9 @@ export function SituationFlow({
            * flag, and submitting it would 404 with a misleading generic error. Caught and fixed before
            * this was ever presented for review, not left as a silent bug. */}
           {situation.group === "borrow" && savedCheckEnabled() ? (
-            <SaveCheckForm situationKey={situationKey} values={toRequestBody(situationKey, values)} provenance={provenance} result={result} />
+            <div className={styles.saveCheckPanel}>
+              <SaveCheckForm situationKey={situationKey} values={toRequestBody(situationKey, values)} provenance={provenance} result={result} />
+            </div>
           ) : null}
         </div>
         <div className={ui.colSide}>

@@ -170,6 +170,9 @@
 .resultLabel { display: flex; align-items: center; gap: 12px; }
 .resultLabelIcon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; color: var(--green-dark); background: var(--mint); flex: none; }
 .pilotPanel { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 8px; }
+/* Milestone 2C: the save-check form's own panel, kept visually distinct from .pilotPanel (its own
+   top border/spacing) so the two forms read as separate actions, not one combined block. */
+.saveCheckPanel { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 8px; }
 
 /* On a phone the chart belongs next to the answer, before the explanatory paragraphs. */
 @media (max-width: 959px) {
@@ -182,6 +185,11 @@
   .resultLimit { order: 6; }
   .resultActions { order: 7; }
   .pilotPanel { order: 8; }
+  /* Without an explicit order, this would default to 0 and render before .resultPanel (order: 1) — a
+     real layout bug caught via a screenshot before this was presented for review: the save-check form
+     appeared above the actual result, not below the pilot-interest form as intended. order: 9 keeps it
+     last, after .pilotPanel. */
+  .saveCheckPanel { order: 9; }
 }
 
 @media (max-width: 800px) {
