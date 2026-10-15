@@ -23,6 +23,13 @@ from app.services.email import send_or_raise as send_email_or_raise
 
 LOGGER = logging.getLogger(__name__)
 
+# A short, bounded identifier for the exact notice text SaveCheckForm.tsx shows at the moment a save is
+# requested — not the text itself (see alembic/versions/0009_saved_check_notice_version.py). Bump this
+# whenever that notice copy changes, so a past row stays attributable to what it actually agreed to, not
+# silently reinterpreted under later wording. This is request evidence for a requested service action, not
+# a consent record — see docs/execution/PERMISSION_RECORDS_ASSESSMENT.md for why those are kept distinct.
+SAVE_CHECK_NOTICE_VERSION = "save-check-notice-v1-2026-10-15"
+
 # How many raw bytes of randomness the retrieval token carries before URL-safe encoding — 256 bits, the
 # same order of magnitude Python's own secrets module docs recommend for a security token, and large
 # enough that a keyed (HMAC) hash buys no practical protection beyond a plain SHA-256 of the raw value
@@ -103,11 +110,16 @@ def save_borrow_check(
                 result_scenario=result_scenario,
                 result_note=result_note,
                 result_bars=result_bars,
+                notice_version=SAVE_CHECK_NOTICE_VERSION,
                 retrieval_token_hash=token_hash,
                 expires_at=expires_at,
             )
 
-            link = f"{base_url}/saved/{token}"
+            # A URL *fragment* (after "#"), not a path segment: a fragment is never sent to any server in
+            # an HTTP request, so this link never puts the token in the PWA's own server/proxy access log
+            # either — the same reasoning that moved the API's own retrieval/delete calls from a path
+            # parameter to a header. See docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md.
+            link = f"{base_url}/saved#{token}"
             retention_days = settings.retention_days
             body = (
                 "Here's the private link to the Sutriva check you asked to save:\n\n"
@@ -128,6 +140,14 @@ def save_borrow_check(
         LOGGER.warning("saved-check save unavailable", extra={"category": "saved_check_db_error"})
         raise SavedBorrowCheckError(503, "service_unavailable") from exc
 
+    # Minimal save measurement — a structured log line, not a product_events row (adding one would mean
+    # widening the ck_product_events_screen_name allowlist, deliberately out of scope this round — see
+    # docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md). Only situation_key and provenance: never the email
+    # address, the retrieval token, or any input/result value. This is enough for an operator to count
+    # saves per situation from log aggregation; it is not a replacement for a real analytics event.
+    LOGGER.info(
+        "saved-check saved", extra={"category": "saved_check_measurement", "situation_key": situation_key, "provenance": provenance},
+    )
     return SaveBorrowCheckOutcome(saved_borrow_check_uuid=saved_borrow_check_uuid)
 
 
@@ -148,7 +168,14 @@ def retrieve_saved_borrow_check(*, token: str) -> SavedBorrowCheckRecord:
 
     now = datetime.now(UTC)
     if record is None or record.deleted_at is not None or record.expires_at <= now:
+        # Deliberately no measurement log on the not-found path: logging per failed-token attempt would
+        # itself be a token-guessing oracle in the logs (a count of attempts against a near-guess), and
+        # the per-IP rate limiter (see app/routers/saved_borrow_checks.py) is the actual control against
+        # that, not logging.
         raise SavedBorrowCheckError(404, "not_found")
+    LOGGER.info(
+        "saved-check retrieved", extra={"category": "saved_check_measurement", "situation_key": record.situation_key},
+    )
     return record
 
 

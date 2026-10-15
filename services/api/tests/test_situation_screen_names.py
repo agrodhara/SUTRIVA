@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from conftest import phaseb_origin
 
 
-def test_alembic_head_is_0008(postgres_test_url: str, alembic_ini_path, clean_database: None) -> None:
+def test_alembic_head_is_0009(postgres_test_url: str, alembic_ini_path, clean_database: None) -> None:
     from alembic import command
     from sqlalchemy import create_engine, text
 
@@ -20,7 +20,7 @@ def test_alembic_head_is_0008(postgres_test_url: str, alembic_ini_path, clean_da
     engine = create_engine(postgres_test_url, future=True)
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == "0008_saved_borrow_checks"
+    assert revision == "0009_saved_check_notice_version"
 
 
 def _bootstrap_and_post(client: TestClient, **overrides) -> "object":

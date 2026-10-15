@@ -65,13 +65,16 @@ def _save(client: TestClient, origin: str | None = None, **overrides):
 
 
 def _retrieve(client: TestClient, token: str, origin: str | None = None):
-    headers = {"Origin": origin if origin is not None else phaseb_origin()}
-    return client.get(f"/v1/saved-borrow-checks/{token}", headers=headers)
+    # Token travels as a header, never a path or query value — see
+    # docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md for why (it's a bearer credential; a path/query value is
+    # what a default access-log format captures on every request).
+    headers = {"Origin": origin if origin is not None else phaseb_origin(), "X-Saved-Check-Token": token}
+    return client.get("/v1/saved-borrow-checks", headers=headers)
 
 
 def _delete(client: TestClient, token: str, origin: str | None = None):
-    headers = {"Origin": origin if origin is not None else phaseb_origin()}
-    return client.request("DELETE", f"/v1/saved-borrow-checks/{token}", headers=headers)
+    headers = {"Origin": origin if origin is not None else phaseb_origin(), "X-Saved-Check-Token": token}
+    return client.request("DELETE", "/v1/saved-borrow-checks", headers=headers)
 
 
 def _row_count(postgres_test_url: str) -> int:
@@ -87,6 +90,22 @@ def test_all_routes_404_when_saved_check_is_disabled(phaseb_client: TestClient) 
     assert _save(phaseb_client).status_code == 404
     assert _retrieve(phaseb_client, "anything").status_code == 404
     assert _delete(phaseb_client, "anything").status_code == 404
+
+
+def test_a_request_with_no_token_header_at_all_still_404s_while_disabled_not_422(phaseb_client: TestClient) -> None:
+    # Regression test for a real bug caught before this shipped: a *required* FastAPI header parameter is
+    # validated before the route body (and _require_saved_check_enabled) ever runs, so omitting the header
+    # entirely returned 422 even while the feature was disabled — leaking that this route exists through
+    # the one path meant to be indistinguishable from "doesn't exist." Fixed by making the header optional
+    # and checking it only after the enabled check. This test calls the routes with no
+    # X-Saved-Check-Token header at all, not just an empty/wrong one.
+    get_response = phaseb_client.get("/v1/saved-borrow-checks", headers={"Origin": phaseb_origin()})
+    assert get_response.status_code == 404
+    assert get_response.json()["detail"] == "feature_disabled"
+
+    delete_response = phaseb_client.request("DELETE", "/v1/saved-borrow-checks", headers={"Origin": phaseb_origin()})
+    assert delete_response.status_code == 404
+    assert delete_response.json()["detail"] == "feature_disabled"
 
 
 def test_every_route_rejects_a_missing_or_wrong_origin(phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,6 +140,82 @@ def test_a_valid_save_persists_and_can_be_retrieved_byte_identical(
     assert body["provenance"] == "own"
     assert body["result_title"] == _RESULT_FIELDS["result_title"]
     assert body["result_bars"] == _RESULT_FIELDS["result_bars"]
+
+
+def test_a_save_records_the_current_notice_version_as_request_evidence(
+    phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch, phaseb_upgraded_database: str
+) -> None:
+    # Request evidence, not a consent record (see docs/execution/PERMISSION_RECORDS_ASSESSMENT.md) — but a
+    # save should still be attributable to the notice wording actually shown at the time, in case that
+    # wording is ever revised later. notice_version is intentionally not exposed in the retrieval
+    # response (it's operator-facing evidence, not something the visitor needs to see on the page).
+    from app.services.saved_borrow_checks import SAVE_CHECK_NOTICE_VERSION
+
+    _enable_saved_check(monkeypatch)
+    _configure_email(monkeypatch)
+    assert _save(phaseb_client).status_code == 200
+
+    engine = create_engine(phaseb_upgraded_database, future=True)
+    with engine.connect() as conn:
+        stored = conn.execute(text("SELECT notice_version FROM saved_borrow_checks")).scalar_one()
+    assert stored == SAVE_CHECK_NOTICE_VERSION
+
+
+def test_a_successful_save_and_retrieval_log_minimal_safe_measurement_only(
+    phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Minimal measurement, per instruction: situation_key/provenance only, never the email address, the
+    # retrieval token, or any input/result value — see app/services/saved_borrow_checks.py's log lines.
+    #
+    # Not pytest's `caplog` fixture, and the target logger is explicitly re-enabled here — traced to a
+    # real cause, not guessed: `command.upgrade(...)` (run by the `phaseb_upgraded_database` fixture this
+    # test depends on via `phaseb_client`) calls Alembic's own `fileConfig(alembic.ini)` internally, which
+    # defaults to `disable_existing_loggers=True` — this disables every *already-created* logger not
+    # explicitly listed in alembic.ini's `[loggers]` section (only `root`/`sqlalchemy`/`alembic` are),
+    # including this module's own `LOGGER`, as an unrelated side effect of running a migration. Confirmed
+    # directly (not inferred) by printing `LOGGER.disabled` at the exact call site: `True`, only when a
+    # `phaseb_*`-fixture-driven alembic upgrade had already run in this test. This is a pre-existing
+    # property of how this test suite invokes Alembic, not introduced by this feature, and plausibly
+    # affects any future test that both uses `phaseb_client` and asserts on application log output — worth
+    # knowing about repo-wide, not just here.
+    _enable_saved_check(monkeypatch)
+    _configure_email(monkeypatch)
+    _fix_generated_token(monkeypatch)
+
+    import logging
+
+    records: list[logging.LogRecord] = []
+
+    class _CollectingHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    target_logger = logging.getLogger("app.services.saved_borrow_checks")
+    handler = _CollectingHandler(level=logging.INFO)
+    previous_level = target_logger.level
+    previous_disabled = target_logger.disabled
+    target_logger.addHandler(handler)
+    target_logger.setLevel(logging.INFO)
+    target_logger.disabled = False
+    try:
+        assert _save(phaseb_client).status_code == 200
+        assert _retrieve(phaseb_client, "test-fixed-token").status_code == 200
+    finally:
+        target_logger.removeHandler(handler)
+        target_logger.setLevel(previous_level)
+        target_logger.disabled = previous_disabled
+
+    measurement_records = [r for r in records if getattr(r, "category", None) == "saved_check_measurement"]
+    assert len(measurement_records) == 2
+    saved_record, retrieved_record = measurement_records
+    assert saved_record.situation_key == "offer"
+    assert saved_record.provenance == "own"
+    assert retrieved_record.situation_key == "offer"
+
+    full_text = "\n".join(r.getMessage() + str(r.__dict__) for r in records)
+    assert "visitor@example.com" not in full_text
+    assert "test-fixed-token" not in full_text
+    assert _RESULT_FIELDS["result_title"] not in full_text
 
 
 def test_save_never_exposes_the_token_itself_in_the_response(
@@ -247,6 +342,22 @@ def test_a_wrong_token_returns_not_found(phaseb_client: TestClient, monkeypatch:
     assert response.json()["detail"] == "not_found"
 
 
+def test_retrieval_with_no_token_header_is_not_found_once_enabled(phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_saved_check(monkeypatch)
+    response = phaseb_client.get("/v1/saved-borrow-checks", headers={"Origin": phaseb_origin()})
+    assert response.status_code == 404
+    assert response.json()["detail"] == "not_found"
+
+
+def test_the_token_never_appears_in_the_request_url_itself(phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The whole point of the header-based design: confirms this directly rather than only by inspecting the
+    # router source. A path/query value is what a reverse proxy or server's default access-log format
+    # captures on every request; a header is not, by default.
+    _enable_saved_check(monkeypatch)
+    response = _retrieve(phaseb_client, "a-sensitive-token-value")
+    assert "a-sensitive-token-value" not in str(response.request.url)
+
+
 def test_an_expired_saved_check_is_not_retrievable(
     phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch, phaseb_upgraded_database: str
 ) -> None:
@@ -322,6 +433,11 @@ def test_deleting_an_already_deleted_or_nonexistent_token_is_idempotent(
     # Deleting again, and deleting a token that never existed, both still report success.
     assert _delete(phaseb_client, "test-fixed-token").status_code == 200
     assert _delete(phaseb_client, "no-such-token-ever").status_code == 200
+    # An absent header is just one more case this same idempotent contract already covers — not a
+    # different response to invent.
+    no_header_response = phaseb_client.request("DELETE", "/v1/saved-borrow-checks", headers={"Origin": phaseb_origin()})
+    assert no_header_response.status_code == 200
+    assert no_header_response.json() == {"status": "deleted"}
 
 
 def test_deleting_one_saved_check_does_not_affect_another_visitors_row(

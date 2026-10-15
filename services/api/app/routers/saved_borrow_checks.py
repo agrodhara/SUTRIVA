@@ -8,12 +8,22 @@ never reads or writes anything in pilot_registrations/otp_challenges. Gated behi
 Three routes, all origin-validated and per-IP rate-limited the same way the existing pilot and
 situation-pilot-interest routers are:
 - POST   /v1/saved-borrow-checks            — save a check, email a retrieval link.
-- GET    /v1/saved-borrow-checks/{token}    — retrieve a saved check by its raw token.
-- DELETE /v1/saved-borrow-checks/{token}    — visitor-initiated withdrawal (soft delete).
+- GET    /v1/saved-borrow-checks            — retrieve a saved check, token via header.
+- DELETE /v1/saved-borrow-checks            — visitor-initiated withdrawal, token via header.
+
+**Token is never a path or query parameter, by design — launch-gap hardening (Milestone 2, round 2).**
+The retrieval token is a bearer credential (possession = access to a stored financial result), and a
+path/query value is what a reverse proxy or ASGI server's *default* access-log format captures on every
+request. Carrying it instead in an `X-Saved-Check-Token` header keeps it out of a standard
+`nginx`/`uvicorn` access-log line without needing any host-level logging change — which this session has
+no way to apply anyway (SSH to `sutriva-alpha` is still blocked). The frontend's own emailed link uses a
+URL **fragment** (`/saved#<token>`), not a path segment, for the same reason: a fragment is never sent in
+an HTTP request at all, so neither the PWA's own server nor any proxy in front of it ever sees it either.
+See `docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md` for what this does and does not close.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from app.config import saved_check_enabled
 from app.models.saved_borrow_check import (
@@ -106,12 +116,25 @@ def post_save_borrow_check(payload: SaveBorrowCheckRequest, request: Request) ->
     return SaveBorrowCheckResponse(status="saved")
 
 
-@router.get("/{token}", response_model=SavedBorrowCheckOut)
-def get_saved_borrow_check(token: str, request: Request) -> SavedBorrowCheckOut:
+@router.get("", response_model=SavedBorrowCheckOut)
+def get_saved_borrow_check(
+    request: Request, x_saved_check_token: str | None = Header(None, alias="X-Saved-Check-Token"),
+) -> SavedBorrowCheckOut:
+    # The header is declared optional here, deliberately, and checked only below — a *required* FastAPI
+    # header parameter is validated before this function body ever runs, which would 422 a request missing
+    # it even while the feature is disabled, leaking that this route exists through the one path that's
+    # supposed to be indistinguishable from "doesn't exist" (_require_saved_check_enabled, next line).
+    # Caught by directly testing this exact case before shipping it — see
+    # docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md.
     _require_saved_check_enabled()
     validate_request_origin(request.headers.get("origin"))
     _enforce_rate_limit(_retrieve_limiter, request, max_events=get_saved_borrow_check_rate_limit_settings().retrieve_per_ip_per_hour)
 
+    if not x_saved_check_token:
+        # Same outcome as any other invalid token — an attacker (or a buggy client) learns nothing more
+        # from omitting the header than from presenting a wrong one.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    token = x_saved_check_token
     try:
         record = retrieve_saved_borrow_check(token=token)
     except SavedBorrowCheckError as exc:
@@ -132,16 +155,25 @@ def get_saved_borrow_check(token: str, request: Request) -> SavedBorrowCheckOut:
     )
 
 
-@router.delete("/{token}", response_model=DeleteSavedBorrowCheckResponse)
-def delete_saved_borrow_check_route(token: str, request: Request) -> DeleteSavedBorrowCheckResponse:
+@router.delete("", response_model=DeleteSavedBorrowCheckResponse)
+def delete_saved_borrow_check_route(
+    request: Request, x_saved_check_token: str | None = Header(None, alias="X-Saved-Check-Token"),
+) -> DeleteSavedBorrowCheckResponse:
+    # See the identical comment on get_saved_borrow_check above — optional-then-checked, not required, for
+    # the same route-existence-leak reason.
     _require_saved_check_enabled()
     validate_request_origin(request.headers.get("origin"))
     _enforce_rate_limit(_delete_limiter, request, max_events=get_saved_borrow_check_rate_limit_settings().delete_per_ip_per_hour)
 
-    try:
-        delete_saved_borrow_check(token=token)
-    except SavedBorrowCheckError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    # Unlike the retrieval route above, a missing token here isn't reported as a distinct 404 — delete is
+    # already documented and tested as idempotent and uninformative about whether a token ever matched
+    # anything (see delete_saved_borrow_check's docstring); an absent token is just one more case that
+    # outcome already covers, not a new one to invent a different response for.
+    if x_saved_check_token:
+        try:
+            delete_saved_borrow_check(token=x_saved_check_token)
+        except SavedBorrowCheckError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
     # Idempotent and intentionally uninformative about whether the token ever existed — a delete call
     # always reports "deleted" from the caller's point of view (see delete_saved_borrow_check's docstring).

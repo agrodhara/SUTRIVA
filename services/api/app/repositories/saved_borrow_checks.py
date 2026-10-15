@@ -21,6 +21,7 @@ class SavedBorrowCheckRecord:
     result_scenario: str
     result_note: str
     result_bars: list
+    notice_version: str
     created_at: datetime
     expires_at: datetime
     deleted_at: datetime | None
@@ -41,6 +42,7 @@ def insert_saved_borrow_check(
     result_scenario: str,
     result_note: str,
     result_bars: list,
+    notice_version: str,
     retrieval_token_hash: str,
     expires_at: datetime,
 ) -> str:
@@ -53,11 +55,11 @@ def insert_saved_borrow_check(
             INSERT INTO saved_borrow_checks (
                 situation_key, anonymous_session_uuid, access_email, input_values, provenance,
                 result_title, result_headline, result_detail, result_insight, result_scenario, result_note,
-                result_bars, retrieval_token_hash, expires_at
+                result_bars, notice_version, retrieval_token_hash, expires_at
             ) VALUES (
                 :situation_key, :anonymous_session_uuid, :access_email, CAST(:input_values AS json), :provenance,
                 :result_title, :result_headline, :result_detail, :result_insight, :result_scenario, :result_note,
-                CAST(:result_bars AS json), :retrieval_token_hash, :expires_at
+                CAST(:result_bars AS json), :notice_version, :retrieval_token_hash, :expires_at
             )
             RETURNING saved_borrow_check_uuid
             """
@@ -75,6 +77,7 @@ def insert_saved_borrow_check(
             "result_scenario": result_scenario,
             "result_note": result_note,
             "result_bars": json.dumps(result_bars),
+            "notice_version": notice_version,
             "retrieval_token_hash": retrieval_token_hash,
             "expires_at": expires_at,
         },
@@ -95,6 +98,7 @@ def _to_record(row) -> SavedBorrowCheckRecord:
         result_scenario=row["result_scenario"],
         result_note=row["result_note"],
         result_bars=row["result_bars"],
+        notice_version=row["notice_version"],
         created_at=row["created_at"],
         expires_at=row["expires_at"],
         deleted_at=row["deleted_at"],
@@ -113,7 +117,7 @@ def get_saved_borrow_check_by_token_hash(db: Session, *, retrieval_token_hash: s
             """
             SELECT saved_borrow_check_uuid, situation_key, input_values, provenance, result_title,
                    result_headline, result_detail, result_insight, result_scenario, result_note,
-                   result_bars, created_at, expires_at, deleted_at
+                   result_bars, notice_version, created_at, expires_at, deleted_at
             FROM saved_borrow_checks
             WHERE retrieval_token_hash = :retrieval_token_hash
             """

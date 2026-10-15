@@ -146,11 +146,15 @@ export async function saveBorrowCheck(
   }
 }
 
-/** Retrieves a saved check by its raw retrieval token (the `{token}` in the emailed `/saved/{token}`
- * link) — see app/saved/[token]/page.tsx. */
+/** Retrieves a saved check by its raw retrieval token — the part of the emailed `/saved#<token>` link
+ * after the `#`. Sent as a header, never a path or query parameter: a path/query value is what a
+ * reverse proxy or server's *default* access log captures on every request, and this token is a bearer
+ * credential (possession = access to a stored financial result) — see app/saved/page.tsx and
+ * docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md. */
 export async function retrieveSavedBorrowCheck(token: string): Promise<SavedBorrowCheck> {
-  const response = await fetch(`${requireApiBaseUrl()}/v1/saved-borrow-checks/${encodeURIComponent(token)}`, {
+  const response = await fetch(`${requireApiBaseUrl()}/v1/saved-borrow-checks`, {
     credentials: "include",
+    headers: { "X-Saved-Check-Token": token },
   });
   if (!response.ok) {
     throw new SituationApiError(response.status, await parseErrorDetail(response, "We couldn't find that saved check."));
@@ -159,11 +163,13 @@ export async function retrieveSavedBorrowCheck(token: string): Promise<SavedBorr
 }
 
 /** Visitor-initiated withdrawal — idempotent; the backend reports success whether or not the token still
- * matched anything (see app/services/saved_borrow_checks.py::delete_saved_borrow_check). */
+ * matched anything (see app/services/saved_borrow_checks.py::delete_saved_borrow_check). Same
+ * header-not-path treatment as retrieveSavedBorrowCheck, for the same reason. */
 export async function deleteSavedBorrowCheck(token: string): Promise<void> {
-  const response = await fetch(`${requireApiBaseUrl()}/v1/saved-borrow-checks/${encodeURIComponent(token)}`, {
+  const response = await fetch(`${requireApiBaseUrl()}/v1/saved-borrow-checks`, {
     method: "DELETE",
     credentials: "include",
+    headers: { "X-Saved-Check-Token": token },
   });
   if (!response.ok) {
     throw new SituationApiError(response.status, await parseErrorDetail(response, "Something went wrong. Please try again."));

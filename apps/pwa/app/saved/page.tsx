@@ -1,43 +1,57 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ValueBars, type ValueBarRow } from "../../../components/journey-ui/ValueBars";
-import ui from "../../../components/journey-ui/journeyUi.module.css";
-import { ProvenanceBadge } from "../../situations/ProvenanceBadge";
-import { formatRupees } from "../../situations/SituationFlow";
-import { deleteSavedBorrowCheck, retrieveSavedBorrowCheck, SituationApiError, type SavedBorrowCheck } from "../../situations/situationsApi";
-import { SITUATIONS } from "../../situations/situationsConfig";
-import styles from "../../situations/situations.module.css";
+import { ValueBars, type ValueBarRow } from "../../components/journey-ui/ValueBars";
+import ui from "../../components/journey-ui/journeyUi.module.css";
+import { ProvenanceBadge } from "../situations/ProvenanceBadge";
+import { formatRupees } from "../situations/SituationFlow";
+import { deleteSavedBorrowCheck, retrieveSavedBorrowCheck, SituationApiError, type SavedBorrowCheck } from "../situations/situationsApi";
+import { SITUATIONS } from "../situations/situationsConfig";
+import styles from "../situations/situations.module.css";
 
 type LoadState = "loading" | "found" | "not_found" | "error";
 type DeleteState = "idle" | "deleting" | "deleted";
 
 /**
- * Milestone 2C retrieval page: `/saved/{token}` — the link the save-check email sends (see
- * app/services/saved_borrow_checks.py). Renders with the same result layout pieces the live check's
- * result screen uses (ValueBars, ProvenanceBadge, formatRupees) populated from the saved snapshot
- * instead of a fresh calculation — nothing here is ever recalculated.
+ * Milestone 2C retrieval page: `/saved#<token>` — a URL *fragment*, not a path segment (see
+ * app/services/saved_borrow_checks.py). A fragment is never sent to any server in an HTTP request, so
+ * this page's own URL never puts the token in the PWA's own server or any proxy's access log — unlike
+ * the earlier `/saved/[token]` design this replaces, which did. The token is read client-side only, from
+ * `window.location.hash`, and sent to the API as a header, never a path or query value — see
+ * situationsApi.ts and docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md for the full reasoning.
+ *
+ * Renders with the same result layout pieces the live result screen uses (ValueBars, ProvenanceBadge,
+ * formatRupees), populated from the saved snapshot instead of a fresh calculation — nothing here is ever
+ * recalculated.
  *
  * A wrong, expired, or already-deleted token gets one identical "no longer valid" state — the backend
  * deliberately returns the same 404 for all three (see retrieve_saved_borrow_check's docstring), so this
  * page cannot and does not distinguish them either.
  */
 export default function SavedCheckPage() {
-  const params = useParams<{ token: string }>();
-  const token = typeof params?.token === "string" ? params.token : Array.isArray(params?.token) ? params.token[0] : "";
-
+  const [token, setToken] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [check, setCheck] = useState<SavedBorrowCheck | null>(null);
   const [deleteState, setDeleteState] = useState<DeleteState>("idle");
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    if (!token) {
+    // Read once, client-side only — there is nothing to read during server rendering, and the fragment is
+    // never part of what a server ever sees in the first place. `token` starts `null`, meaning "not read
+    // yet"; after this runs it is always a string (possibly empty, meaning "no fragment at all") — never
+    // collapsed back to `null`, so the next effect doesn't mistake "read, and empty" for "hasn't run yet"
+    // and leave the page stuck on "Loading" forever, which an earlier version of this effect did.
+    const fromHash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
+    setToken(fromHash);
+  }, []);
+
+  useEffect(() => {
+    if (token === null) return;
+    if (token === "") {
       setState("not_found");
       return;
     }
+    let cancelled = false;
     retrieveSavedBorrowCheck(token)
       .then((result) => {
         if (cancelled) return;
@@ -54,6 +68,7 @@ export default function SavedCheckPage() {
   }, [token]);
 
   async function handleDelete() {
+    if (!token) return;
     setDeleteState("deleting");
     setDeleteError(null);
     try {

@@ -1,13 +1,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../lib/api", () => ({
   requireApiBaseUrl: () => "http://127.0.0.1:8010",
-}));
-
-vi.mock("next/navigation", () => ({
-  useParams: () => ({ token: "test-token" }),
 }));
 
 import SavedCheckPage from "./page";
@@ -26,9 +22,32 @@ const SAVED_CHECK = {
   created_at: "2026-10-01T00:00:00Z",
 };
 
+beforeEach(() => {
+  // The token lives in the URL *fragment*, never sent to any server — see page.tsx's own docstring and
+  // docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md. Setting it directly here is the jsdom equivalent of a
+  // visitor following the emailed `/saved#<token>` link.
+  window.location.hash = "test-token";
+});
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.location.hash = "";
+});
+
+it("reads the token from the URL fragment, not a path or query parameter, and requests it as a header", async () => {
+  let requestHeaders: Headers | null = null;
+  global.fetch = vi.fn((url: string, init?: RequestInit) => {
+    requestHeaders = init?.headers ? new Headers(init.headers) : null;
+    // The fetch target itself must never contain the token — confirms it never becomes a path/query value.
+    expect(String(url)).not.toContain("test-token");
+    return Promise.resolve({ ok: true, status: 200, json: async () => SAVED_CHECK });
+  }) as unknown as typeof fetch;
+
+  render(<SavedCheckPage />);
+
+  await screen.findByText("This looks manageable");
+  expect(requestHeaders?.get("X-Saved-Check-Token")).toBe("test-token");
 });
 
 it("renders the saved result once loaded", async () => {
@@ -53,9 +72,22 @@ it("shows a single 'no longer valid' state for a 404 (wrong, expired, or already
   expect(await screen.findByText("This link is no longer valid")).toBeInTheDocument();
 });
 
-it("deleting the saved check shows a deleted confirmation and the result is no longer shown", async () => {
+it("shows the same 'no longer valid' state with no fragment at all, rather than an error or a blank page", async () => {
+  window.location.hash = "";
+  global.fetch = vi.fn() as unknown as typeof fetch;
+
+  render(<SavedCheckPage />);
+
+  expect(await screen.findByText("This link is no longer valid")).toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalled();
+});
+
+it("deleting the saved check sends the token as a header, shows a deleted confirmation, and the result is no longer shown", async () => {
+  let deleteHeaders: Headers | null = null;
   global.fetch = vi.fn((url: string, init?: RequestInit) => {
     if (init?.method === "DELETE") {
+      deleteHeaders = init?.headers ? new Headers(init.headers) : null;
+      expect(String(url)).not.toContain("test-token");
       return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: "deleted" }) });
     }
     return Promise.resolve({ ok: true, status: 200, json: async () => SAVED_CHECK });
@@ -69,6 +101,7 @@ it("deleting the saved check shows a deleted confirmation and the result is no l
 
   expect(await screen.findByText("Saved check deleted")).toBeInTheDocument();
   expect(screen.queryByText("This looks manageable")).not.toBeInTheDocument();
+  expect(deleteHeaders?.get("X-Saved-Check-Token")).toBe("test-token");
 });
 
 it("a failed delete shows an error and keeps the result visible, not a false deleted state", async () => {
