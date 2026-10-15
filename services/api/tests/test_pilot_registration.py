@@ -779,6 +779,107 @@ def test_per_ip_rate_limit_on_mobile_applies_across_different_registrations(phas
     assert third.json()["detail"] == "rate_limited"
 
 
+# --- Trusted-proxy-aware rate limiting (found 2026-10 assessing this route's abuse/cost controls: --------
+# --- app/routers/pilot.py still used the raw TCP peer directly, the same gap already fixed for -----------
+# --- app/routers/situation_pilot_interest.py in PR #29 — mirrors that file's three tests exactly) --------
+
+
+@pytest.fixture()
+def phaseb_app(phaseb_upgraded_database: str):
+    """Like conftest.py's phaseb_client, but yields the raw FastAPI app instead of wrapping it in
+    starlette's TestClient — which always reports its own peer as the literal string "testclient", not a
+    real IP, and gives no way to override that. The trusted-proxy tests below need a *real*, controllable
+    peer address to prove the fix, so they build their own httpx.AsyncClient per simulated peer from this."""
+    import importlib
+
+    import app.main as app_main
+    from app.db.engine import dispose_engine
+
+    dispose_engine()
+    app_module = importlib.reload(app_main)
+    try:
+        yield app_module.app
+    finally:
+        dispose_engine()
+
+
+def _client_with_peer(app, peer_ip: str):
+    import httpx
+
+    transport = httpx.ASGITransport(app=app, client=(peer_ip, 12345))
+    return httpx.AsyncClient(transport=transport, base_url="http://testserver")
+
+
+def _run(coro):
+    import asyncio
+
+    return asyncio.run(coro)
+
+
+async def _register_interest_http_async(client, *, forwarded_for: str | None = None, journey: str = "money_value"):
+    headers = {"Origin": phaseb_origin()}
+    if forwarded_for is not None:
+        headers["X-Forwarded-For"] = forwarded_for
+    return await client.post("/v1/pilot/interest", json={"journey": journey}, headers=headers)
+
+
+def test_without_trusted_proxy_config_every_visitor_behind_the_proxy_shares_one_otp_budget(
+    phaseb_app, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _enable_track11b(monkeypatch)
+    monkeypatch.delenv("TRUSTED_PROXY_IPS", raising=False)
+    monkeypatch.setenv("PILOT_RATE_LIMIT_INTEREST_PER_IP_PER_HOUR", "1")
+
+    async def _scenario():
+        async with _client_with_peer(phaseb_app, "10.0.0.5") as client:
+            first = await _register_interest_http_async(client, forwarded_for="203.0.113.1")
+            second = await _register_interest_http_async(client, forwarded_for="203.0.113.2")
+        return first, second
+
+    first, second = _run(_scenario())
+    assert first.status_code == 200
+    assert second.status_code == 429, "documents the gap: an unconfigured deployment shares one OTP-send budget for every visitor behind the proxy"
+
+
+def test_with_trusted_proxy_configured_each_real_visitor_gets_an_independent_otp_budget(
+    phaseb_app, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _enable_track11b(monkeypatch)
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.5")
+    monkeypatch.setenv("PILOT_RATE_LIMIT_INTEREST_PER_IP_PER_HOUR", "1")
+
+    async def _scenario():
+        async with _client_with_peer(phaseb_app, "10.0.0.5") as client:
+            first = await _register_interest_http_async(client, forwarded_for="203.0.113.1")
+            second = await _register_interest_http_async(client, forwarded_for="203.0.113.2")
+            first_again = await _register_interest_http_async(client, forwarded_for="203.0.113.1")
+        return first, second, first_again
+
+    first, second, first_again = _run(_scenario())
+    assert first.status_code == 200
+    assert second.status_code == 200, "a second, different real visitor behind the same trusted proxy must not be blocked by the first visitor's limit"
+    assert first_again.status_code == 429
+
+
+def test_bypassing_the_trusted_proxy_cannot_evade_the_otp_limit_via_the_header(
+    phaseb_app, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _enable_track11b(monkeypatch)
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.5")
+    monkeypatch.setenv("PILOT_RATE_LIMIT_INTEREST_PER_IP_PER_HOUR", "1")
+
+    async def _scenario():
+        # This caller connects directly — its peer is not the trusted proxy's address.
+        async with _client_with_peer(phaseb_app, "198.51.100.9") as client:
+            first = await _register_interest_http_async(client, forwarded_for="1.2.3.4")
+            second = await _register_interest_http_async(client, forwarded_for="5.6.7.8")
+        return first, second
+
+    first, second = _run(_scenario())
+    assert first.status_code == 200
+    assert second.status_code == 429, "an untrusted peer must not be able to fabricate a fresh identity via X-Forwarded-For"
+
+
 # --- "Change number" / Back / retry against a real active challenge ---------------------------
 
 

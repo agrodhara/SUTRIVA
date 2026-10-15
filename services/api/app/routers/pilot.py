@@ -14,6 +14,7 @@ from app.models.pilot import (
 )
 from app.pilot_config import get_pilot_rate_limit_settings
 from app.services.anonymous_sessions import AnonymousSessionHttpError, get_cookie_name, validate_event_session, validate_request_origin
+from app.services.client_ip import resolve_client_ip
 from app.services.pilot import PilotServiceError, register_interest, resend_otp, submit_mobile_and_send_otp, verify_otp
 from app.services.pilot_rate_limit import FixedWindowRateLimiter, RateLimitExceededError
 
@@ -36,7 +37,13 @@ def _require_track11b() -> None:
 
 
 def _client_key(request: Request) -> str:
-    return request.client.host if request.client is not None else "unknown"
+    # Trusted-proxy-aware, matching app/routers/situation_pilot_interest.py's identical fix (PR #29):
+    # behind the documented nginx reverse proxy, the raw TCP peer (what this used to return directly) is
+    # always nginx's own loopback address for every visitor, collapsing every real visitor's OTP-send
+    # budget into one shared bucket — found 2026-10, while assessing this route's abuse/cost controls, as
+    # the same gap already fixed here. X-Forwarded-For is only honoured once the direct peer is named in
+    # TRUSTED_PROXY_IPS, so an untrusted caller cannot spoof a fresh budget by setting it themselves.
+    return resolve_client_ip(request)
 
 
 def _enforce_rate_limit(limiter: FixedWindowRateLimiter, request: Request, *, max_events: int) -> None:
