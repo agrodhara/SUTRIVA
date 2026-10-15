@@ -1,13 +1,22 @@
 # B1 saved-check — launch gaps, closed or explicitly reported
 
-Milestone 2, round 2. Per instruction: "Close or explicitly report these launch gaps." Each of the six
-named items below is marked **closed** (fixed and tested this round), **partially closed**, or
-**open — reported** (not fixed, with the exact reason and what's needed). This document is itself
-evidence, not a release decision — `savedCheckEnabled` stays `false`; nothing here authorizes activation.
+Milestone 2 (rounds 2–4). Per instruction: "Close or explicitly report these launch gaps." Each named
+item below is marked **closed** (fixed and tested), **partially closed**, or **open — reported** (not
+fixed, with the exact reason and what's needed). This document is itself evidence, not a release
+decision — `savedCheckEnabled` stays `false`; nothing here authorizes activation.
 
 ## 1. Real email provider and designated-inbox delivery — **open; recommendation + exact steps below**
 
-Unchanged technically: `app/services/email.py` has `LoggingEmailSender` only.
+**Confirmed directly, stated plainly**: the SES sending adapter is **documented only — not implemented**.
+`app/services/email.py` contains `EmailSender` (the abstract interface), `LoggingEmailSender` (the dev-only
+stub, real and in use), and `get_email_sender()`'s fail-closed behavior for any unrecognized provider name
+— but **no `AwsSesEmailSender` class exists anywhere in this codebase**, checked directly by searching for
+it. `SAVED_CHECK_EMAIL_PROVIDER=aws-ses` would fail closed with `EmailProviderNotConfiguredError` today,
+exactly like any other unimplemented value. Building it is a real, estimated, not-yet-started task — see
+`B1_SAVED_CHECK_SPEC.md`'s "Implementation estimate," which already separates this from the logging-stub
+work completed so far.
+
+Unchanged technically otherwise: `app/services/email.py` has `LoggingEmailSender` only.
 `SAVED_CHECK_EMAIL_PROVIDER=logging-dev-only` is the only working value; any other value fails closed
 with `EmailProviderNotConfiguredError`. No real provider has been built or configured, and no email has
 ever been sent to a real inbox. **Nothing in this section opens an account or creates a credential — it is
@@ -75,6 +84,25 @@ SES_CONFIGURATION_SET=                       # optional, for bounce/complaint tr
 ```
 
 No value for any of these has been requested, generated, or exposed in this session.
+
+### Sandbox/sending-status checks (how to confirm current state, not guess it)
+
+Checked against AWS's own API reference this round, not assumed:
+
+- **`aws sesv2 get-account`** (the `GetAccount` API operation) returns, in one call:
+  - `ProductionAccessEnabled` (boolean) — `false` means the account is in sandbox (can only send to
+    verified recipients); `true` means production access has been granted.
+  - `SendingEnabled` (boolean) — whether sending is currently enabled at all for the account in this
+    region.
+  - `EnforcementStatus` (`HEALTHY` / `PROBATION` / `SHUTDOWN`) — whether AWS has paused or restricted
+    sending due to a reputation issue (bounce/complaint rates), independent of the sandbox/production
+    distinction.
+- **Console equivalent**: SES console → left navigation → **Account dashboard** — shows the same sandbox
+  status (with a "Request production access" action when still in sandbox) without needing the CLI.
+
+None of these have been run against any real account from this session — no AWS credentials exist yet to
+run them with. Documented here so whoever does have account access can check status precisely rather than
+assume it from memory.
 
 ### Designated-inbox test procedure (once the above is in place — not yet performed)
 
@@ -273,6 +301,42 @@ all — logging per-attempt would itself be a token-guessing oracle in the logs,
 limiter is the actual control against that, not a log line. This is log-based measurement an operator can
 aggregate with plain shell tools against real log output, not a real-time dashboard metric — proportionate
 to "minimal," not a claim of more.
+
+## 7. Email-delivery link preserves the fragment; link tracking cannot expose it — confirmed
+
+New item this round, per explicit instruction to confirm rather than assume. Two parts:
+
+**Does the actual email link preserve the fragment?** Yes, by construction and unaffected by provider
+choice: `app/services/saved_borrow_checks.py` builds the link as an f-string,
+`f"{base_url}/saved#{token}"`, and passes that complete string as the plain-text/HTML body content to
+whichever `EmailSender` is configured — there is no intermediate step, in this codebase, that could parse,
+truncate, or rewrite the URL before it reaches the provider. The logging-dev-only stub logs only a masked
+recipient address, never the body, so this has always been true for the one real code path that exists.
+
+**Would AWS SES (the recommended provider) rewrite the link, and could that rewriting expose the token?**
+Checked directly against AWS's own documentation this round, not assumed:
+- Plain `SendEmail`/`SendRawEmail` calls — what this feature would use — **do not rewrite any link in the
+  email body by default**. Link rewriting ("click tracking") in SES is an **opt-in** feature, only active
+  when a specific **Configuration Set** with an **Event Destination configured to capture click events** is
+  explicitly attached to the send. `SAVED_CHECK_EMAIL_PROVIDER`'s proposed config includes an *optional*
+  `SES_CONFIGURATION_SET` variable for bounce/complaint tracking — nothing about that implies click
+  tracking is also enabled; they are separate, independently-configured event types on the same
+  Configuration Set mechanism, and this document does not propose turning click tracking on.
+- **Even if click tracking were enabled** (now or later, by a future configuration change this document
+  does not make): a URL fragment (the `#token` portion) is **never transmitted to any server in any HTTP
+  request** — this is not an implementation detail of this codebase or of SES, it is baked into the HTTP
+  protocol itself (RFC 9112 §3.2.1 defines the request-target grammar with no fragment component at all;
+  RFC 3986 §3.5 states the fragment "is not used in the scheme-specific processing of a URI" and is
+  stripped "prior to a dereference"). A click-tracking server literally cannot log what it never receives.
+  Separately, per the WHATWG Fetch Standard's redirect-handling algorithm, a browser *does* carry the
+  original fragment forward into the final URL after a 3xx redirect (if the `Location` header specifies no
+  fragment of its own) — so the visitor's own browser would still end up at the correct, working
+  `/saved#<token>` URL even after passing through a hypothetical tracking redirect; that fragment simply
+  never appears in the tracking server's own request or logs at any point in the chain.
+
+**Conclusion**: the fragment design's security property (the token is never visible to any server) holds
+regardless of whether email click tracking is ever turned on, and the link itself reaches the recipient
+intact today, confirmed by reading the actual code path rather than assumed from the design intent alone.
 
 ## Testing note
 
