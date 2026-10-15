@@ -162,7 +162,7 @@ flag check could run) — caught and fixed, with its own dedicated regression te
 (`test_a_request_with_no_token_header_at_all_still_404s_while_disabled_not_422`), so this guarantee is
 demonstrably stronger after this round, not just unchanged.
 
-## 4. Scheduled retention purge and deletion behaviour — **wired and tested this round, not installed**
+## 4. Scheduled retention purge and deletion behaviour — **wired and validated on a real systemd, not installed**
 
 **Closed**: `purge_expired_and_deleted` (bounded batch, same contract as the existing anonymous-session
 purge) is implemented and tested — expired rows removed, active rows kept, soft-deleted rows removed only
@@ -170,13 +170,18 @@ past a grace window (`SAVED_CHECK_DELETE_GRACE_HOURS`, default 24h), not immedia
 `app/purge_saved_borrow_checks.py`, mirrors `app/purge_anonymous_data.py`'s exact shape for operational
 consistency.
 
-**Wired and tested this round**: `ops/systemd/sutriva-purge-saved-borrow-checks.{service,timer}` — prepared
-systemd unit files (every 15 minutes, `Persistent=true` so a missed run fires at next boot rather than
-waiting a full interval). "Tested" means precisely: the exact `ExecStart` command was run against a real,
-migrated Postgres 16 database seeded with one expired and one active row, confirmed to remove only the
-expired one — not that the unit syntax was verified by a real `systemd` (this machine has none; stated as
-a limitation, not silently skipped). See `ops/systemd/README.md` for the full detail and the install
-steps, none of which have been performed — **not copied to any host, not enabled, not started anywhere.**
+**Wired and validated this round**: `ops/systemd/sutriva-purge-saved-borrow-checks.{service,timer}` —
+prepared systemd unit files (every 15 minutes, `Persistent=true` so a missed run fires at next boot rather
+than waiting a full interval). This machine (macOS) has no `systemd` itself — resolved this round, per
+instruction to validate on a compatible environment rather than document around the gap, with a disposable
+`debian:bookworm-slim` Docker container (destroyed after use, never a host) that has a real `systemd 252`.
+`systemd-analyze verify` first correctly **failed** against the unit files exactly as written — real
+validation catching that `/opt/sutriva/venv/bin/python` doesn't exist in that throwaway container (it
+legitimately only exists on the real host) — then **passed cleanly (exit 0, no warnings)** once that
+expected host layout was stubbed in the container. This confirms the unit syntax itself is valid against a
+real systemd binary, not merely plausible-looking INI text. See `ops/systemd/README.md` for the full
+detail, including explicit install, post-install verification, and disable instructions — **none of which
+have been performed: not copied to any host, not enabled, not started anywhere.**
 This closes the scheduling gap for *this* job specifically; the identical, pre-existing gap on
 `app/purge_anonymous_data.py` would close the same way but is not itself touched by this change.
 
