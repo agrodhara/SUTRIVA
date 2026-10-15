@@ -1,0 +1,20 @@
+# Pairs with sutriva-purge-saved-borrow-checks.service — see that file's header for the same
+# not-installed, not-activated status.
+#
+# Every 15 minutes: frequent enough that a 90-day default retention window (SAVED_CHECK_RETENTION_DAYS)
+# and a 24-hour default soft-delete grace window (SAVED_CHECK_DELETE_GRACE_HOURS) are both enforced
+# promptly, infrequent enough to be a negligible load against a bounded-batch query — each run only
+# examines rows already past their own cutoff, not the whole table.
+[Unit]
+Description=Run sutriva-purge-saved-borrow-checks.service every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+# A missed run (e.g. the host was down) still fires once at next boot, rather than silently waiting a
+# full extra interval — matters more for this job than most, since a missed run means expired/deleted
+# rows sit un-purged for longer, not that anything breaks.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

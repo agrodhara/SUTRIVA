@@ -1,4 +1,4 @@
-import { TRACK11_VERSION, TRACK11A_ENABLED, TRACK11B_ENABLED } from "./track11Config";
+import { SAVED_CHECK_ENABLED, TRACK11_VERSION, TRACK11A_ENABLED, TRACK11B_ENABLED } from "./track11Config";
 
 export type Journey = "money_value" | "comfortable_borrowing";
 
@@ -82,6 +82,10 @@ export function track11aEnabled(): boolean {
 
 export function track11bEnabled(): boolean {
   return TRACK11B_ENABLED;
+}
+
+export function savedCheckEnabled(): boolean {
+  return SAVED_CHECK_ENABLED;
 }
 
 export function track11Version(): string {

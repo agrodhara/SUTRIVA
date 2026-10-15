@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ValueBars, type ValueBarRow } from "../../components/journey-ui/ValueBars";
 import ui from "../../components/journey-ui/journeyUi.module.css";
 import { trackEvent, type ScreenName } from "../../lib/api";
-import { createJourneyRunId } from "../../lib/journeySession";
+import { createJourneyRunId, savedCheckEnabled } from "../../lib/journeySession";
 import { PilotInterestForm } from "./PilotInterestForm";
 import { ProvenanceBadge, type Provenance } from "./ProvenanceBadge";
+import { SaveCheckForm } from "./SaveCheckForm";
 import { checkSituation, SituationApiError, type SituationResult } from "./situationsApi";
 import { GROUP_COPY, SITUATIONS, type SituationKey } from "./situationsConfig";
 import { SituationIcon } from "./SituationIcon";
@@ -28,7 +29,10 @@ function ownModeValues(key: SituationKey): Record<string, FieldValue> {
 /** Builds the exact JSON body the situation's endpoint expects, coercing numeric-looking strings and
  * dropping a conditional field the situation doesn't currently require. Never includes anything beyond
  * this situation's own fields — no journey_run_id, no cookie-derived value, nothing else. */
-function toRequestBody(key: SituationKey, values: Record<string, FieldValue>): Record<string, unknown> {
+// Exported for SaveCheckForm.tsx (Milestone 2C): a save must submit the exact same validated body that
+// produced the result currently on screen — never a separately re-derived one — so this is the one
+// function both the live calculation and a save ever build that body from.
+export function toRequestBody(key: SituationKey, values: Record<string, FieldValue>): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   for (const field of SITUATIONS[key].fields) {
     if (field.showWhen && values[field.showWhen.field] !== field.showWhen.equals) continue; // conditional field not applicable right now
@@ -319,6 +323,21 @@ export function SituationFlow({
               Explore another situation
             </button>
           </div>
+          {/* Milestone 2, round 3 — product direction: on B1 (Borrow Better), "Save this check" is now the
+           * primary post-result contact action, with the pilot-interest form secondary beneath it. This is
+           * purely an ordering/prominence change in THIS file and its CSS — PilotInterestForm.tsx itself is
+           * untouched (same copy, same validation, same submit logic, same analytics events), and its
+           * arrival-screen mount above is completely unaffected (unchanged position, unchanged prominence).
+           * On rewards (R1) result screens, where SaveCheckForm doesn't exist at all, the pilot-interest
+           * form's position is exactly what it always was — nothing changes there. "Primary" is expressed
+           * by SaveCheckForm's button now using ui.primaryButton (previously ui.secondaryButton, matching
+           * the pilot form's own button weight) and by rendering first; "secondary" is PilotInterestForm
+           * keeping its own existing ui.secondaryButton unchanged. */}
+          {situation.group === "borrow" && savedCheckEnabled() ? (
+            <div className={styles.saveCheckPanel}>
+              <SaveCheckForm situationKey={situationKey} values={toRequestBody(situationKey, values)} provenance={provenance} result={result} />
+            </div>
+          ) : null}
           <div className={styles.pilotPanel}><PilotInterestForm situationKey={situationKey} onEmit={emit} placement="result" /></div>
         </div>
         <div className={ui.colSide}>
@@ -336,7 +355,9 @@ export function SituationFlow({
   );
 }
 
-function formatRupees(value: number): string {
+// Exported for the saved-check retrieval page (Milestone 2C) — the same formatting a live result's
+// chart already uses, so a reopened check renders identically to how it looked when saved.
+export function formatRupees(value: number): string {
   const sign = value < 0 ? "−" : "";
   return `${sign}₹${Math.round(Math.abs(value)).toLocaleString("en-IN")}`;
 }

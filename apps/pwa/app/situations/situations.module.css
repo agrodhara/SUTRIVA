@@ -170,6 +170,9 @@
 .resultLabel { display: flex; align-items: center; gap: 12px; }
 .resultLabelIcon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; color: var(--green-dark); background: var(--mint); flex: none; }
 .pilotPanel { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 8px; }
+/* Milestone 2C: the save-check form's own panel, kept visually distinct from .pilotPanel (its own
+   top border/spacing) so the two forms read as separate actions, not one combined block. */
+.saveCheckPanel { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 8px; }
 
 /* On a phone the chart belongs next to the answer, before the explanatory paragraphs. */
 @media (max-width: 959px) {
@@ -181,7 +184,14 @@
   .resultWhatIf { order: 5; }
   .resultLimit { order: 6; }
   .resultActions { order: 7; }
-  .pilotPanel { order: 8; }
+  /* Milestone 2, round 3: save-check is now the primary post-result contact action, pilot-interest
+     secondary beneath it — .saveCheckPanel sorts before .pilotPanel (was the reverse). On a rewards (R1)
+     result screen, where .saveCheckPanel doesn't exist, .pilotPanel's order value just means "last", same
+     as always — nothing changes there. Without an explicit order at all, an element defaults to 0 and
+     renders before .resultPanel (order: 1) — a real layout bug caught once already via a screenshot
+     before this was presented for review; keeping both values explicit here avoids repeating it. */
+  .saveCheckPanel { order: 8; }
+  .pilotPanel { order: 9; }
 }
 
 @media (max-width: 800px) {

@@ -32,5 +32,9 @@ def track11b_enabled() -> bool:
     return bool(track11_config()["track11bEnabled"])
 
 
+def saved_check_enabled() -> bool:
+    return bool(track11_config()["savedCheckEnabled"])
+
+
 def track11_version() -> str:
     return str(track11_config()["track11Version"])

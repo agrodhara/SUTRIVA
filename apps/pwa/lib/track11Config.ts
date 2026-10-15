@@ -11,3 +11,4 @@ export const BORROW_ILLUSTRATIVE_ANNUAL_RATE_PERCENT = track11Config.borrowIllus
 export const BORROW_ILLUSTRATIVE_RATE_EFFECTIVE_DATE = track11Config.borrowIllustrativeRateEffectiveDate;
 export const TRACK11A_ENABLED = readFlag(process.env.NEXT_PUBLIC_TRACK_11A_ENABLED, track11Config.track11aEnabled);
 export const TRACK11B_ENABLED = readFlag(process.env.NEXT_PUBLIC_TRACK_11B_ENABLED, track11Config.track11bEnabled);
+export const SAVED_CHECK_ENABLED = readFlag(process.env.NEXT_PUBLIC_SAVED_CHECK_ENABLED, track11Config.savedCheckEnabled);
