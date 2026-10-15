@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import FastAPI
@@ -24,6 +25,20 @@ app = FastAPI(
     version="0.1.0",
     description="Alpha API for Personal Financial Intelligence quick-value journeys.",
 )
+
+# Milestone 2 (round 3): without this, app/services/saved_borrow_checks.py's INFO-level measurement log
+# lines (and every other sub-WARNING log call anywhere in this codebase) produce **no output at all** in
+# a real run — confirmed directly, not assumed, by running the actual server and capturing its real
+# stdout: nothing in this application calls logging.basicConfig or configures any handler anywhere, so
+# Python's root logger has no handler and its default level (WARNING) suppresses INFO regardless. This
+# configures a handler and INFO level scoped to exactly the one logger this round's measurement work
+# needs — not the root logger — so third-party libraries (SQLAlchemy, uvicorn's own loggers, etc.) are
+# not made more verbose as a side effect of this fix.
+logging.getLogger("app.services.saved_borrow_checks").setLevel(logging.INFO)
+if not logging.getLogger("app.services.saved_borrow_checks").handlers:
+    _measurement_handler = logging.StreamHandler()
+    _measurement_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logging.getLogger("app.services.saved_borrow_checks").addHandler(_measurement_handler)
 
 allowed_origins = list(get_anonymous_session_settings().allowed_origins)
 

@@ -184,6 +184,23 @@ def test_a_save_records_the_current_notice_version_as_request_evidence(
     assert stored == SAVE_CHECK_NOTICE_VERSION
 
 
+def test_importing_the_app_configures_the_measurement_logger_to_actually_produce_output() -> None:
+    # Regression test for a real gap caught by actually running the server and capturing its real stdout
+    # (not inferred): nothing in this codebase calls logging.basicConfig or configures any handler
+    # anywhere, so Python's root logger has no handler and its default WARNING level suppresses every
+    # INFO-level measurement log call — meaning, before app/main.py's fix, these log lines produced *no
+    # output at all* in any real run, not just none visible to this test's own tooling. Importing
+    # app.main (done by every test in this file via the phaseb_client fixture, and by the real server at
+    # startup) must leave this logger able to actually emit.
+    import logging
+
+    import app.main  # noqa: F401 — imported for its side effect of configuring this logger
+
+    target_logger = logging.getLogger("app.services.saved_borrow_checks")
+    assert target_logger.getEffectiveLevel() <= logging.INFO
+    assert target_logger.handlers, "the measurement logger must have a handler, or INFO logs go nowhere"
+
+
 def test_a_successful_save_and_retrieval_log_minimal_safe_measurement_only(
     phaseb_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -234,6 +251,13 @@ def test_a_successful_save_and_retrieval_log_minimal_safe_measurement_only(
     assert saved_record.situation_key == "offer"
     assert saved_record.provenance == "own"
     assert retrieved_record.situation_key == "offer"
+
+    # The safe fields must appear in the *rendered* message text (what `%(message)s` or any plain
+    # formatter would actually print), not only as LogRecord attributes a test harness can see via
+    # `extra` but a real log file never would — the exact gap caught and fixed this round (see
+    # app/services/saved_borrow_checks.py's log-call comments).
+    assert saved_record.getMessage() == "saved-check saved situation_key=offer provenance=own"
+    assert retrieved_record.getMessage() == "saved-check retrieved situation_key=offer"
 
     full_text = "\n".join(r.getMessage() + str(r.__dict__) for r in records)
     assert "visitor@example.com" not in full_text

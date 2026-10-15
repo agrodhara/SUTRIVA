@@ -1,0 +1,30 @@
+# Milestone 2 (round 3): retention-purge scheduler for the saved-check feature — WIRED AND TESTED
+# (the underlying command, see B1_SAVED_CHECK_LAUNCH_GAPS.md), NOT INSTALLED OR ACTIVATED ANYWHERE.
+#
+# This file is not copied to any host by this change. It is prepared here for review, matching the
+# existing deployment layout documented in docs/execution/UAT_DEPLOYMENT.md (release symlink at
+# /opt/sutriva/current, secret environment files under /etc/sutriva/, mode 0600) — confirm those exact
+# paths against the real host before ever installing this, since this session has no SSH access to
+# verify them directly (sutriva-alpha remains blocked).
+#
+# A oneshot unit, triggered by the paired .timer file — this unit itself does not loop or stay resident.
+[Unit]
+Description=Sutriva — purge expired/deleted saved borrow checks (one bounded batch per run)
+# Never run this (or the PWA/API services) before the database migration for this release has applied —
+# same ordering discipline the existing deployment runbook already requires for the API service itself.
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=sutriva
+WorkingDirectory=/opt/sutriva/current/services/api
+EnvironmentFile=/etc/sutriva/api.env
+# Confirm this venv path against the real host at install time — the deployment runbook describes a
+# per-release Python 3.11 venv, and the exact current path was not independently re-verified this round.
+ExecStart=/opt/sutriva/venv/bin/python -m app.purge_saved_borrow_checks
+# This job only ever deletes rows that are already past expires_at or past their soft-delete grace window
+# (see app/services/saved_borrow_checks.py::purge_expired_and_deleted) — a failed run is safe to retry at
+# the next scheduled tick, so no special restart handling is configured here beyond systemd's default.
+
+[Install]
+WantedBy=multi-user.target

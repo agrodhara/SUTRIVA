@@ -152,8 +152,16 @@ def save_borrow_check(
     # docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md). Only situation_key and provenance: never the email
     # address, the retrieval token, or any input/result value. This is enough for an operator to count
     # saves per situation from log aggregation; it is not a replacement for a real analytics event.
+    #
+    # The safe fields are interpolated directly into the message (not only passed via `extra`) — `extra`
+    # populates LogRecord attributes that Python's *default* Formatter does not render into the printed
+    # line at all (only a custom formatter referencing them would show them; this codebase configures
+    # none). Caught by actually capturing real rendered log output rather than assuming a test harness's
+    # view of LogRecord attributes was the same as what an operator would ever actually see — see
+    # docs/execution/B1_SAVED_CHECK_LAUNCH_GAPS.md for the real, captured demonstration.
     LOGGER.info(
-        "saved-check saved", extra={"category": "saved_check_measurement", "situation_key": situation_key, "provenance": provenance},
+        "saved-check saved situation_key=%s provenance=%s", situation_key, provenance,
+        extra={"category": "saved_check_measurement", "situation_key": situation_key, "provenance": provenance},
     )
     return SaveBorrowCheckOutcome(saved_borrow_check_uuid=saved_borrow_check_uuid)
 
@@ -181,7 +189,8 @@ def retrieve_saved_borrow_check(*, token: str) -> SavedBorrowCheckRecord:
         # that, not logging.
         raise SavedBorrowCheckError(404, "not_found")
     LOGGER.info(
-        "saved-check retrieved", extra={"category": "saved_check_measurement", "situation_key": record.situation_key},
+        "saved-check retrieved situation_key=%s", record.situation_key,
+        extra={"category": "saved_check_measurement", "situation_key": record.situation_key},
     )
     return record
 
